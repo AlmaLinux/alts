@@ -1,0 +1,8 @@
+---
+- name: Update all packages
+  hosts: all
+  remote_user: root
+  tasks:
+    - yum:
+        name: "*"
+        state: latest

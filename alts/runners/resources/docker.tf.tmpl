@@ -1,0 +1,14 @@
+provider "docker" {
+  host = "unix:///run/docker.sock"
+}
+
+resource "docker_container" "test_container" {
+  image = docker_image.${dist_name}.latest
+  name = "${container_name}"
+  must_run = true
+  command = ["/bin/tail", "-f", "/dev/null"]
+}
+
+resource "docker_image" "${dist_name}" {
+  name = "${dist_name}:${dist_version}"
+}

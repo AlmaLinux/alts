@@ -1,0 +1,6 @@
+celery==5.0.5
+celery[s3]
+celery[gevent]
+gevent==21.1.2
+mako==1.1.4
+plumbum==1.7.0

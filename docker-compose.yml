@@ -1,0 +1,20 @@
+version: "2.4"
+services:
+  rabbitmq:
+    image: rabbitmq:3.8-management
+    container_name: "rabbitmq-ts"
+    ports:
+      - 5672:5672
+      - 15672:15672
+    environment:
+      RABBITMQ_ERLANG_COOKIE: PyekdgANDctdPgRzU8AVaRBK
+      RABBITMQ_DEFAULT_USER: test-system
+      RABBITMQ_DEFAULT_PASS: # Your secret password here
+      RABBITMQ_DEFAULT_VHOST: test_system
+    restart: always
+    networks:
+      - test-system
+
+networks:
+  test-system:
+    driver: bridge
