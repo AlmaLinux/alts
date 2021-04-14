@@ -1,8 +1,18 @@
 ---
-- name: Update all packages
+- name: Prepare environment
   hosts: all
   remote_user: root
   tasks:
-    - yum:
+    - name: Update all packages
+      yum:
         name: "*"
         state: latest
+
+    - name: Add required repositories
+      yum_repository:
+        name: "{{ item.name }}"
+        baseurl: "{{ item.url }}"
+        enabled: yes
+        gpgcheck: yes
+      with_items: "{{ repositories }}"
+      when: repositories is defined and (repositories | length > 0)

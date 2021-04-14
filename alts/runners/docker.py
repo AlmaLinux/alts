@@ -1,20 +1,25 @@
 import os
-from typing import Union
+from typing import Union, List
 
-from plumbum import local, ProcessExecutionError
+from plumbum import local
 
 from alts.errors import InstallPackageError, WorkDirPreparationError
 from alts.runners import TEMPLATE_LOOKUP
-from alts.runners.base import BaseRunner
-from alts.utils import set_directory
+from alts.runners.base import BaseRunner, command_decorator
+
+
+__all__ = ['DockerRunner']
 
 
 class DockerRunner(BaseRunner):
     DOCKER_TF_FILE = 'docker.tf'
     TEMPFILE_PREFIX = 'docker_test_runner_'
 
-    def __init__(self, dist_name: str, dist_version: Union[str, int]):
-        super().__init__(dist_name, dist_version)
+    def __init__(self, task_id: str, dist_name: str, dist_version: Union[str, int],
+                 repositories: List[dict], package_name: str,
+                 package_version: str = None):
+        super().__init__(task_id, dist_name, dist_version, repositories,
+                         package_name, package_version=package_version)
         self._ansible_connection_type = 'docker'
         self._docker = local['docker']
 
@@ -31,11 +36,7 @@ class DockerRunner(BaseRunner):
         except Exception as e:
             raise WorkDirPreparationError('Cannot create working directory and needed files') from e
 
+    @command_decorator(InstallPackageError, 'install_package', 'Cannot install package')
     def install_package(self, package_name: str):
-        try:
-            with set_directory(self._work_dir):
-                # TODO: Capture command result into log
-                result = self._docker('exec', str(self._env_id), self._pkg_manager, 'install', '-y', package_name)
-                print(result)
-        except ProcessExecutionError as e:
-            raise InstallPackageError(f'Cannot install package {package_name}') from e
+        docker_command = f'exec {str(self._env_id)} {self._pkg_manager} install -y {self._package_name}'
+        return self._docker.run(docker_command, retcode=None)

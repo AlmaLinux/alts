@@ -5,14 +5,38 @@ import tempfile
 import uuid
 from abc import abstractmethod
 from pathlib import Path
-from typing import Union
+from typing import List, Union
 
-from plumbum import local, ProcessExecutionError
+import boto3
+from plumbum import local
 
+from alts import config
 from alts.errors import (DestroyEnvironmentError, EnvironmentStartError, ProvisionError,
                          TerraformInitializationError, WorkDirPreparationError)
 from alts.runners import TEMPLATE_LOOKUP, RESOURCES_DIRECTORY
 from alts.utils import set_directory
+
+
+__all__ = ['BaseRunner', 'command_decorator']
+
+
+def command_decorator(exception_class, artifacts_key, error_message):
+    def method_wrapper(fn):
+        def inner_wrapper(self, *args, **kwargs):
+            if not os.path.exists(self._work_dir):
+                return
+            with set_directory(self._work_dir):
+                exit_code, stdout, stderr = fn(self, *args, **kwargs)
+            self._artifacts[artifacts_key] = {
+                'exit_code': exit_code,
+                'stderr': stderr,
+                'stdout': stdout
+            }
+            if exit_code != 0:
+                self._logger.error(f'{error_message}, exit code: {exit_code}, error:\n{stderr}')
+                raise exception_class(error_message)
+        return inner_wrapper
+    return method_wrapper
 
 
 class BaseRunner(object):
@@ -22,18 +46,39 @@ class BaseRunner(object):
     TERRAFORM_RESOURCES = [VERSIONS_TF_FILE, ANSIBLE_PLAYBOOK]
     TEMPFILE_PREFIX = 'base_test_runner_'
 
-    def __init__(self, dist_name: str, dist_version: Union[str, int]):
-        self._dist_name = dist_name
-        self._dist_version = str(dist_version)
+    def __init__(self, task_id: str, dist_name: str,
+                 dist_version: Union[str, int],
+                 repositories: List[dict], package_name: str,
+                 package_version: str = None):
+        # Environment ID and working directory preparation
+        self._task_id = task_id
         self._env_id = uuid.uuid4()
+        self._logger = logging.getLogger(__file__)
         self._work_dir = self._create_work_dir()
         self._artifacts_dir = self._create_artifacts_dir()
+
+        # Basic commands and tools setup
         self._terraform = local['terraform']
         self._playbook_runner = local['ansible-playbook']
         self._ansible_connection_type = 'ssh'
         self._pkg_manager = 'yum'
         if dist_name in ('debian', 'ubuntu', 'raspbian'):
             self._pkg_manager = 'apt'
+
+        # Package-specific variables that define needed container/VM
+        self._dist_name = dist_name
+        self._dist_version = str(dist_version)
+
+        # Package installation and test stuff
+        self._repositories = repositories
+        self._package_name = package_name
+        self._package_version = package_version
+
+        self._artifacts = {}
+
+    @property
+    def artifacts(self):
+        return self._artifacts
 
     # TODO: Think of better implementation
     def _create_work_dir(self):
@@ -69,61 +114,58 @@ class BaseRunner(object):
             raise WorkDirPreparationError('Cannot create working directory and needed files') from e
 
     # After: prepare_work_dir_files
+    @command_decorator(TerraformInitializationError, 'initialize_terraform', 'Cannot initialize terraform')
     def initialize_terraform(self):
-        try:
-            # Initialize Terraform environment in working directory
-            with set_directory(self._work_dir):
-                self._terraform('init')
-        except ProcessExecutionError as e:
-            raise TerraformInitializationError('Cannot initialize Terraform environment') from e
+        return self._terraform.run('init', retcode=None)
 
     # After: initialize_terraform
+    @command_decorator(EnvironmentStartError, 'start_environment', 'Cannot start environment')
     def start_env(self):
-        try:
-            with set_directory(self._work_dir):
-                self._terraform('apply', '--auto-approve')
-        except ProcessExecutionError as e:
-            raise EnvironmentStartError('Cannot start environment') from e
+        return self._terraform.run(args=('apply', '--auto-approve'), retcode=None)
 
     # After: start_env
+    @command_decorator(ProvisionError, 'initial_provision', 'Cannot run initial provision')
     def initial_provision(self):
-        try:
-            with set_directory(self._work_dir):
-                # TODO: Capture command result into log
-                result = self._playbook_runner('-c', self._ansible_connection_type, '-i', 'hosts',
-                                               self.ANSIBLE_PLAYBOOK)
-                print(result)
-        except ProcessExecutionError as e:
-            raise ProvisionError('Cannot provision environment') from e
+        cmd_args = ('-c', self._ansible_connection_type, '-i', 'hosts', self.ANSIBLE_PLAYBOOK)
+        return self._playbook_runner.run(args=cmd_args, retcode=None)
 
     @abstractmethod
     def install_package(self, package_name: str):
         raise NotImplementedError('Should be implemented in subclasses')
 
-    @abstractmethod
-    def run_tests(self):
-        # Run tests and collect their results
-        raise NotImplementedError('Should be implemented in subclasses')
-
-    @abstractmethod
-    def gather_artifacts(self):
-        # Should place all artifacts into artifacts directory
-        raise NotImplementedError('Should be implemented in subclasses')
-
-    @abstractmethod
+    # @abstractmethod
+    # def run_tests(self):
+    #     # Run tests and collect their results
+    #     raise NotImplementedError('Should be implemented in subclasses')
+    #
+    # @abstractmethod
+    # def gather_artifacts(self):
+    #     # Should place all artifacts into artifacts directory
+    #     raise NotImplementedError('Should be implemented in subclasses')
+    #
     def publish_artifacts_to_storage(self):
         # Should upload artifacts from artifacts directory to preffered artifacts storage (S3, Minio, etc.)
-        raise NotImplementedError('Should be implemented in subclasses')
+        for artifact_key, content in self.artifacts.items():
+            with open(os.path.join(self._artifacts_dir, f'{artifact_key}.log'), 'w+t') as f:
+                f.write(f'Exit code: {content["exit_code"]}\n')
+                f.write(content['stdout'])
+            if content['stderr']:
+                with open(os.path.join(self._artifacts_dir, f'{artifact_key}_error.log'), 'w+t') as f:
+                    f.write(content['stderr'])
+
+        client = boto3.client('s3', region_name=config.s3_region,
+                              aws_access_key_id=config.s3_access_key_id,
+                              aws_secret_access_key=config.s3_secret_access_key)
+        for artifact in os.listdir(self._artifacts_dir):
+            artifact_path = os.path.join(self._artifacts_dir, artifact)
+            object_name = os.path.join(config.ARTIFACTS_ROOT_DIRECTORY, artifact)
+            client.upload_file(artifact_path, config.s3_bucket, object_name)
 
     # After: install_package and run_tests
+    @command_decorator(DestroyEnvironmentError, 'destroy_environment', 'Cannot destroy environment')
     def destroy_env(self):
         if os.path.exists(self._work_dir):
-            try:
-                with set_directory(self._work_dir):
-                    self._terraform('destroy', '--auto-approve')
-            except Exception as e:
-                logging.warning(f'Exception during container destroy: {e}')
-                raise DestroyEnvironmentError('Cannot destroy environment via Terraform') from e
+            return self._terraform.run(args=('destroy', '--auto-approve'), retcode=None)
 
     def erase_work_dir(self):
         if os.path.exists(self._work_dir):
