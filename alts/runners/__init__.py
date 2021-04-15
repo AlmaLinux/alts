@@ -1,7 +1,5 @@
-import os
+from .base import BaseRunner, RESOURCES_DIRECTORY, TEMPLATE_LOOKUP
+from .docker import DockerRunner
 
-from mako.lookup import TemplateLookup
 
-
-RESOURCES_DIRECTORY = os.path.join(os.path.dirname(__file__), 'resources')
-TEMPLATE_LOOKUP = TemplateLookup(directories=[RESOURCES_DIRECTORY])
+__all__ = ['BaseRunner', 'DockerRunner', 'RESOURCES_DIRECTORY', 'TEMPLATE_LOOKUP']

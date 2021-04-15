@@ -4,25 +4,33 @@ import shutil
 import tempfile
 import uuid
 from abc import abstractmethod
+from functools import wraps
 from pathlib import Path
 from typing import List, Union
 
 import boto3
+from mako.lookup import TemplateLookup
 from plumbum import local
 
 from alts import config
 from alts.errors import (DestroyEnvironmentError, EnvironmentStartError, ProvisionError,
                          TerraformInitializationError, WorkDirPreparationError)
-from alts.runners import TEMPLATE_LOOKUP, RESOURCES_DIRECTORY
 from alts.utils import set_directory
 
 
-__all__ = ['BaseRunner', 'command_decorator']
+__all__ = ['BaseRunner', 'command_decorator', 'RESOURCES_DIRECTORY', 'TEMPLATE_LOOKUP']
+
+
+RESOURCES_DIRECTORY = os.path.join(os.path.dirname(__file__), 'resources')
+TEMPLATE_LOOKUP = TemplateLookup(directories=[RESOURCES_DIRECTORY])
 
 
 def command_decorator(exception_class, artifacts_key, error_message):
     def method_wrapper(fn):
-        def inner_wrapper(self, *args, **kwargs):
+        @wraps(fn)
+        def inner_wrapper(*args, **kwargs):
+            self = args[0]
+            args = args[1:]
             if not os.path.exists(self._work_dir):
                 return
             with set_directory(self._work_dir):
@@ -48,8 +56,7 @@ class BaseRunner(object):
 
     def __init__(self, task_id: str, dist_name: str,
                  dist_version: Union[str, int],
-                 repositories: List[dict], package_name: str,
-                 package_version: str = None):
+                 repositories: List[dict]):
         # Environment ID and working directory preparation
         self._task_id = task_id
         self._env_id = uuid.uuid4()
@@ -71,8 +78,6 @@ class BaseRunner(object):
 
         # Package installation and test stuff
         self._repositories = repositories
-        self._package_name = package_name
-        self._package_version = package_version
 
         self._artifacts = {}
 
@@ -93,13 +98,17 @@ class BaseRunner(object):
         return path
 
     def __del__(self):
-        self.destroy_env()
+        self.stop_env()
         self.erase_work_dir()
 
     # TODO: Introduce steps dependencies of some sort
 
     # First step
     def prepare_work_dir_files(self):
+        # In case if you've removed worker folder, recreate one
+        if not os.path.exists(self._work_dir):
+            self._work_dir = self._create_work_dir()
+            self._artifacts_dir = self._create_artifacts_dir()
         try:
             env_name = str(self._env_id)
             hosts_group_name = f'test_group_{env_name}'
@@ -158,15 +167,26 @@ class BaseRunner(object):
                               aws_secret_access_key=config.s3_secret_access_key)
         for artifact in os.listdir(self._artifacts_dir):
             artifact_path = os.path.join(self._artifacts_dir, artifact)
-            object_name = os.path.join(config.ARTIFACTS_ROOT_DIRECTORY, artifact)
+            object_name = os.path.join(config.ARTIFACTS_ROOT_DIRECTORY, self._task_id, artifact)
             client.upload_file(artifact_path, config.s3_bucket, object_name)
 
     # After: install_package and run_tests
-    @command_decorator(DestroyEnvironmentError, 'destroy_environment', 'Cannot destroy environment')
-    def destroy_env(self):
+    @command_decorator(DestroyEnvironmentError, 'stop_environment', 'Cannot destroy environment')
+    def stop_env(self):
         if os.path.exists(self._work_dir):
             return self._terraform.run(args=('destroy', '--auto-approve'), retcode=None)
 
     def erase_work_dir(self):
         if os.path.exists(self._work_dir):
             shutil.rmtree(self._work_dir)
+
+    def setup(self):
+        self.prepare_work_dir_files()
+        self.initialize_terraform()
+        self.start_env()
+        self.initial_provision()
+
+    def teardown(self):
+        self.stop_env()
+        self.publish_artifacts_to_storage()
+        self.erase_work_dir()

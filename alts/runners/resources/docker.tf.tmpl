@@ -9,6 +9,12 @@ resource "docker_container" "test_container" {
   command = ["/bin/tail", "-f", "/dev/null"]
 }
 
-resource "docker_image" "${dist_name}" {
+data "docker_registry_image" "${dist_name}" {
   name = "${dist_name}:${dist_version}"
+}
+
+resource "docker_image" "${dist_name}" {
+  name          = data.docker_registry_image.${dist_name}.name
+  pull_triggers = [data.docker_registry_image.${dist_name}.sha256_digest]
+  keep_locally = true
 }

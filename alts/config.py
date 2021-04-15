@@ -18,7 +18,7 @@ broker_url = f'amqp://{RABBITMQ_USER}:{RABBITMQ_PASSWORD}@{RABBITMQ_HOST}:{RABBI
 # from broker.
 worker_prefetch_multiplier = 1
 # FIXME: To enable later
-# result_backend = 's3'
+result_backend = 's3'
 
 # Tasks configuration
 task_track_started = True
@@ -27,6 +27,6 @@ task_track_started = True
 s3_access_key_id = None
 s3_secret_access_key = None
 s3_bucket = None
-s3_base_path = '/celery_result_backend'
+s3_base_path = 'celery_result_backend/'
+s3_region = 'eu-north-1'
 s3_endpoint_url = None
-s3_region = 'us-east-2'
