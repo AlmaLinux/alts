@@ -11,7 +11,7 @@ class TerraformInitializationError(BaseError):
     pass
 
 
-class EnvironmentStartError(BaseError):
+class StartEnvironmentError(BaseError):
     pass
 
 
@@ -23,5 +23,9 @@ class InstallPackageError(BaseError):
     pass
 
 
-class DestroyEnvironmentError(BaseError):
+class PublishArtifactsError(BaseError):
+    pass
+
+
+class StopEnvironmentError(BaseError):
     pass

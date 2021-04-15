@@ -21,6 +21,7 @@ worker_prefetch_multiplier = 1
 result_backend = 's3'
 
 # Tasks configuration
+task_acks_late = True
 task_track_started = True
 
 # S3 configuration
