@@ -2,8 +2,6 @@ import logging
 import os
 import shutil
 import tempfile
-import uuid
-from abc import abstractmethod
 from functools import wraps
 from pathlib import Path
 from typing import List, Union
@@ -14,11 +12,10 @@ from mako.lookup import TemplateLookup
 from plumbum import local
 
 from alts import config
-from alts.errors import (ProvisionError, PublishArtifactsError,
-                         StartEnvironmentError, StopEnvironmentError,
-                         TerraformInitializationError,
+from alts.errors import (InstallPackageError, ProvisionError,
+                         PublishArtifactsError, StartEnvironmentError,
+                         StopEnvironmentError, TerraformInitializationError,
                          WorkDirPreparationError)
-from alts.utils import set_directory
 
 
 __all__ = ['BaseRunner', 'command_decorator', 'RESOURCES_DIRECTORY',
@@ -37,8 +34,7 @@ def command_decorator(exception_class, artifacts_key, error_message):
             args = args[1:]
             if not os.path.exists(self._work_dir):
                 return
-            with set_directory(self._work_dir):
-                exit_code, stdout, stderr = fn(self, *args, **kwargs)
+            exit_code, stdout, stderr = fn(self, *args, **kwargs)
             self._artifacts[artifacts_key] = {
                 'exit_code': exit_code,
                 'stderr': stderr,
@@ -50,11 +46,22 @@ def command_decorator(exception_class, artifacts_key, error_message):
                 raise exception_class(error_message)
             else:
                 self._logger.info('Operation completed successfully')
+            # Return results of command execution
+            return exit_code, stdout, stderr
         return inner_wrapper
     return method_wrapper
 
 
 class BaseRunner(object):
+    """
+    This class describes a basic interface of test runner on some instance
+    like Docker container, virtual machine, etc.
+
+    """
+    SUPPORTED_DISTRIBUTIONS = ()
+    SUPPORTED_ARCHITECTURES = ()
+    ARCHITECTURES_MAPPING: dict = None
+    COST = 0
     VERSIONS_TF_FILE = 'versions.tf'
     ANSIBLE_PLAYBOOK = 'playbook.yml'
     ANSIBLE_INVENTORY_FILE = 'hosts'
@@ -66,18 +73,17 @@ class BaseRunner(object):
                  repositories: List[dict]):
         # Environment ID and working directory preparation
         self._task_id = task_id
-        self._env_id = uuid.uuid4()
+        self._env_id = task_id
         self._logger = logging.getLogger(__file__)
-        self._work_dir = self._create_work_dir()
-        self._artifacts_dir = self._create_artifacts_dir()
+        self._work_dir = None
+        self._artifacts_dir = None
+        self._debian_flavors = ('debian', 'ubuntu', 'raspbian')
 
         # Basic commands and tools setup
-        self._terraform = local['terraform']
-        self._playbook_runner = local['ansible-playbook']
         self._ansible_connection_type = 'ssh'
         self._pkg_manager = 'yum'
-        if dist_name in ('debian', 'ubuntu', 'raspbian'):
-            self._pkg_manager = 'apt'
+        if dist_name in self._debian_flavors:
+            self._pkg_manager = 'apt-get'
 
         # Package-specific variables that define needed container/VM
         self._dist_name = dist_name
@@ -92,16 +98,39 @@ class BaseRunner(object):
     def artifacts(self):
         return self._artifacts
 
+    @property
+    def pkg_manager(self):
+        return self._pkg_manager
+
+    @property
+    def ansible_connection_type(self):
+        return self._ansible_connection_type
+
+    @property
+    def dist_name(self):
+        return self._dist_name
+
+    @property
+    def dist_version(self):
+        return self._dist_version
+
+    @property
+    def repositories(self):
+        return self._repositories
+
     # TODO: Think of better implementation
     def _create_work_dir(self):
-        return Path(tempfile.mkdtemp(prefix=self.TEMPFILE_PREFIX))
+        if not self._work_dir:
+            self._work_dir = Path(tempfile.mkdtemp(prefix=self.TEMPFILE_PREFIX))
+        return self._work_dir
 
     # TODO: Think of better implementation
     def _create_artifacts_dir(self):
         if not self._work_dir:
             self._work_dir = self._create_work_dir()
         path = self._work_dir / 'artifacts'
-        os.mkdir(path)
+        if not os.path.exists(path):
+            os.mkdir(path)
         return path
 
     def __del__(self):
@@ -113,7 +142,7 @@ class BaseRunner(object):
     # First step
     def prepare_work_dir_files(self):
         # In case if you've removed worker folder, recreate one
-        if not os.path.exists(self._work_dir):
+        if not self._work_dir or not os.path.exists(self._work_dir):
             self._work_dir = self._create_work_dir()
             self._artifacts_dir = self._create_artifacts_dir()
         try:
@@ -139,30 +168,57 @@ class BaseRunner(object):
     @command_decorator(TerraformInitializationError, 'initialize_terraform',
                        'Cannot initialize terraform')
     def initialize_terraform(self):
-        self._logger.info('Initializing Terraform environment...')
-        return self._terraform.run('init', retcode=None)
+        self._logger.info(f'Initializing Terraform environment '
+                          f'for {self._env_id}...')
+        self._logger.debug('Running "terraform init" command')
+        return local['terraform'].run('init', retcode=None, cwd=self._work_dir)
 
     # After: initialize_terraform
     @command_decorator(StartEnvironmentError, 'start_environment',
                        'Cannot start environment')
     def start_env(self):
-        self._logger.info('Starting the environment...')
-        return self._terraform.run(args=('apply', '--auto-approve'),
-                                   retcode=None)
+        self._logger.info(f'Starting the environment {self._env_id}...')
+        self._logger.debug('Running "terraform apply --auto-approve" command')
+        return local['terraform'].run(args=('apply', '--auto-approve'),
+                                      retcode=None, cwd=self._work_dir)
 
     # After: start_env
     @command_decorator(ProvisionError, 'initial_provision',
                        'Cannot run initial provision')
-    def initial_provision(self):
-        cmd_args = ('-c', self._ansible_connection_type, '-i', 'hosts',
-                    self.ANSIBLE_PLAYBOOK, '--extra-vars',
-                    f'repositories={self._repositories}')
-        self._logger.info('Provisioning the environment...')
-        return self._playbook_runner.run(args=cmd_args, retcode=None)
+    def initial_provision(self, verbose=False):
+        cmd_args = ['-c', self.ansible_connection_type, '-i', 'hosts',
+                    self.ANSIBLE_PLAYBOOK,
+                    '-e', f'repositories={self._repositories}',
+                    '-t', 'initial_provision']
+        if verbose:
+            cmd_args.append('-vvvv')
+        cmd_args_str = ' '.join(cmd_args)
+        self._logger.info(f'Provisioning the environment {self._env_id}...')
+        self._logger.debug(
+            f'Running "ansible-playbook {cmd_args_str}" command')
+        return local['ansible-playbook'].run(
+            args=cmd_args, retcode=None, cwd=self._work_dir)
 
-    @abstractmethod
-    def install_package(self, package_name: str):
-        raise NotImplementedError('Should be implemented in subclasses')
+    @command_decorator(InstallPackageError, 'install_package',
+                       'Cannot install package')
+    def install_package(self, package_name: str, package_version: str = None):
+        if package_version:
+            if self.pkg_manager == 'yum':
+                full_pkg_name = f'{package_name}-{package_version}'
+            else:
+                full_pkg_name = f'{package_name}={package_version}'
+        else:
+            full_pkg_name = package_name
+
+        self._logger.info(f'Installing {full_pkg_name} on {self._env_id}...')
+        cmd_args = ['-c', self.ansible_connection_type, '-i', 'hosts',
+                    self.ANSIBLE_PLAYBOOK, '-e', f'pkg_name={full_pkg_name}',
+                    '-t', 'install_package']
+        cmd_args_str = ' '.join(cmd_args)
+        self._logger.debug(
+            f'Running "ansible-playbook {cmd_args_str}" command')
+        return local['ansible-playbook'].run(
+            args=cmd_args, retcode=None, cwd=self._work_dir)
 
     def publish_artifacts_to_storage(self):
         # Should upload artifacts from artifacts directory to preferred
@@ -205,9 +261,11 @@ class BaseRunner(object):
                        'Cannot destroy environment')
     def stop_env(self):
         if os.path.exists(self._work_dir):
-            self._logger.info('Destroying the environment...')
-            return self._terraform.run(args=('destroy', '--auto-approve'),
-                                       retcode=None)
+            self._logger.info(f'Destroying the environment {self._env_id}...')
+            self._logger.debug(
+                'Running "terraform destroy --auto-approve" command')
+            return local['terraform'].run(args=('destroy', '--auto-approve'),
+                                          retcode=None, cwd=self._work_dir)
 
     def erase_work_dir(self):
         if os.path.exists(self._work_dir):
@@ -215,7 +273,8 @@ class BaseRunner(object):
             try:
                 shutil.rmtree(self._work_dir)
             except Exception as e:
-                self._logger.error(f'Error while erasing working directory: {e}')
+                self._logger.error(f'Error while erasing working directory:'
+                                   f' {e}')
             else:
                 self._logger.info('Working directory was successfully removed')
 
@@ -225,7 +284,8 @@ class BaseRunner(object):
         self.start_env()
         self.initial_provision()
 
-    def teardown(self):
+    def teardown(self, publish_artifacts: bool = True):
         self.stop_env()
-        self.publish_artifacts_to_storage()
+        if publish_artifacts:
+            self.publish_artifacts_to_storage()
         self.erase_work_dir()

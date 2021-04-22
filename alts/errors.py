@@ -1,4 +1,10 @@
 
+__all__ = ['BaseError', 'InstallPackageError', 'ProvisionError',
+           'PublishArtifactsError', 'StartEnvironmentError',
+           'StopEnvironmentError', 'TerraformInitializationError',
+           'WorkDirPreparationError']
+
+
 class BaseError(Exception):
     pass
 

@@ -3,16 +3,55 @@
   hosts: all
   remote_user: root
   tasks:
-    - name: Update all packages
-      yum:
-        name: "*"
-        state: latest
+    - name: Initial provision (RedHat-like distros)
+      block:
+        - name: Update all packages
+          yum:
+            name: "*"
+            state: latest
 
-    - name: Add required repositories
-      yum_repository:
-        name: "{{ item.name }}"
-        baseurl: "{{ item.url }}"
-        enabled: yes
-        gpgcheck: yes
-      with_items: "{{ repositories }}"
-      when: repositories is defined and (repositories | length > 0)
+
+        - name: Add required repositories
+          yum_repository:
+            name: "{{ item.name }}"
+            baseurl: "{{ item.url }}"
+            enabled: yes
+            gpgcheck: no
+          with_items: "{{ repositories }}"
+          when: repositories is defined and (repositories | length > 0)
+      when: ansible_distribution_file_variety == 'RedHat'
+      tags:
+        - initial_provision
+
+    - name: Initial provision (Debian-like distros)
+      block:
+        - name: Update all packages
+          apt:
+            name: "*"
+            state: latest
+
+        - name: Add required repositories
+          apt_repository:
+            repo: "{{ item.url }}"
+            filename: 'test_repos'
+          with_items: "{{ repositories }}"
+          when: repositories is defined and (repositories | length > 0)
+      when: ansible_distribution_file_variety == 'Debian'
+      tags:
+        - initial_provision
+
+    - name: Install package
+      yum:
+        name: "{{ pkg_name }}"
+        state: present
+      when: ansible_distribution_file_variety == 'RedHat'
+      tags:
+        - install_package
+
+    - name: Install package
+      apt:
+        name: "{{ pkg_name }}"
+        state: present
+      when: ansible_distribution_file_variety == 'Debian'
+      tags:
+        - install_package

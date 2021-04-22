@@ -2,7 +2,7 @@ provider "docker" {
   host = "unix:///run/docker.sock"
 }
 
-resource "docker_container" "test_container" {
+resource "docker_container" "test_container_${container_name}" {
   image = docker_image.${dist_name}.latest
   name = "${container_name}"
   must_run = true

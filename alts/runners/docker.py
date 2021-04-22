@@ -3,14 +3,23 @@ from typing import Union, List
 
 from plumbum import local
 
-from alts.errors import InstallPackageError, WorkDirPreparationError
+from alts.errors import (InstallPackageError, ProvisionError,
+                         WorkDirPreparationError)
 from alts.runners.base import BaseRunner, command_decorator, TEMPLATE_LOOKUP
+from helpers.types import ImmutableDict
 
 
 __all__ = ['DockerRunner']
 
 
 class DockerRunner(BaseRunner):
+    SUPPORTED_DISTRIBUTIONS = ('almalinux', 'centos', 'debian', 'ubuntu')
+    SUPPORTED_ARCHITECTURES = ('x86_64', 'i686', 'amd64' 'aarch64', 'arm64')
+    COST = 0
+    ARCHITECTURES_MAPPING = ImmutableDict(
+        aarch64=['arm64', 'aarch64'],
+        x86_64=['x86_64', 'amd64', 'i686'],
+    )
     DOCKER_TF_FILE = 'docker.tf'
     TEMPFILE_PREFIX = 'docker_test_runner_'
 
@@ -18,7 +27,6 @@ class DockerRunner(BaseRunner):
                  dist_version: Union[str, int], repositories: List[dict]):
         super().__init__(task_id, dist_name, dist_version, repositories)
         self._ansible_connection_type = 'docker'
-        self._docker = local['docker']
 
     def prepare_work_dir_files(self):
         try:
@@ -39,10 +47,24 @@ class DockerRunner(BaseRunner):
             raise WorkDirPreparationError('Cannot create working directory and'
                                           ' needed files') from e
 
-    @command_decorator(InstallPackageError, 'install_package',
-                       'Cannot install package')
-    def install_package(self, package_name: str, package_version: str = None):
-        cmd_args = ('exec', str(self._env_id), self._pkg_manager, 'install',
-                    '-y', package_name)
-        self._logger.info(f'Installing package {package_name}...')
-        return self._docker.run(args=cmd_args, retcode=None)
+    def _exec(self, cmd_with_args: ()):
+        cmd = ('exec', str(self._env_id), *cmd_with_args)
+        cmd_str = ' '.join(cmd)
+        self._logger.debug(f'Running "docker {cmd_str}" command')
+        return local['docker'].run(args=cmd, retcode=None, cwd=self._work_dir)
+
+    def initial_provision(self, verbose=False):
+        # Installing python3 package before running Ansible
+        if self._dist_name in self._debian_flavors:
+            self._logger.info('Installing python3 package...')
+            exit_code, stdout, stderr = self._exec(
+                (self._pkg_manager, 'update'))
+            if exit_code != 0:
+                raise ProvisionError(f'Cannot update metadata: {stderr}')
+            cmd_args = (self._pkg_manager, 'install', '-y', 'python3')
+            exit_code, stdout, stderr = self._exec(cmd_args)
+            if exit_code != 0:
+                raise ProvisionError(f'Cannot install package python3: '
+                                     f'{stderr}')
+            self._logger.info('Installation is completed')
+        return super().initial_provision(verbose=verbose)
