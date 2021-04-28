@@ -38,5 +38,11 @@ class Task(Base):
 
     # queue = sqlalchemy.orm.relationship('Queue', back_populates='tasks')
 
+    def __str__(self):
+        return f'Task: task ID {self.task_id}, status {self.status}'
+
+    def __repr__(self):
+        return self.__str__()
+
 
 Base.metadata.create_all(engine)
