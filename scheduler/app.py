@@ -1,50 +1,48 @@
 import logging
 import time
 import traceback
-import typing
 import uuid
 from datetime import datetime, timedelta
 
+from celery.exceptions import TimeoutError
 from celery.states import READY_STATES
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    HTTPException,
+    status,
+)
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, validator, ValidationError
+from fastapi.security import HTTPBearer
+from jose import JWTError, jwt
+from pydantic import ValidationError
 
 from alts.app import celery_app
+from alts.mappings import RUNNER_MAPPING
 from alts.tasks import run_docker
+from scheduler import CONFIG
 from scheduler.db import database, Session, Task
-from shared import RUNNER_MAPPING
+from shared.models import (
+    TaskRequestResponse,
+    TaskRequestPayload,
+    TaskResultResponse,
+)
 
 
 app = FastAPI()
+http_bearer_scheme = HTTPBearer()
 
 
-class Repository(BaseModel):
-    name: typing.Optional[str] = None
-    baseurl = str
-
-
-class TaskRequestPayload(BaseModel):
-    runner_type: str
-    dist_name: str
-    dist_version: typing.Union[str, int]
-    dist_arch: str
-    repositories: typing.List[Repository] = []
-    package_name: str
-    package_version: typing.Optional[str] = None
-
-    @validator('runner_type')
-    def validate_runner_type(cls, value: str) -> str:
-        # TODO: Add config or constant to have all possible runner types
-        if value not in ('any', 'docker'):
-            raise ValidationError(f'Unknown runner type: {value}')
-        return value
-
-
-class TaskRequestResponse(BaseModel):
-    success: bool
-    error_description: typing.Optional[str] = None
-    task_id: typing.Optional[str] = None
+def get_celery_task_result(task_id: str, timeout: int = 1) -> dict:
+    result = {}
+    task_data = celery_app.AsyncResult(task_id)
+    try:
+        result['result'] = task_data.get(timeout=timeout)
+    except TimeoutError:
+        pass
+    result['state'] = task_data.state
+    return result
 
 
 # TODO: Make timeout configurable
@@ -100,13 +98,37 @@ async def shutdown():
     await database.disconnect()
 
 
-@app.post('/schedule-task', response_model=TaskRequestResponse,
+async def authenticate_user(credentials: str = Depends(http_bearer_scheme)):
+    # TODO: Validate user emails?
+    try:
+        # If credentials have a whitespace then the token is the part after
+        # the whitespace
+        if ' ' in credentials.credentials:
+            token = credentials.credentials.split(' ')[-1]
+        else:
+            token = credentials.credentials
+        return jwt.decode(token, CONFIG.jwt_secret,
+                          algorithms=[CONFIG.hashing_algorithm])
+    except JWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="Could not validate credentials",
+                            headers={"WWW-Authenticate": "Bearer"})
+
+
+@app.get('/tasks/{task_id}/result', response_model=TaskResultResponse)
+async def get_task_result(task_id: str,
+                          _=Depends(authenticate_user)) -> JSONResponse:
+    return JSONResponse(content=get_celery_task_result(task_id))
+
+
+@app.post('/tasks/schedule', response_model=TaskRequestResponse,
           responses={
               201: {'model': TaskRequestResponse},
               400: {'model': TaskRequestResponse},
           })
 async def schedule_task(task_data: TaskRequestPayload,
-                        b_tasks: BackgroundTasks) -> JSONResponse:
+                        b_tasks: BackgroundTasks,
+                        _=Depends(authenticate_user)) -> JSONResponse:
     runner_type = task_data.runner_type
     if runner_type == 'any':
         runner_type = 'docker'

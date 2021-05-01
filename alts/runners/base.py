@@ -11,11 +11,12 @@ from boto3.exceptions import S3UploadFailedError
 from mako.lookup import TemplateLookup
 from plumbum import local
 
-from alts import config
-from alts.errors import (InstallPackageError, ProvisionError,
-                         PublishArtifactsError, StartEnvironmentError,
-                         StopEnvironmentError, TerraformInitializationError,
-                         WorkDirPreparationError)
+from alts import CONFIG
+from shared.exceptions import (
+    InstallPackageError, ProvisionError, PublishArtifactsError,
+    StartEnvironmentError, StopEnvironmentError, TerraformInitializationError,
+    WorkDirPreparationError,
+)
 
 
 __all__ = ['BaseRunner', 'command_decorator', 'RESOURCES_DIRECTORY',
@@ -236,18 +237,18 @@ class BaseRunner(object):
                     f.write(content['stderr'])
 
         client = boto3.client(
-            's3', region_name=config.s3_region,
-            aws_access_key_id=config.s3_access_key_id,
-            aws_secret_access_key=config.s3_secret_access_key
+            's3', region_name=CONFIG.s3_region,
+            aws_access_key_id=CONFIG.s3_access_key_id,
+            aws_secret_access_key=CONFIG.s3_secret_access_key
         )
         error_when_uploading = False
         for artifact in os.listdir(self._artifacts_dir):
             artifact_path = os.path.join(self._artifacts_dir, artifact)
-            object_name = os.path.join(config.ARTIFACTS_ROOT_DIRECTORY,
+            object_name = os.path.join(CONFIG.artifacts_root_directory,
                                        self._task_id, artifact)
             try:
                 self._logger.info(f'Uploading artifact {artifact_path} to S3')
-                client.upload_file(artifact_path, config.s3_bucket, object_name)
+                client.upload_file(artifact_path, CONFIG.s3_bucket, object_name)
             except (S3UploadFailedError, ValueError) as e:
                 self._logger.error(f'Cannot upload artifact {artifact_path}'
                                    f' to S3: {e}')

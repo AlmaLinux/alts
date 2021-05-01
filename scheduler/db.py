@@ -1,17 +1,25 @@
+import os
+
 import sqlalchemy
 from databases import Database
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-from scheduler.config import DATABASE_URL
+from scheduler import CONFIG, DATABASE_NAME
 
 
 __all__ = ['database', 'Session', 'Task']
 
 
-database = Database(DATABASE_URL)
+if not os.path.exists(CONFIG.working_directory):
+    os.makedirs(CONFIG.working_directory)
+
+
+database_path = os.path.join(CONFIG.working_directory, DATABASE_NAME)
+database_url = f'sqlite:///{database_path}'
+database = Database(database_url)
 engine = sqlalchemy.engine.create_engine(
-    DATABASE_URL, connect_args={"check_same_thread": False}
+    database_url, connect_args={"check_same_thread": False}
 )
 Base = declarative_base()
 Session = sessionmaker(bind=engine)

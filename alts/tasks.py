@@ -2,7 +2,7 @@ import logging
 from typing import List, Union
 
 from alts.app import celery_app
-from shared import RUNNER_MAPPING
+from alts.mappings import RUNNER_MAPPING
 
 
 __all__ = ['run_docker']

@@ -3,10 +3,9 @@ from typing import Union, List
 
 from plumbum import local
 
-from alts.errors import (InstallPackageError, ProvisionError,
-                         WorkDirPreparationError)
-from alts.runners.base import BaseRunner, command_decorator, TEMPLATE_LOOKUP
-from helpers.types import ImmutableDict
+from alts.runners.base import BaseRunner, TEMPLATE_LOOKUP
+from shared.types import ImmutableDict
+from shared.exceptions import (ProvisionError, WorkDirPreparationError)
 
 
 __all__ = ['DockerRunner']
@@ -14,7 +13,7 @@ __all__ = ['DockerRunner']
 
 class DockerRunner(BaseRunner):
     SUPPORTED_DISTRIBUTIONS = ('almalinux', 'centos', 'debian', 'ubuntu')
-    SUPPORTED_ARCHITECTURES = ('x86_64', 'i686', 'amd64' 'aarch64', 'arm64')
+    SUPPORTED_ARCHITECTURES = ('x86_64', 'i686', 'amd64', 'aarch64', 'arm64')
     COST = 0
     ARCHITECTURES_MAPPING = ImmutableDict(
         aarch64=['arm64', 'aarch64'],

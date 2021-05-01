@@ -24,12 +24,7 @@ services:
       args:
         ARCH: amd64
     environment:
-      RABBITMQ_USER:
-      RABBITMQ_PASSWORD:
-      RABBITMQ_HOST: rabbitmq
-      AWS_S3_ACCESS_KEY_ID:
-      AWS_S3_SECRET_ACCESS_KEY:
-      AWS_S3_BUCKET:
+      CELERY_CONFIG_PATH: "/celery_config.yaml"
     command: "bash -c 'source env/bin/activate && celery -A alts.app worker
       --pool=threads --concurrency=10 --loglevel=INFO -Q docker-x86_64-0'"
     restart: on-failure
@@ -38,6 +33,7 @@ services:
     privileged: true
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./configs/docker_compose_celery.yaml:/celery_config.yaml
     depends_on:
       - rabbitmq
 
@@ -47,18 +43,16 @@ services:
       dockerfile: Dockerfile.scheduler
       context: .
     environment:
-      RABBITMQ_USER:
-      RABBITMQ_PASSWORD:
-      RABBITMQ_HOST: rabbitmq
-      AWS_S3_ACCESS_KEY_ID:
-      AWS_S3_SECRET_ACCESS_KEY:
-      AWS_S3_BUCKET:
+      CELERY_CONFIG_PATH: "/scheduler_config.yaml"
+      SCHEDULER_CONFIG_PATH: "/scheduler_config.yaml"
     command: "bash -c 'source env/bin/activate && uvicorn --host 0.0.0.0 scheduler.app:app'"
     restart: on-failure
     networks:
       - test-system
     ports:
       - 8000:8000
+    volumes:
+      - ./configs/docker_compose_scheduler.yaml:/scheduler_config.yaml
     depends_on:
       - rabbitmq
 

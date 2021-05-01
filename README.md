@@ -9,21 +9,20 @@ Instruments and libraries required for system to run in current state:
 
 Celery launch command example:
 ```shell
-AWS_S3_ACCESS_KEY_ID=$KEY_ID AWS_S3_BUCKET=$S3_BUCkET \
-AWS_S3_SECRET_ACCESS_KEY=$SECRET_KEY RABBITMQ_USER=test-system \
-RABBITMQ_PASSWORD=$YOUR_PASSWORD celery -A alts.app \
-worker --pool=threads --concurrency=10 --loglevel=DEBUG
+celery -A alts.app worker --pool=threads --concurrency=10 --loglevel=DEBUG
 ```
 
 To launch scheduler, apply the following command:
 ```shell
-AWS_S3_ACCESS_KEY_ID=$KEY_ID AWS_S3_BUCKET=$S3_BUCkET \
-AWS_S3_SECRET_ACCESS_KEY=$SECRET_KEY RABBITMQ_USER=test-system \
-RABBITMQ_PASSWORD=$YOUR_PASSWORD uvicorn scheduler.app:app
+uvicorn scheduler.app:app
 ```
 
 For testing purposes you can add `--reload` argument to scheduler launch 
 command, this will enable live code reload.
+
+Both Celery worker and scheduler REST API services need YAML-based configs to function.
+Config examples are provided in `configs` folder.
+
 
 System overview
 --
@@ -52,8 +51,6 @@ Test system flow
 
 Unresolved issues
 --
-- Cannot make background task check from web app (reports disabled result backend);
-- JWT authorization is required;
 - Provision for production server is required;
 - Only supports Docker containers;
 - No basic tests;
