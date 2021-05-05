@@ -146,6 +146,20 @@ async def schedule_task(task_data: TaskRequestPayload,
         if task_data.dist_arch in supported_arches:
             queue_arch = arch
 
+    repositories = []
+
+    # Make sure all repositories have their names
+    # (needed only for RHEL-like distributions)
+    # Convert repositories structures to dictionaries
+    repo_counter = 0
+    for repository in task_data.repositories:
+        if not repository.name:
+            repo_name = f'repo-{repo_counter}'
+            repo_counter += 1
+        else:
+            repo_name = repository.name
+        repositories.append({'url': repository.baseurl, 'name': repo_name})
+
     if not queue_arch:
         raise ValidationError('Cannot map requested architecture to any '
                               'host architecture, possible coding error')
@@ -155,8 +169,8 @@ async def schedule_task(task_data: TaskRequestPayload,
     try:
         run_docker.apply_async(
             (task_id, runner_type, task_data.dist_name, task_data.dist_version,
-             task_data.repositories, task_data.package_name,
-             task_data.package_version), task_id=task_id, queue=queue_name)
+             repositories, task_data.package_name, task_data.package_version),
+            task_id=task_id, queue=queue_name)
     except Exception as e:
         logging.error(f'Cannot launch the task: {e}')
         logging.error(traceback.format_exc())

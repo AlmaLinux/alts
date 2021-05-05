@@ -33,7 +33,7 @@ services:
     privileged: true
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./configs/docker_compose_celery.yaml:/celery_config.yaml
+      - ./configs/alts_config.yaml:/celery_config.yaml
     depends_on:
       - rabbitmq
 
@@ -52,7 +52,7 @@ services:
     ports:
       - 8000:8000
     volumes:
-      - ./configs/docker_compose_scheduler.yaml:/scheduler_config.yaml
+      - ./configs/alts_config.yaml:/scheduler_config.yaml
     depends_on:
       - rabbitmq
 

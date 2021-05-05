@@ -303,6 +303,4 @@ override.tf.json
 terraform.rc
 
 # Ignore configs for docker-compose deploy
-configs/docker_compose_*.yaml
-configs/docker_compose_*.yml
-
+configs/alts_config*.yaml
