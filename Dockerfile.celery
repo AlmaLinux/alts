@@ -1,0 +1,26 @@
+FROM centos:8
+
+ARG ARCH
+
+RUN mkdir -p /code ~/.terraform.d/plugin-cache \
+    && echo "plugin_cache_dir = \"\$HOME/.terraform.d/plugin-cache\"" > ~/.terraformrc \
+    && yum update -y \
+    && yum install -y python3-virtualenv epel-release wget unzip yum-utils \
+    && yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo \
+    && yum install -y docker-ce docker-ce-cli containerd.io \
+    && yum install -y ansible --enablerepo=epel \
+    && yum clean all
+RUN wget -q https://releases.hashicorp.com/terraform/0.15.1/terraform_0.15.1_linux_${ARCH}.zip \
+    -O /tmp/terraform_linux_${ARCH}.zip \
+    && unzip /tmp/terraform_linux_${ARCH}.zip -d /usr/local/bin \
+    && chmod 755 /usr/local/bin/terraform \
+    && rm -f /tmp/terraform_linux_${ARCH}.zip
+COPY requirements/celery.txt /tmp/requirements.txt
+RUN cd /code \
+    && virtualenv -p python3.6 env \
+    && source env/bin/activate \
+    && pip3 install -U pip setuptools && pip3 install -r /tmp/requirements.txt \
+    && deactivate \
+    && rm -f /tmp/requirements.txt
+COPY . /code
+WORKDIR /code

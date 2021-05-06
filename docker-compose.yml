@@ -1,0 +1,60 @@
+version: "2.4"
+services:
+
+  rabbitmq:
+    image: rabbitmq:3.8-management
+    container_name: "rabbitmq-ts"
+    ports:
+      - 5672:5672
+      - 15672:15672
+    environment:
+      RABBITMQ_ERLANG_COOKIE: PyekdgANDctdPgRzU8AVaRBK
+      RABBITMQ_DEFAULT_USER: test-system
+      RABBITMQ_DEFAULT_PASS: # Your secret password here
+      RABBITMQ_DEFAULT_VHOST: test_system
+    restart: always
+    networks:
+      - test-system
+
+  celery:
+    image: alts-celery:latest
+    build:
+      dockerfile: Dockerfile.celery
+      context: .
+      args:
+        ARCH: amd64
+    environment:
+      CELERY_CONFIG_PATH: "/celery_config.yaml"
+    command: "bash -c 'source env/bin/activate && celery -A alts.app worker
+      --pool=threads --concurrency=10 --loglevel=INFO -Q docker-x86_64-0'"
+    restart: on-failure
+    networks:
+      - test-system
+    privileged: true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./configs/alts_config.yaml:/celery_config.yaml
+    depends_on:
+      - rabbitmq
+
+  scheduler:
+    image: alts-scheduler:latest
+    build:
+      dockerfile: Dockerfile.scheduler
+      context: .
+    environment:
+      CELERY_CONFIG_PATH: "/scheduler_config.yaml"
+      SCHEDULER_CONFIG_PATH: "/scheduler_config.yaml"
+    command: "bash -c 'source env/bin/activate && uvicorn --host 0.0.0.0 scheduler.app:app'"
+    restart: on-failure
+    networks:
+      - test-system
+    ports:
+      - 8000:8000
+    volumes:
+      - ./configs/alts_config.yaml:/scheduler_config.yaml
+    depends_on:
+      - rabbitmq
+
+networks:
+  test-system:

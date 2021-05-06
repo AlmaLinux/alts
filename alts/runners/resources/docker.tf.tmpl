@@ -1,0 +1,20 @@
+provider "docker" {
+  host = "unix:///run/docker.sock"
+}
+
+resource "docker_container" "test_container_${container_name}" {
+  image = docker_image.${dist_name}.latest
+  name = "${container_name}"
+  must_run = true
+  command = ["/bin/tail", "-f", "/dev/null"]
+}
+
+data "docker_registry_image" "${dist_name}" {
+  name = "${dist_name}:${dist_version}"
+}
+
+resource "docker_image" "${dist_name}" {
+  name          = data.docker_registry_image.${dist_name}.name
+  pull_triggers = [data.docker_registry_image.${dist_name}.sha256_digest]
+  keep_locally = true
+}
