@@ -1,0 +1,28 @@
+variable "one_endpoint" {}
+variable "one_username" {}
+variable "one_password" {
+  sensitive = true
+}
+
+provider "opennebula" {
+  endpoint      = var.one_endpoint
+  username      = var.one_username
+  password      = var.one_password
+}
+
+resource "opennebula_virtual_machine" "${vm_name}" {
+  name = "${vm_name}"
+  template_id = ${template_id}
+  permissions = "660"
+  group = "${vm_group_name}"
+
+  context = {
+    NETWORK      = "YES"
+    HOSTNAME     = "${vm_name}.test.com"
+    SSH_PUBLIC_KEY = "${ssh_public_key}"
+  }
+}
+
+output "vm_ip" {
+  value = opennebula_virtual_machine.${vm_name}.ip
+}

@@ -5,7 +5,7 @@ from databases import Database
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-from scheduler import CONFIG, DATABASE_NAME
+from alts.scheduler import CONFIG, DATABASE_NAME
 
 
 __all__ = ['database', 'Session', 'Task']
@@ -31,7 +31,6 @@ class Queue(Base):
     id = sqlalchemy.Column(sqlalchemy.Integer, primary_key=True)
     name = sqlalchemy.Column(sqlalchemy.String, unique=True)
     cost = sqlalchemy.Column(sqlalchemy.Integer)
-    max_capacity = sqlalchemy.Column(sqlalchemy.Integer)
 
 
 class Task(Base):
@@ -39,12 +38,9 @@ class Task(Base):
 
     id = sqlalchemy.Column(sqlalchemy.Integer, primary_key=True)
     task_id = sqlalchemy.Column(sqlalchemy.String, unique=True)
-    # queue_name = sqlalchemy.Column(sqlalchemy.ForeignKey('queue.name'))
     queue_name = sqlalchemy.Column(sqlalchemy.String)
     status = sqlalchemy.Column(sqlalchemy.String)
     task_duration = sqlalchemy.Column(sqlalchemy.String, nullable=True)
-
-    # queue = sqlalchemy.orm.relationship('Queue', back_populates='tasks')
 
     def __str__(self):
         return f'Task: task ID {self.task_id}, status {self.status}'
