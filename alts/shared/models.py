@@ -10,7 +10,7 @@ __all__ = ['CeleryConfig', 'Repository', 'SchedulerConfig',
 
 class Repository(BaseModel):
     name: typing.Optional[str] = None
-    baseurl = str
+    baseurl: str
 
 
 class TaskRequestPayload(BaseModel):
