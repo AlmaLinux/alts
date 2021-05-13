@@ -20,7 +20,7 @@ testing:
 working_directory:
 jwt_secret:
 hashing_algorithm: 'HS256'
-opennebula_endpoint:
+opennebula_rpc_endpoint:
 opennebula_username:
 opennebula_password:
 opennebula_vm_group:
