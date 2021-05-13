@@ -19,7 +19,7 @@ class ALTSBaseError(Exception):
 
 class DBUpdateError(ALTSBaseError):
 
-    """Updating Test System database error."""
+    """Database update error."""
 
     pass
 
@@ -40,7 +40,7 @@ class WorkDirPreparationError(ALTSBaseError):
 
 class TerraformInitializationError(ALTSBaseError):
 
-    """Terraform environment initialization error."""
+    """Testing instance start error."""
 
     pass
 

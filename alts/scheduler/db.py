@@ -33,7 +33,7 @@ Session = sessionmaker(bind=engine)
 
 class Queue(Base):
 
-    """Test System database tasks' queues creator."""
+    """Test System database tasks' queues table."""
 
     __tablename__ = 'queues'
 
@@ -44,7 +44,7 @@ class Queue(Base):
 
 class Task(Base):
 
-    """Test System database tasks creator."""
+    """Test System database tasks table."""
 
     __tablename__ = 'tasks'
 

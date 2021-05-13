@@ -1,3 +1,9 @@
+# -*- mode:python; coding:utf-8; -*-
+# author: Vasily Kleschov <vkleschov@cloudlinux.com>
+# created: 2021-04-13
+
+"""AlmaLinux Test System base environment runner."""
+
 import logging
 import os
 import shutil
@@ -25,6 +31,22 @@ __all__ = ['BaseRunner', 'GenericVMRunner', 'command_decorator']
 
 
 def command_decorator(exception_class, artifacts_key, error_message):
+    """
+
+    Parameters
+    ----------
+    exception_class : class
+        Specified error as exception to raise.
+    artifacts_key : str
+        Specified artifact's key.
+    error_message : str
+        Specified error message for output.
+
+    Returns
+    -------
+    function
+        Function decorator.
+    """
     def method_wrapper(fn):
         @wraps(fn)
         def inner_wrapper(*args, **kwargs):
@@ -75,6 +97,22 @@ class BaseRunner(object):
     def __init__(self, task_id: str, dist_name: str,
                  dist_version: Union[str, int],
                  repositories: List[dict] = None, dist_arch: str = 'x86_64'):
+        """
+        Base runner environment initialization.
+
+        Parameters
+        ----------
+        task_id : str
+            Test System task identifier.
+        dist_name : str
+            Distribution name.
+        dist_version : str, int
+            Distribution version.
+        repositories : list of dict
+            List of packages' repositories/
+        dist_arch : str
+            Distribution architecture.
+        """
         # Environment ID and working directory preparation
         self._task_id = task_id
         self._env_name = f'{self.TYPE}_{task_id}'
@@ -100,10 +138,32 @@ class BaseRunner(object):
 
     @property
     def artifacts(self):
+        """
+        Gets artifacts.
+
+        Returns
+        -------
+        dict
+            Dictionary of artifacts.
+
+        """
         return self._artifacts
 
     @property
     def pkg_manager(self):
+        """
+        Defines which package manager to use.
+
+        Returns
+        -------
+        str
+            Name of package manager.
+        Raises
+        ------
+        ValueError
+            If distribution name wasn't recognized.
+
+        """
         if (self._dist_name == 'fedora' or self._dist_name in self.RHEL_FLAVORS
                 and '8' in self._dist_version):
             return 'dnf'
@@ -116,36 +176,102 @@ class BaseRunner(object):
 
     @property
     def ansible_connection_type(self):
+        """
+        Gets connection type for running ansible.
+
+        Returns
+        -------
+        str
+            Type of connection to establish.
+
+        """
         return self._ansible_connection_type
 
     @property
     def dist_arch(self):
+        """
+        Gets distribution architecture.
+
+        Returns
+        -------
+        str
+            Distribution architecture.
+
+        """
         return self._dist_arch
 
     @property
     def dist_name(self):
+        """
+        Gets distribution name.
+
+        Returns
+        -------
+        str
+            Distribution name.
+        """
         return self._dist_name
 
     @property
     def dist_version(self):
+        """
+        Gets distribution version.
+
+        Returns
+        -------
+        str
+            Distribution version.
+        """
         return self._dist_version
 
     @property
     def repositories(self):
+        """
+        Gets list of packages' repositories.
+
+        Returns
+        -------
+        list
+            List of packages' repositories.
+        """
         return self._repositories
 
     @property
     def env_name(self):
+        """
+        Gets environment name.
+
+        Returns
+        -------
+        str
+            Environment name.
+        """
         return self._env_name
 
     # TODO: Think of better implementation
     def _create_work_dir(self):
+        """
+        Creates temporary working directory.
+
+        Returns
+        -------
+        Path
+            Temporary working directory path.
+        """
         if not self._work_dir or not os.path.exists(self._work_dir):
             self._work_dir = Path(tempfile.mkdtemp(prefix=self.TEMPFILE_PREFIX))
         return self._work_dir
 
     # TODO: Think of better implementation
     def _create_artifacts_dir(self):
+        """
+        Creates temporary artifacts directory.
+
+        Returns
+        -------
+        Path
+            Temporary artifacts directory path.
+        """
         if not self._work_dir:
             self._work_dir = self._create_work_dir()
         path = self._work_dir / 'artifacts'
@@ -154,16 +280,39 @@ class BaseRunner(object):
         return path
 
     def __del__(self):
+        """
+        Stops running environment and removes all temporary directories.
+        """
         self.stop_env()
         self.erase_work_dir()
 
     def _render_template(self, template_name, result_file_path, **kwargs):
+        """
+        Renders environment's template to get configuration data.
+
+        Parameters
+        ----------
+        template_name : str
+            Environment's template name to render.
+        result_file_path : str
+            File path to write rendered environment configuration.
+        kwargs : dict of str
+            Additional parameters for rendering template.
+        """
         template = self._template_lookup.get_template(template_name)
         with open(result_file_path, 'wt') as f:
             content = template.render(**kwargs)
             f.write(content)
 
     def _create_ansible_inventory_file(self, vm_ip: str = None):
+        """
+        Creates file with environment's configuration for ansible usage.
+
+        Parameters
+        ----------
+        vm_ip : str
+            Virtual machine's ip address.
+        """
         inventory_file_path = os.path.join(self._work_dir,
                                            self.ANSIBLE_INVENTORY_FILE)
         self._render_template(
@@ -173,24 +322,41 @@ class BaseRunner(object):
 
     def _render_tf_main_file(self):
         """
-        Renders main Terraform file for the instance managing
+        Renders main Terraform file for the instance managing.
 
-        Returns:
-
+        Raises
+        ------
+        NotImplementedError
         """
         raise NotImplementedError
 
     def _render_tf_variables_file(self):
         """
-        Renders Terraform variables file
+        Renders Terraform variables file.
 
-        Returns:
-
+        Raises
+        ------
+        NotImplementedError
         """
         raise NotImplementedError
 
     # First step
     def prepare_work_dir_files(self, create_ansible_inventory=False):
+        """
+        Prepares configuration files for ansible usage in temporary
+        working directory.
+
+        Parameters
+        ----------
+        create_ansible_inventory : bool
+            True if ansible inventory should be used, False otherwise.
+
+        Raises
+        ------
+        WorkDirPreparationError
+            Raised if creating temporary directory with files failed.
+
+        """
         # In case if you've removed worker folder, recreate one
         if not self._work_dir or not os.path.exists(self._work_dir):
             self._work_dir = self._create_work_dir()
@@ -217,6 +383,14 @@ class BaseRunner(object):
     @command_decorator(TerraformInitializationError, 'initialize_terraform',
                        'Cannot initialize terraform')
     def initialize_terraform(self):
+        """
+        Initializes specified Terraform environment.
+
+        Returns
+        -------
+        tuple
+            Executed command exit code, standard output and standard error.
+        """
         self._logger.info(f'Initializing Terraform environment '
                           f'for {self.env_name}...')
         self._logger.debug('Running "terraform init" command')
@@ -226,6 +400,14 @@ class BaseRunner(object):
     @command_decorator(StartEnvironmentError, 'start_environment',
                        'Cannot start environment')
     def start_env(self):
+        """
+        Starts up initialized specified Terraform environment.
+
+        Returns
+        -------
+        tuple
+            Executed command exit code, standard output and standard error.
+        """
         self._logger.info(f'Starting the environment {self.env_name}...')
         self._logger.debug('Running "terraform apply --auto-approve" command')
         cmd_args = ['apply', '--auto-approve']
@@ -238,6 +420,19 @@ class BaseRunner(object):
     @command_decorator(ProvisionError, 'initial_provision',
                        'Cannot run initial provision')
     def initial_provision(self, verbose=False):
+        """
+        Creates initial ansible provision inside specified environment.
+
+        Parameters
+        ----------
+        verbose : bool
+            True if additional output information is needed, False otherwise.
+
+        Returns
+        -------
+        tuple
+            Executed command exit code, standard output and standard error.
+        """
         cmd_args = ['-c', self.ansible_connection_type, '-i',
                     self.ANSIBLE_INVENTORY_FILE, self.ANSIBLE_PLAYBOOK,
                     '-e', f'repositories={self._repositories}',
@@ -254,6 +449,20 @@ class BaseRunner(object):
     @command_decorator(InstallPackageError, 'install_package',
                        'Cannot install package')
     def install_package(self, package_name: str, package_version: str = None):
+        """
+        Installs package being tested inside testing environment.
+
+        Parameters
+        ----------
+        package_name : str
+            Name of a package being tested.
+        package_version :
+            Version of a package being tested.
+        Returns
+        -------
+        tuple
+            Executed command exit code, standard output and standard error.
+        """
         if package_version:
             if self.pkg_manager == 'yum':
                 full_pkg_name = f'{package_name}-{package_version}'
@@ -274,6 +483,15 @@ class BaseRunner(object):
             args=cmd_args, retcode=None, cwd=self._work_dir)
 
     def publish_artifacts_to_storage(self):
+        """
+        Uploads artifacts from temporary directory to the specified
+        storage directory.
+
+        Raises
+        ------
+        PublishArtifactsError
+            Raised if artifacts' upload failed.
+        """
         # Should upload artifacts from artifacts directory to preferred
         # artifacts storage (S3, Minio, etc.)
         for artifact_key, content in self.artifacts.items():
@@ -313,6 +531,14 @@ class BaseRunner(object):
     @command_decorator(StopEnvironmentError, 'stop_environment',
                        'Cannot destroy environment')
     def stop_env(self):
+        """
+        Stops running testing environment.
+
+        Returns
+        -------
+        tuple
+            Executed command exit code, standard output and standard error.
+        """
         if os.path.exists(self._work_dir):
             self._logger.info(f'Destroying the environment {self.env_name}...')
             self._logger.debug(
@@ -324,6 +550,10 @@ class BaseRunner(object):
                                           cwd=self._work_dir)
 
     def erase_work_dir(self):
+        """
+        Removes temporarily created working directories inside
+        testing environment.
+        """
         if self._work_dir and os.path.exists(self._work_dir):
             self._logger.info('Erasing working directory...')
             try:
@@ -335,12 +565,14 @@ class BaseRunner(object):
                 self._logger.info('Working directory was successfully removed')
 
     def setup(self):
+        """Prepares testing environment."""
         self.prepare_work_dir_files()
         self.initialize_terraform()
         self.start_env()
         self.initial_provision()
 
     def teardown(self, publish_artifacts: bool = True):
+        """Shuts down created testing environment."""
         self.stop_env()
         if publish_artifacts:
             self.publish_artifacts_to_storage()
@@ -349,9 +581,27 @@ class BaseRunner(object):
 
 class GenericVMRunner(BaseRunner):
 
+    """Generates base runner for virtual machines."""
+
     def __init__(self, task_id: str, dist_name: str,
                  dist_version: Union[str, int],
                  repositories: List[dict] = None, dist_arch: str = 'x86_64'):
+        """
+        Initializes base VM's runner.
+
+        Parameters
+        ----------
+        task_id : str
+            Test System task identifier.
+        dist_name : str
+            Distribution name.
+        dist_version : str, int
+            Distribution version.
+        repositories : list of dict
+            List of packages' repositories/
+        dist_arch : str
+            Distribution architecture.
+        """
         super().__init__(task_id, dist_name, dist_version,
                          repositories=repositories, dist_arch=dist_arch)
         ssh_key_path = os.path.abspath(
@@ -364,9 +614,32 @@ class GenericVMRunner(BaseRunner):
 
     @property
     def ssh_public_key(self):
+        """
+        Gets ssh public key.
+
+        Returns
+        -------
+        str
+            Ssh public key
+        """
         return self._ssh_public_key
 
     def _wait_for_ssh(self, retries=60):
+        """
+        Establishes ssh connection with a virtual machine.
+
+        Parameters
+        ----------
+        retries : int
+            Attempts to retry establishing ssh connection.
+
+        Returns
+        -------
+        bool
+            True if ssh connection was successfully establsihed,
+            False otherwise.
+
+        """
         ansible = local['ansible']
         cmd_args = ('-i', self.ANSIBLE_INVENTORY_FILE, '-m', 'ping', 'all')
         stdout = None
@@ -384,6 +657,14 @@ class GenericVMRunner(BaseRunner):
         return False
 
     def start_env(self):
+        """
+        Starts a specified testing environment using Terraform.
+
+        Raises
+        ------
+        StartEnvironmentError
+            Raised if a testing environment failed to start.
+        """
         super().start_env()
         # VM gets its IP address only after deploy.
         # To extract it, the `vm_ip` output should be defined

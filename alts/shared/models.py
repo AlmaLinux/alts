@@ -19,7 +19,7 @@ class Repository(BaseModel):
     """Package repository model."""
 
     name: typing.Optional[str] = None
-    baseurl = str
+    baseurl: str
 
 
 class TaskRequestPayload(BaseModel):

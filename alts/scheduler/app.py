@@ -52,7 +52,8 @@ def get_celery_task_result(task_id: str, timeout: int = 1) -> dict:
     task_id : str
         Test System task identifier.
     timeout : int
-        How long to wait before the operation to get result times out.
+        How long to wait before the operation to get result times out
+        (in seconds).
     Returns
     -------
     dict
@@ -156,7 +157,7 @@ async def authenticate_user(credentials: str = Depends(http_bearer_scheme)):
     Returns
     -------
     dict
-        Decoded jwt token.
+        Decoded information as jwt token.
     """
     # TODO: Validate user emails?
     try:
