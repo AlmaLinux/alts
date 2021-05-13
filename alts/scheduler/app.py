@@ -140,9 +140,19 @@ async def get_task_result(task_id: str,
 async def schedule_task(task_data: TaskRequestPayload,
                         b_tasks: BackgroundTasks,
                         _=Depends(authenticate_user)) -> JSONResponse:
+    # Get only supported runners mapping based on the config
+    if isinstance(CONFIG.supported_runners, str) and \
+            CONFIG.supported_runners == 'all':
+        runner_mapping = RUNNER_MAPPING
+    elif isinstance(CONFIG.supported_runners, list):
+        runner_mapping = {key: value for key, value in RUNNER_MAPPING.items()
+                          if key in CONFIG.supporter_runners}
+    else:
+        raise ValidationError(f'Misconfiguration found: supported_runners is '
+                              f'{CONFIG.supported_runners}')
     runner_type = task_data.runner_type
     if runner_type == 'any':
-        runner_type = random.choice(list(RUNNER_MAPPING.keys()))
+        runner_type = random.choice(list(runner_mapping.keys()))
     runner_class = RUNNER_MAPPING[runner_type]
 
     if task_data.dist_arch not in CONFIG.supported_architectures:
