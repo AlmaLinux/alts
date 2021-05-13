@@ -1,3 +1,9 @@
+# -*- mode:python; coding:utf-8; -*-
+# author: Vasily Kleschov <vkleschov@cloudlinux.com>
+# created: 2021-05-01
+
+"""AlmaLinux Test System tasks scheduler application."""
+
 import logging
 import random
 import time
@@ -38,6 +44,21 @@ http_bearer_scheme = HTTPBearer()
 
 
 def get_celery_task_result(task_id: str, timeout: int = 1) -> dict:
+    """
+    Gets Test System task result info from Celery.
+
+    Parameters
+    ----------
+    task_id : str
+        Test System task identifier.
+    timeout : int
+        How long to wait before the operation to get result times out.
+    Returns
+    -------
+    dict
+        Test System task result.
+
+    """
     result = {}
     task_data = celery_app.AsyncResult(task_id)
     try:
@@ -50,6 +71,16 @@ def get_celery_task_result(task_id: str, timeout: int = 1) -> dict:
 
 # TODO: Make background functions react to application stop
 def check_celery_task_result(task_id: str, callback_url: str = None):
+    """
+    Gets Test System task result info from Celery.
+
+    Parameters
+    ----------
+    task_id : str
+        Test System task identifier.
+    callback_url : str
+        ???????
+    """
     task_status = None
     later = datetime.now() + timedelta(seconds=CONFIG.task_tracking_timeout)
     session = Session()
@@ -80,6 +111,9 @@ def check_celery_task_result(task_id: str, callback_url: str = None):
 
 @app.on_event('startup')
 async def startup():
+
+    """Starting up Test System task scheduler app."""
+
     logging.basicConfig(level=logging.INFO)
     await database.connect()
 
@@ -104,10 +138,26 @@ async def startup():
 
 @app.on_event('shutdown')
 async def shutdown():
+
+    """Shutting down Test System task scheduler app."""
+
     await database.disconnect()
 
 
 async def authenticate_user(credentials: str = Depends(http_bearer_scheme)):
+    """
+    Authenticates user via jwt token.
+
+    Parameters
+    ----------
+    credentials : str
+        Http authentication scheme info with token.
+
+    Returns
+    -------
+    dict
+        Decoded jwt token.
+    """
     # TODO: Validate user emails?
     try:
         # If credentials have a whitespace then the token is the part after
@@ -127,6 +177,21 @@ async def authenticate_user(credentials: str = Depends(http_bearer_scheme)):
 @app.get('/tasks/{task_id}/result', response_model=TaskResultResponse)
 async def get_task_result(task_id: str,
                           _=Depends(authenticate_user)) -> JSONResponse:
+    """
+    Requests for Test System task result.
+
+    Parameters
+    ----------
+    task_id : str
+        Test System task identifier.
+    _ : dict
+        Authenticated user's token.
+
+    Returns
+    -------
+    JSON
+        JSON-encoded response with task result.
+    """
     task_result = get_celery_task_result(task_id)
     task_result['api_version'] = API_VERSION
     return JSONResponse(content=task_result)
@@ -140,6 +205,23 @@ async def get_task_result(task_id: str,
 async def schedule_task(task_data: TaskRequestPayload,
                         b_tasks: BackgroundTasks,
                         _=Depends(authenticate_user)) -> JSONResponse:
+    """
+    Schedules new tasks in Test System.
+
+    Parameters
+    ----------
+    task_data : TaskRequestPayload
+        Loader task data in appropriate for request form.
+    b_tasks : BackgroundTasks
+        Tasks running in background.
+    _ : dict
+        Authenticated user's token.
+
+    Returns
+    -------
+    JSONResponse
+        JSON-encoded response if task executed successfully or not.
+    """
     runner_type = task_data.runner_type
     if runner_type == 'any':
         runner_type = random.choice(list(RUNNER_MAPPING.keys()))

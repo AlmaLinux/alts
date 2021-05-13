@@ -1,3 +1,9 @@
+# -*- mode:python; coding:utf-8; -*-
+# author: Vasily Kleschov <vkleschov@cloudlinux.com>
+# created: 2021-04-13
+
+"""AlmaLinux Test System package testing tasks running."""
+
 import logging
 
 from alts.worker.app import celery_app
@@ -9,7 +15,19 @@ __all__ = ['run_tests']
 
 @celery_app.task()
 def run_tests(task_params: dict):
+    """
+    Executes a package test in a specified environment.
 
+    Parameters
+    ----------
+    task_params : dict
+        Task parameters.
+
+    Returns
+    -------
+    dict
+        Result summary of a test execution.
+    """
     logging.info(f'Starting work with the following params: {task_params}')
 
     for key in ['task_id', 'runner_type', 'dist_name', 'dist_version',
