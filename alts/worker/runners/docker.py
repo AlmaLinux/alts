@@ -88,7 +88,8 @@ class DockerRunner(BaseRunner):
         Parameters
         ----------
         create_ansible_inventory : bool
-            True if ansible inventory should be used, False otherwise.
+            True if ansible inventory file should be created,
+            False otherwise.
         """
         super().prepare_work_dir_files(
             create_ansible_inventory=create_ansible_inventory)
@@ -100,7 +101,8 @@ class DockerRunner(BaseRunner):
         Parameters
         ----------
         cmd_with_args : tuple
-            Arguments to create a command to execute.
+            Arguments to create a command and its arguments to execute
+            inside the container.
 
         Returns
         -------

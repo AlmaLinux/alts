@@ -109,7 +109,7 @@ class BaseRunner(object):
         dist_version : str, int
             Distribution version.
         repositories : list of dict
-            List of packages' repositories/
+            List of packages' repositories
         dist_arch : str
             Distribution architecture.
         """
@@ -349,7 +349,8 @@ class BaseRunner(object):
         Parameters
         ----------
         create_ansible_inventory : bool
-            True if ansible inventory should be used, False otherwise.
+            True if ansible inventory file should be created,
+            False otherwise.
 
         Raises
         ------

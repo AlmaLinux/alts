@@ -157,7 +157,7 @@ async def authenticate_user(credentials: str = Depends(http_bearer_scheme)):
     Returns
     -------
     dict
-        Decoded information as jwt token.
+        Decoded information from jwt token.
     """
     # TODO: Validate user emails?
     try:
