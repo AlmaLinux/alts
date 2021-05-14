@@ -80,7 +80,7 @@ def check_celery_task_result(task_id: str, callback_url: str = None):
     task_id : str
         Test System task identifier.
     callback_url : str
-        ???????
+        Url to update Test System task execution result.
     """
     task_status = None
     later = datetime.now() + timedelta(seconds=CONFIG.task_tracking_timeout)
