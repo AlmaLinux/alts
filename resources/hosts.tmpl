@@ -1,2 +1,2 @@
 [all]
-${vm_ip if vm_ip else env_name} ansible_user=root
+${vm_ip if vm_ip else env_name} ansible_user=root ansible_connection=${connection_type}
