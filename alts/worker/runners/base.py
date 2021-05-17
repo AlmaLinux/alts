@@ -2,6 +2,7 @@ import logging
 import os
 import shutil
 import tempfile
+import time
 from functools import wraps
 from pathlib import Path
 from typing import List, Union
@@ -11,20 +12,16 @@ from boto3.exceptions import S3UploadFailedError
 from mako.lookup import TemplateLookup
 from plumbum import local
 
-from alts import CONFIG
-from shared.exceptions import (
+from alts.shared.exceptions import (
     InstallPackageError, ProvisionError, PublishArtifactsError,
     StartEnvironmentError, StopEnvironmentError, TerraformInitializationError,
     WorkDirPreparationError,
 )
+from alts.shared.types import ImmutableDict
+from alts.worker import CONFIG, RESOURCES_DIR
 
 
-__all__ = ['BaseRunner', 'command_decorator', 'RESOURCES_DIRECTORY',
-           'TEMPLATE_LOOKUP']
-
-
-RESOURCES_DIRECTORY = os.path.join(os.path.dirname(__file__), 'resources')
-TEMPLATE_LOOKUP = TemplateLookup(directories=[RESOURCES_DIRECTORY])
+__all__ = ['BaseRunner', 'GenericVMRunner', 'command_decorator']
 
 
 def command_decorator(exception_class, artifacts_key, error_message):
@@ -33,7 +30,7 @@ def command_decorator(exception_class, artifacts_key, error_message):
         def inner_wrapper(*args, **kwargs):
             self = args[0]
             args = args[1:]
-            if not os.path.exists(self._work_dir):
+            if not self._work_dir or not os.path.exists(self._work_dir):
                 return
             exit_code, stdout, stderr = fn(self, *args, **kwargs)
             self._artifacts[artifacts_key] = {
@@ -59,39 +56,45 @@ class BaseRunner(object):
     like Docker container, virtual machine, etc.
 
     """
-    SUPPORTED_DISTRIBUTIONS = ()
-    SUPPORTED_ARCHITECTURES = ()
-    ARCHITECTURES_MAPPING: dict = None
+    DEBIAN_FLAVORS = ('debian', 'ubuntu', 'raspbian')
+    RHEL_FLAVORS = ('fedora', 'centos', 'almalinux', 'cloudlinux')
+    TYPE = 'base'
+    ARCHITECTURES_MAPPING = ImmutableDict(
+        aarch64=['arm64', 'aarch64'],
+        x86_64=['x86_64', 'amd64', 'i686'],
+    )
     COST = 0
-    VERSIONS_TF_FILE = 'versions.tf'
+    TF_VARIABLES_FILE = None
+    TF_MAIN_FILE = None
+    TF_VERSIONS_FILE = 'versions.tf'
     ANSIBLE_PLAYBOOK = 'playbook.yml'
+    ANSIBLE_CONFIG = 'ansible.cfg'
     ANSIBLE_INVENTORY_FILE = 'hosts'
-    TERRAFORM_RESOURCES = [VERSIONS_TF_FILE, ANSIBLE_PLAYBOOK]
     TEMPFILE_PREFIX = 'base_test_runner_'
 
     def __init__(self, task_id: str, dist_name: str,
                  dist_version: Union[str, int],
-                 repositories: List[dict]):
+                 repositories: List[dict] = None, dist_arch: str = 'x86_64'):
         # Environment ID and working directory preparation
         self._task_id = task_id
-        self._env_id = task_id
+        self._env_name = f'{self.TYPE}_{task_id}'
         self._logger = logging.getLogger(__file__)
         self._work_dir = None
         self._artifacts_dir = None
-        self._debian_flavors = ('debian', 'ubuntu', 'raspbian')
+        self._class_resources_dir = os.path.join(RESOURCES_DIR, self.TYPE)
+        self._template_lookup = TemplateLookup(
+            directories=[RESOURCES_DIR, self._class_resources_dir])
 
         # Basic commands and tools setup
         self._ansible_connection_type = 'ssh'
-        self._pkg_manager = 'yum'
-        if dist_name in self._debian_flavors:
-            self._pkg_manager = 'apt-get'
 
         # Package-specific variables that define needed container/VM
-        self._dist_name = dist_name
-        self._dist_version = str(dist_version)
+        self._dist_name = dist_name.lower()
+        self._dist_version = str(dist_version).lower()
+        self._dist_arch = dist_arch.lower()
 
         # Package installation and test stuff
-        self._repositories = repositories
+        self._repositories = repositories or []
 
         self._artifacts = {}
 
@@ -101,11 +104,24 @@ class BaseRunner(object):
 
     @property
     def pkg_manager(self):
-        return self._pkg_manager
+        if (self._dist_name == 'fedora' or
+                (self._dist_name in self.RHEL_FLAVORS
+                 and self._dist_version.startswith('8'))):
+            return 'dnf'
+        elif self._dist_name in self.RHEL_FLAVORS:
+            return 'yum'
+        elif self._dist_name in self.DEBIAN_FLAVORS:
+            return 'apt-get'
+        else:
+            raise ValueError(f'Unknown distribution: {self._dist_name}')
 
     @property
     def ansible_connection_type(self):
         return self._ansible_connection_type
+
+    @property
+    def dist_arch(self):
+        return self._dist_arch
 
     @property
     def dist_name(self):
@@ -119,9 +135,13 @@ class BaseRunner(object):
     def repositories(self):
         return self._repositories
 
+    @property
+    def env_name(self):
+        return self._env_name
+
     # TODO: Think of better implementation
     def _create_work_dir(self):
-        if not self._work_dir:
+        if not self._work_dir or not os.path.exists(self._work_dir):
             self._work_dir = Path(tempfile.mkdtemp(prefix=self.TEMPFILE_PREFIX))
         return self._work_dir
 
@@ -138,29 +158,59 @@ class BaseRunner(object):
         self.stop_env()
         self.erase_work_dir()
 
-    # TODO: Introduce steps dependencies of some sort
+    def _render_template(self, template_name, result_file_path, **kwargs):
+        template = self._template_lookup.get_template(template_name)
+        with open(result_file_path, 'wt') as f:
+            content = template.render(**kwargs)
+            f.write(content)
+
+    def _create_ansible_inventory_file(self, vm_ip: str = None):
+        inventory_file_path = os.path.join(self._work_dir,
+                                           self.ANSIBLE_INVENTORY_FILE)
+        self._render_template(
+            f'{self.ANSIBLE_INVENTORY_FILE}.tmpl', inventory_file_path,
+            env_name=self.env_name, vm_ip=vm_ip,
+            connection_type=self.ansible_connection_type
+        )
+
+    def _render_tf_main_file(self):
+        """
+        Renders main Terraform file for the instance managing
+
+        Returns:
+
+        """
+        raise NotImplementedError
+
+    def _render_tf_variables_file(self):
+        """
+        Renders Terraform variables file
+
+        Returns:
+
+        """
+        raise NotImplementedError
 
     # First step
-    def prepare_work_dir_files(self):
+    def prepare_work_dir_files(self, create_ansible_inventory=False):
         # In case if you've removed worker folder, recreate one
         if not self._work_dir or not os.path.exists(self._work_dir):
             self._work_dir = self._create_work_dir()
             self._artifacts_dir = self._create_artifacts_dir()
         try:
-            env_name = str(self._env_id)
-            hosts_group_name = f'test_group_{env_name}'
-            # Process all templates first
-            hosts_template = TEMPLATE_LOOKUP.get_template(
-                f'{self.ANSIBLE_INVENTORY_FILE}.tmpl')
-            inventory_file_path = os.path.join(self._work_dir,
-                                               self.ANSIBLE_INVENTORY_FILE)
-            with open(inventory_file_path, 'w') as f:
-                f.write(hosts_template.render(
-                    hosts_group_name=hosts_group_name, env_name=env_name))
             # Write resources that are not templated into working directory
-            for tf_file in self.TERRAFORM_RESOURCES:
-                shutil.copy(os.path.join(RESOURCES_DIRECTORY, tf_file),
-                            os.path.join(self._work_dir, tf_file))
+            for ansible_file in (self.ANSIBLE_CONFIG, self.ANSIBLE_PLAYBOOK):
+                shutil.copy(os.path.join(RESOURCES_DIR, ansible_file),
+                            os.path.join(self._work_dir, ansible_file))
+            shutil.copy(
+                os.path.join(self._class_resources_dir, self.TF_VERSIONS_FILE),
+                os.path.join(self._work_dir, self.TF_VERSIONS_FILE)
+            )
+
+            if create_ansible_inventory:
+                self._create_ansible_inventory_file()
+            self._render_tf_main_file()
+            self._render_tf_variables_file()
         except Exception as e:
             raise WorkDirPreparationError('Cannot create working directory and'
                                           ' needed files') from e
@@ -170,7 +220,7 @@ class BaseRunner(object):
                        'Cannot initialize terraform')
     def initialize_terraform(self):
         self._logger.info(f'Initializing Terraform environment '
-                          f'for {self._env_id}...')
+                          f'for {self.env_name}...')
         self._logger.debug('Running "terraform init" command')
         return local['terraform'].run('init', retcode=None, cwd=self._work_dir)
 
@@ -178,23 +228,25 @@ class BaseRunner(object):
     @command_decorator(StartEnvironmentError, 'start_environment',
                        'Cannot start environment')
     def start_env(self):
-        self._logger.info(f'Starting the environment {self._env_id}...')
+        self._logger.info(f'Starting the environment {self.env_name}...')
         self._logger.debug('Running "terraform apply --auto-approve" command')
-        return local['terraform'].run(args=('apply', '--auto-approve'),
-                                      retcode=None, cwd=self._work_dir)
+        cmd_args = ['apply', '--auto-approve']
+        if self.TF_VARIABLES_FILE:
+            cmd_args.extend(['--var-file', self.TF_VARIABLES_FILE])
+        return local['terraform'].run(args=cmd_args, retcode=None,
+                                      cwd=self._work_dir)
 
     # After: start_env
     @command_decorator(ProvisionError, 'initial_provision',
                        'Cannot run initial provision')
     def initial_provision(self, verbose=False):
-        cmd_args = ['-c', self.ansible_connection_type, '-i', 'hosts',
-                    self.ANSIBLE_PLAYBOOK,
+        cmd_args = ['-i', self.ANSIBLE_INVENTORY_FILE, self.ANSIBLE_PLAYBOOK,
                     '-e', f'repositories={self._repositories}',
                     '-t', 'initial_provision']
         if verbose:
             cmd_args.append('-vvvv')
         cmd_args_str = ' '.join(cmd_args)
-        self._logger.info(f'Provisioning the environment {self._env_id}...')
+        self._logger.info(f'Provisioning the environment {self.env_name}...')
         self._logger.debug(
             f'Running "ansible-playbook {cmd_args_str}" command')
         return local['ansible-playbook'].run(
@@ -204,16 +256,16 @@ class BaseRunner(object):
                        'Cannot install package')
     def install_package(self, package_name: str, package_version: str = None):
         if package_version:
-            if self.pkg_manager == 'yum':
+            if self.pkg_manager in ('yum', 'dnf'):
                 full_pkg_name = f'{package_name}-{package_version}'
             else:
                 full_pkg_name = f'{package_name}={package_version}'
         else:
             full_pkg_name = package_name
 
-        self._logger.info(f'Installing {full_pkg_name} on {self._env_id}...')
-        cmd_args = ['-c', self.ansible_connection_type, '-i', 'hosts',
-                    self.ANSIBLE_PLAYBOOK, '-e', f'pkg_name={full_pkg_name}',
+        self._logger.info(f'Installing {full_pkg_name} on {self.env_name}...')
+        cmd_args = ['-i', self.ANSIBLE_INVENTORY_FILE, self.ANSIBLE_PLAYBOOK,
+                    '-e', f'pkg_name={full_pkg_name}',
                     '-t', 'install_package']
         cmd_args_str = ' '.join(cmd_args)
         self._logger.debug(
@@ -262,14 +314,17 @@ class BaseRunner(object):
                        'Cannot destroy environment')
     def stop_env(self):
         if os.path.exists(self._work_dir):
-            self._logger.info(f'Destroying the environment {self._env_id}...')
+            self._logger.info(f'Destroying the environment {self.env_name}...')
             self._logger.debug(
                 'Running "terraform destroy --auto-approve" command')
-            return local['terraform'].run(args=('destroy', '--auto-approve'),
-                                          retcode=None, cwd=self._work_dir)
+            cmd_args = ['destroy', '--auto-approve']
+            if self.TF_VARIABLES_FILE:
+                cmd_args.extend(['--var-file', self.TF_VARIABLES_FILE])
+            return local['terraform'].run(args=cmd_args, retcode=None,
+                                          cwd=self._work_dir)
 
     def erase_work_dir(self):
-        if os.path.exists(self._work_dir):
+        if self._work_dir and os.path.exists(self._work_dir):
             self._logger.info('Erasing working directory...')
             try:
                 shutil.rmtree(self._work_dir)
@@ -290,3 +345,61 @@ class BaseRunner(object):
         if publish_artifacts:
             self.publish_artifacts_to_storage()
         self.erase_work_dir()
+
+
+class GenericVMRunner(BaseRunner):
+
+    def __init__(self, task_id: str, dist_name: str,
+                 dist_version: Union[str, int],
+                 repositories: List[dict] = None, dist_arch: str = 'x86_64'):
+        super().__init__(task_id, dist_name, dist_version,
+                         repositories=repositories, dist_arch=dist_arch)
+        ssh_key_path = os.path.abspath(
+            os.path.expanduser(CONFIG.ssh_public_key_path))
+        if not os.path.exists(ssh_key_path):
+            self._logger.error('SSH key is missing')
+        else:
+            with open(ssh_key_path, 'rt') as f:
+                self._ssh_public_key = f.read().strip()
+
+    @property
+    def ssh_public_key(self):
+        return self._ssh_public_key
+
+    def _wait_for_ssh(self, retries=60):
+        ansible = local['ansible']
+        cmd_args = ('-i', self.ANSIBLE_INVENTORY_FILE, '-m', 'ping', 'all')
+        stdout = None
+        stderr = None
+        while retries > 0:
+            exit_code, stdout, stderr = ansible.run(
+                args=cmd_args, retcode=None, cwd=self._work_dir)
+            if exit_code == 0:
+                return True
+            else:
+                retries -= 1
+                time.sleep(10)
+        self._logger.error(f'Unable to connect to VM. '
+                           f'Stdout: {stdout}\nStderr: {stderr}')
+        return False
+
+    def start_env(self):
+        super().start_env()
+        # VM gets its IP address only after deploy.
+        # To extract it, the `vm_ip` output should be defined
+        # in Terraform main file.
+        exit_code, stdout, stderr = local['terraform'].run(
+            args=('output', '-raw', 'vm_ip'), retcode=None, cwd=self._work_dir)
+        if exit_code != 0:
+            error_message = f'Cannot get VM IP: {stderr}'
+            self._logger.error(error_message)
+            raise StartEnvironmentError(error_message)
+        self._create_ansible_inventory_file(vm_ip=stdout)
+        self._logger.info('Waiting for SSH port to be available')
+        is_online = self._wait_for_ssh()
+        if not is_online:
+            error_message = f'Machine {self.env_name} is started, but ' \
+                            f'SSH connection is not working'
+            self._logger.error(error_message)
+            raise StartEnvironmentError(error_message)
+        self._logger.info(f'Machine is available for SSH connection')

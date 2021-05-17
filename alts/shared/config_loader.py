@@ -4,7 +4,7 @@ from typing import Type
 from pydantic import BaseModel
 from ruamel.yaml import YAML
 
-from shared.exceptions import ConfigNotFoundError
+from alts.shared.exceptions import ConfigNotFoundError
 
 
 __all__ = ['get_config_dict_from_yaml']

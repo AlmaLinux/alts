@@ -1,9 +1,11 @@
 import logging
+import random
 import time
 import traceback
 import uuid
 from datetime import datetime, timedelta
 
+import requests
 from celery.exceptions import TimeoutError
 from celery.states import READY_STATES
 from fastapi import (
@@ -18,18 +20,19 @@ from fastapi.security import HTTPBearer
 from jose import JWTError, jwt
 from pydantic import ValidationError
 
-from alts.app import celery_app
-from alts.mappings import RUNNER_MAPPING
-from alts.tasks import run_docker
-from scheduler import CONFIG
-from scheduler.db import database, Session, Task
-from shared.models import (
+from alts.worker.app import celery_app
+from alts.worker.mappings import RUNNER_MAPPING
+from alts.worker.tasks import run_tests
+from alts.scheduler import CONFIG
+from alts.scheduler.db import database, Session, Task
+from alts.shared.models import (
     TaskRequestResponse,
     TaskRequestPayload,
     TaskResultResponse,
 )
 
-
+# YYYYMMDD format for API version
+API_VERSION = '20210512'
 app = FastAPI()
 http_bearer_scheme = HTTPBearer()
 
@@ -45,11 +48,10 @@ def get_celery_task_result(task_id: str, timeout: int = 1) -> dict:
     return result
 
 
-# TODO: Make timeout configurable
 # TODO: Make background functions react to application stop
-def check_celery_task_result(task_id: str, timeout=3600):
+def check_celery_task_result(task_id: str, callback_url: str = None):
     task_status = None
-    later = datetime.now() + timedelta(seconds=timeout)
+    later = datetime.now() + timedelta(seconds=CONFIG.task_tracking_timeout)
     session = Session()
     while task_status not in READY_STATES and datetime.now() <= later:
         try:
@@ -70,6 +72,11 @@ def check_celery_task_result(task_id: str, timeout=3600):
             logging.error(f'Cannot update task DB record: {e}')
         time.sleep(10)
 
+    if callback_url:
+        task_result = get_celery_task_result(task_id)
+        task_result['api_version'] = API_VERSION
+        requests.post(callback_url, json=task_result)
+
 
 @app.on_event('startup')
 async def startup():
@@ -77,6 +84,8 @@ async def startup():
     await database.connect()
 
     session = Session()
+    # TODO: Get workers capacity and queues mapping
+    # TODO: Get queues maximum capacity
     # inspect_instance = celery_app.control.inspect()
     # for _, tasks in inspect_instance.active(safe=True).items():
     #     # TODO: Add query to database and update tasks
@@ -93,7 +102,7 @@ async def startup():
         session.rollback()
 
 
-@app.on_event("shutdown")
+@app.on_event('shutdown')
 async def shutdown():
     await database.disconnect()
 
@@ -118,7 +127,9 @@ async def authenticate_user(credentials: str = Depends(http_bearer_scheme)):
 @app.get('/tasks/{task_id}/result', response_model=TaskResultResponse)
 async def get_task_result(task_id: str,
                           _=Depends(authenticate_user)) -> JSONResponse:
-    return JSONResponse(content=get_celery_task_result(task_id))
+    task_result = get_celery_task_result(task_id)
+    task_result['api_version'] = API_VERSION
+    return JSONResponse(content=task_result)
 
 
 @app.post('/tasks/schedule', response_model=TaskRequestResponse,
@@ -129,14 +140,24 @@ async def get_task_result(task_id: str,
 async def schedule_task(task_data: TaskRequestPayload,
                         b_tasks: BackgroundTasks,
                         _=Depends(authenticate_user)) -> JSONResponse:
+    # Get only supported runners mapping based on the config
+    if isinstance(CONFIG.supported_runners, str) and \
+            CONFIG.supported_runners == 'all':
+        runner_mapping = RUNNER_MAPPING
+    elif isinstance(CONFIG.supported_runners, list):
+        runner_mapping = {key: value for key, value in RUNNER_MAPPING.items()
+                          if key in CONFIG.supporter_runners}
+    else:
+        raise ValidationError(f'Misconfiguration found: supported_runners is '
+                              f'{CONFIG.supported_runners}')
     runner_type = task_data.runner_type
     if runner_type == 'any':
-        runner_type = 'docker'
+        runner_type = random.choice(list(runner_mapping.keys()))
     runner_class = RUNNER_MAPPING[runner_type]
 
-    if task_data.dist_arch not in runner_class.SUPPORTED_ARCHITECTURES:
+    if task_data.dist_arch not in CONFIG.supported_architectures:
         raise ValidationError(f'Unknown architecture: {task_data.dist_arch}')
-    if task_data.dist_name not in runner_class.SUPPORTED_DISTRIBUTIONS:
+    if task_data.dist_name not in CONFIG.supported_distributions:
         raise ValidationError(f'Unknown distribution: {task_data.dist_name}')
 
     # TODO: Make decision on what queue to use for particular task based on
@@ -146,11 +167,14 @@ async def schedule_task(task_data: TaskRequestPayload,
         if task_data.dist_arch in supported_arches:
             queue_arch = arch
 
-    repositories = []
+    if not queue_arch:
+        raise ValidationError('Cannot map requested architecture to any '
+                              'host architecture, possible coding error')
 
     # Make sure all repositories have their names
     # (needed only for RHEL-like distributions)
     # Convert repositories structures to dictionaries
+    repositories = []
     repo_counter = 0
     for repository in task_data.repositories:
         if not repository.name:
@@ -160,24 +184,21 @@ async def schedule_task(task_data: TaskRequestPayload,
             repo_name = repository.name
         repositories.append({'url': repository.baseurl, 'name': repo_name})
 
-    if not queue_arch:
-        raise ValidationError('Cannot map requested architecture to any '
-                              'host architecture, possible coding error')
-
     queue_name = f'{runner_type}-{queue_arch}-{runner_class.COST}'
     task_id = str(uuid.uuid4())
+    response_content = {'api_version': API_VERSION}
+    task_params = task_data.dict()
+    task_params['task_id'] = task_id
+    task_params['runner_type'] = runner_type
     try:
-        run_docker.apply_async(
-            (task_id, runner_type, task_data.dist_name, task_data.dist_version,
-             repositories, task_data.package_name, task_data.package_version),
-            task_id=task_id, queue=queue_name)
+        run_tests.apply_async((task_params,), task_id=task_id,
+                              queue=queue_name)
     except Exception as e:
         logging.error(f'Cannot launch the task: {e}')
         logging.error(traceback.format_exc())
-        return JSONResponse(
-            content={'success': False, 'error_description': str(e)},
-            status_code=400
-        )
+        response_content.update(
+            {'success': False, 'error_description': str(e)})
+        return JSONResponse(status_code=400, content=response_content)
     else:
         session = Session()
         try:
@@ -185,11 +206,13 @@ async def schedule_task(task_data: TaskRequestPayload,
                                status='NEW')
             session.add(task_record)
             session.commit()
-            b_tasks.add_task(check_celery_task_result, task_id)
-            return JSONResponse(content={'success': True, 'task_id': task_id},
-                                status_code=201)
+            b_tasks.add_task(check_celery_task_result, task_id,
+                             callback_url=task_params.get('callback_url', ''))
+            response_content.update({'success': True, 'task_id': task_id})
+            return JSONResponse(status_code=201, content=response_content)
         except Exception as e:
             logging.error(f'Cannot save task data into DB: {e}')
             session.rollback()
-            return JSONResponse(content={'success': False, 'task_id': task_id},
-                                status_code=400)
+            response_content.update({'success': False, 'task_id': task_id,
+                                     'error_description': str(e)})
+            return JSONResponse(status_code=400, content=response_content)

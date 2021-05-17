@@ -1,17 +1,29 @@
-from unittest import mock, TestCase
+from unittest import TestCase
 
 from ddt import ddt
 from ddt import data, unpack
 # from pyfakefs.fake_filesystem_unittest import TestCase
 
-from alts.runners import DockerRunner
+from alts.worker.runners import DockerRunner
 
-centos_runner_params = ('test_id_1', 'centos', 8, [])
-ubuntu_runner_params = ('test_id_2', 'ubuntu', '20.04', [])
+fedora_runner_params = ('test_id_1', 'fedora', '33')
+centos_8_runner_params = ('test_id_2', 'centos', 8)
+centos_7_runner_params = ('test_id_3', 'centos', 7)
+ubuntu_runner_params = ('test_id_4', 'ubuntu', '20.04')
+debian_runner_params = ('test_id_5', 'debian', '11.0')
+almalinux_runner_params = ('test_id_6', 'almalinux', '8.3')
 
 basics_data = (
     (
-        centos_runner_params,
+        centos_8_runner_params,
+        {
+            'ansible_connection_type': 'docker',
+            'repositories': [],
+            'pkg_manager': 'dnf'
+        }
+    ),
+    (
+        centos_7_runner_params,
         {
             'ansible_connection_type': 'docker',
             'repositories': [],
@@ -24,6 +36,30 @@ basics_data = (
             'ansible_connection_type': 'docker',
             'repositories': [],
             'pkg_manager': 'apt-get'
+        }
+    ),
+    (
+        fedora_runner_params,
+        {
+            'ansible_connection_type': 'docker',
+            'repositories': [],
+            'pkg_manager': 'dnf'
+        }
+    ),
+    (
+        debian_runner_params,
+        {
+            'ansible_connection_type': 'docker',
+            'repositories': [],
+            'pkg_manager': 'apt-get'
+        }
+    ),
+    (
+        almalinux_runner_params,
+        {
+            'ansible_connection_type': 'docker',
+            'repositories': [],
+            'pkg_manager': 'dnf'
         }
     ),
 )

@@ -1,7 +1,7 @@
 import os
 
-from shared.config_loader import get_config_dict_from_yaml
-from shared.models import SchedulerConfig
+from alts.shared.config_loader import get_config_dict_from_yaml
+from alts.shared.models import SchedulerConfig
 
 
 __all__ = ['CONFIG', 'CONFIG_FILE_PATH', 'DATABASE_NAME']

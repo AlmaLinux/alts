@@ -1,16 +1,17 @@
 FROM centos:8
 
-ARG ARCH
+ARG ARCH="amd64"
+ARG TF_VERSION="0.15.3"
 
-RUN mkdir -p /code ~/.terraform.d/plugin-cache \
+RUN mkdir -p /code ~/.terraform.d/plugin-cache ~/.ssh \
     && echo "plugin_cache_dir = \"\$HOME/.terraform.d/plugin-cache\"" > ~/.terraformrc \
     && yum update -y \
-    && yum install -y python3-virtualenv epel-release wget unzip yum-utils \
+    && yum install -y python3-virtualenv epel-release wget unzip yum-utils openssh-clients \
     && yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo \
-    && yum install -y docker-ce docker-ce-cli containerd.io \
-    && yum install -y ansible --enablerepo=epel \
-    && yum clean all
-RUN wget -q https://releases.hashicorp.com/terraform/0.15.1/terraform_0.15.1_linux_${ARCH}.zip \
+    && yum install -y docker-ce docker-ce-cli containerd.io ansible --enablerepo=epel \
+    && yum clean all \
+    && cat /dev/zero | ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -q -N ""
+RUN wget -q https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_${ARCH}.zip \
     -O /tmp/terraform_linux_${ARCH}.zip \
     && unzip /tmp/terraform_linux_${ARCH}.zip -d /usr/local/bin \
     && chmod 755 /usr/local/bin/terraform \

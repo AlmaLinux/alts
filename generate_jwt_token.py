@@ -7,7 +7,7 @@ from argparse import ArgumentParser
 from jose import jwt
 from pydantic import BaseModel
 
-from shared.config_loader import get_config_dict_from_yaml
+from alts.shared.config_loader import get_config_dict_from_yaml
 
 
 class Config(BaseModel):
