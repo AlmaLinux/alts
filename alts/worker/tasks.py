@@ -47,9 +47,11 @@ def run_tests(task_params: dict):
     runner_class = RUNNER_MAPPING[task_params['runner_type']]
     runner = runner_class(*runner_args, **runner_kwargs)
     try:
+        package_name = task_params['package_name']
+        package_version = task_params.get('package_version')
         runner.setup()
-        runner.install_package(task_params['package_name'],
-                               task_params.get('package_version'))
+        runner.install_package(package_name, package_version)
+        runner.run_package_integrity_tests(package_name, package_version)
     finally:
         runner.teardown()
 

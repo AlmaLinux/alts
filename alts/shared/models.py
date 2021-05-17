@@ -70,6 +70,9 @@ class CeleryConfig(BaseModel):
                                                  'arm64', 'aarch64']
     supported_distributions: typing.List[str] = ['almalinux', 'centos',
                                                  'ubuntu', 'debian']
+    rhel_flavors: typing.Tuple[str] = ('fedora', 'centos', 'almalinux',
+                                       'cloudlinux')
+    debian_flavors: typing.Tuple[str] = ('debian', 'ubuntu', 'raspbian')
     supported_runners: typing.Union[typing.List[str], str] = 'all'
     # OpenNebula section
     opennebula_rpc_endpoint: str = ''

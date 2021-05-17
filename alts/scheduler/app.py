@@ -85,6 +85,7 @@ def check_celery_task_result(task_id: str, callback_url: str = None):
     task_status = None
     later = datetime.now() + timedelta(seconds=CONFIG.task_tracking_timeout)
     session = Session()
+    logging.info(f'Starting to monitor task {task_id}')
     while task_status not in READY_STATES and datetime.now() <= later:
         try:
             task_result = celery_app.AsyncResult(task_id)
@@ -108,6 +109,8 @@ def check_celery_task_result(task_id: str, callback_url: str = None):
         task_result = get_celery_task_result(task_id)
         task_result['api_version'] = API_VERSION
         requests.post(callback_url, json=task_result)
+
+    logging.info(f'Finished monitoring for task {task_id}')
 
 
 @app.on_event('startup')

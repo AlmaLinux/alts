@@ -10,6 +10,7 @@ from typing import Union, List
 from plumbum import local
 
 from alts.shared.exceptions import ProvisionError
+from alts.worker import CONFIG
 from alts.worker.runners.base import BaseRunner
 
 
@@ -134,7 +135,7 @@ class DockerRunner(BaseRunner):
             or installing.
         """
         # Installing python3 package before running Ansible
-        if self._dist_name in self.DEBIAN_FLAVORS:
+        if self._dist_name in CONFIG.debian_flavors:
             self._logger.info('Installing python3 package...')
             exit_code, stdout, stderr = self._exec(
                 (self.pkg_manager, 'update'))
