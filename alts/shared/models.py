@@ -1,3 +1,9 @@
+# -*- mode:python; coding:utf-8; -*-
+# author: Vasily Kleschov <vkleschov@cloudlinux.com>
+# created: 2021-05-01
+
+"""Models for Test System testing environment."""
+
 import typing
 
 import jmespath
@@ -9,11 +15,17 @@ __all__ = ['CeleryConfig', 'Repository', 'SchedulerConfig',
 
 
 class Repository(BaseModel):
+
+    """Package repository model."""
+
     name: typing.Optional[str] = None
     baseurl: str
 
 
 class TaskRequestPayload(BaseModel):
+
+    """New task data loader for scheduling request."""
+
     runner_type: str = 'any'
     dist_name: str
     dist_version: typing.Union[str, int]
@@ -25,6 +37,25 @@ class TaskRequestPayload(BaseModel):
 
     @validator('runner_type')
     def validate_runner_type(cls, value: str) -> str:
+        """
+        Validates type of a runner.
+
+        Parameters
+        ----------
+        value : str
+            Name of a runner as value to validate.
+
+        Returns
+        -------
+        str
+            Validated name of  runner.
+
+        Raises
+        ------
+        ValidationError
+            If runner name is unknown, error is raised
+
+        """
         # TODO: Add config or constant to have all possible runner types
         if value not in ('any', 'docker', 'opennebula'):
             raise ValidationError(f'Unknown runner type: {value}')
@@ -32,6 +63,9 @@ class TaskRequestPayload(BaseModel):
 
 
 class TaskRequestResponse(BaseModel):
+
+    """Task scheduling request response."""
+
     success: bool
     error_description: typing.Optional[str] = None
     task_id: typing.Optional[str] = None
@@ -39,11 +73,17 @@ class TaskRequestResponse(BaseModel):
 
 
 class TaskResultResponse(BaseModel):
+
+    """Test System task execution result."""
+
     state: str
     result: typing.Optional[dict]
 
 
 class CeleryConfig(BaseModel):
+
+    """Celery configuration model for Test System."""
+
     # Needed for broker_url property
     rabbitqm_host: str
     rabbitmq_port: int = 5672
@@ -82,12 +122,43 @@ class CeleryConfig(BaseModel):
 
     @property
     def broker_url(self) -> str:
+        """
+        Formats broker url.
+
+        Returns
+        -------
+        str
+            Formatted to the specified string broker url.
+
+        """
         return (f'amqp://{self.rabbitmq_user}:{self.rabbitmq_password}@'
                 f'{self.rabbitqm_host}:{self.rabbitmq_port}/'
                 f'{self.rabbitmq_vhost}')
 
     def get_opennebula_template_id(self, dist_name: str, dist_version: str,
                                    dist_arch: str):
+        """
+        Gets opennebula VM's template identifier.
+
+        Parameters
+        ----------
+        dist_name : str
+            Distribution name.
+        dist_version : str
+            Distribution version.
+        dist_arch :
+            Distribution architecture.
+
+        Returns
+        -------
+        str
+            Opennebula template identifier.
+
+        Raises
+        ------
+        KeyError
+            If opennebula template was not found at the given path.
+        """
         template_id_path = f'{dist_name}."{dist_version}"."{dist_arch}"'
         template_id = jmespath.search(
             template_id_path, self.opennebula_templates)
@@ -97,6 +168,9 @@ class CeleryConfig(BaseModel):
 
 
 class SchedulerConfig(CeleryConfig):
+
+    """Test System tasks scheduler configuration."""
+
     testing: bool = False
     working_directory: str = '/srv/alts/scheduler'
     jwt_secret: str

@@ -1,3 +1,9 @@
+# -*- mode:python; coding:utf-8; -*-
+# author: Vasily Kleschov <vkleschov@cloudlinux.com>
+# created: 2021-05-01
+
+"""AlmaLinux Test System tasks scheduler."""
+
 import os
 
 from alts.shared.config_loader import get_config_dict_from_yaml
