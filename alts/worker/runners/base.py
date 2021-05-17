@@ -164,8 +164,9 @@ class BaseRunner(object):
             If distribution name wasn't recognized.
 
         """
-        if (self._dist_name == 'fedora' or self._dist_name in self.RHEL_FLAVORS
-                and '8' in self._dist_version):
+        if (self._dist_name == 'fedora' or
+                (self._dist_name in self.RHEL_FLAVORS
+                 and self._dist_version.startswith('8'))):
             return 'dnf'
         elif self._dist_name in self.RHEL_FLAVORS:
             return 'yum'
@@ -317,7 +318,8 @@ class BaseRunner(object):
                                            self.ANSIBLE_INVENTORY_FILE)
         self._render_template(
             f'{self.ANSIBLE_INVENTORY_FILE}.tmpl', inventory_file_path,
-            env_name=self.env_name, vm_ip=vm_ip
+            env_name=self.env_name, vm_ip=vm_ip,
+            connection_type=self.ansible_connection_type
         )
 
     def _render_tf_main_file(self):
@@ -434,8 +436,7 @@ class BaseRunner(object):
         tuple
             Executed command exit code, standard output and standard error.
         """
-        cmd_args = ['-c', self.ansible_connection_type, '-i',
-                    self.ANSIBLE_INVENTORY_FILE, self.ANSIBLE_PLAYBOOK,
+        cmd_args = ['-i', self.ANSIBLE_INVENTORY_FILE, self.ANSIBLE_PLAYBOOK,
                     '-e', f'repositories={self._repositories}',
                     '-t', 'initial_provision']
         if verbose:
@@ -465,7 +466,7 @@ class BaseRunner(object):
             Executed command exit code, standard output and standard error.
         """
         if package_version:
-            if self.pkg_manager == 'yum':
+            if self.pkg_manager in ('yum', 'dnf'):
                 full_pkg_name = f'{package_name}-{package_version}'
             else:
                 full_pkg_name = f'{package_name}={package_version}'
@@ -473,8 +474,7 @@ class BaseRunner(object):
             full_pkg_name = package_name
 
         self._logger.info(f'Installing {full_pkg_name} on {self.env_name}...')
-        cmd_args = ['-c', self.ansible_connection_type, '-i',
-                    self.ANSIBLE_INVENTORY_FILE, self.ANSIBLE_PLAYBOOK,
+        cmd_args = ['-i', self.ANSIBLE_INVENTORY_FILE, self.ANSIBLE_PLAYBOOK,
                     '-e', f'pkg_name={full_pkg_name}',
                     '-t', 'install_package']
         cmd_args_str = ' '.join(cmd_args)
