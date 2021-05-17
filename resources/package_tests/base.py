@@ -1,3 +1,4 @@
+import os
 import re
 from collections import namedtuple
 from typing import List, Union
@@ -8,7 +9,8 @@ from testinfra.modules.package import DebianPackage, RpmPackage
 
 
 __all__ = [
-    'get_package_files', 'is_package_empty', 'is_file_dynamically_linked',
+    'get_package_files', 'get_shared_libraries', 'is_package_empty',
+    'is_file_dynamically_linked', 'is_rpath_correct',
     'has_missing_shared_libraries', 'resolve_symlink', 'MissingSOResult'
 ]
 
@@ -38,16 +40,39 @@ def get_package_files(pkg: Union[DebianPackage, RpmPackage]) -> List[str]:
     else:
         raise ValueError(f'Unknown package type: {type(pkg)}')
 
-    assert pkg.is_installed
     output = pkg.run(command)
     assert output.rc == 0
     return [item for item in output.stdout.strip().split('\n')
             if item and 'contains no files' not in item]
 
 
+def get_shared_libraries(pkg: Union[DebianPackage, RpmPackage]) -> List[str]:
+    """
+    Returns a list of shared libraries from the package.
+
+    Parameters
+    ----------
+    pkg: DebianPackage | RpmPackage
+        Package instance
+
+    Returns
+    -------
+    list
+        List of shared libraries
+
+    """
+    shared_libs = []
+
+    for file_ in get_package_files(pkg):
+        if '.so' in os.path.basename(file_):
+            shared_libs.append(file_)
+
+    return shared_libs
+
+
 def is_package_empty(pkg: Union[DebianPackage, RpmPackage]) -> bool:
     """
-    Checks if package contains no files
+    Checks if package contains no files.
 
     Parameters
     ----------
@@ -65,7 +90,7 @@ def is_package_empty(pkg: Union[DebianPackage, RpmPackage]) -> bool:
 
 def is_file_dynamically_linked(file_: GNUFile) -> bool:
     """
-    Returns if file is dynamically linked
+    Returns if file is dynamically linked.
 
     Parameters
     ----------
@@ -84,7 +109,7 @@ def is_file_dynamically_linked(file_: GNUFile) -> bool:
 def resolve_symlink(host: Host, file_: Union[str, GNUFile],
                     resolve_depth: int = 20) -> str:
     """
-    Resolve symlink until actual file or fail in case if symlink is broken
+    Resolve symlink until actual file or fail in case if symlink is broken.
 
     Parameters
     ----------
@@ -124,7 +149,7 @@ def resolve_symlink(host: Host, file_: Union[str, GNUFile],
 
 def has_missing_shared_libraries(file_: GNUFile) -> MissingSOResult:
     """
-    Checks if requested file has broken shared libraries dependencies
+    Checks if requested file has broken shared libraries dependencies.
 
     Parameters
     ----------
@@ -147,3 +172,23 @@ def has_missing_shared_libraries(file_: GNUFile) -> MissingSOResult:
     if len(result):
         return MissingSOResult(True, '\n'.join(result))
     return MissingSOResult(False, '')
+
+
+def is_rpath_correct(file_: GNUFile) -> bool:
+    """
+    Checks RPATH correctness.
+
+    Parameters
+    ----------
+    file_: GNUFile
+        File to check RPATH in
+
+    Returns
+    -------
+    bool
+        True if RPATH is correct, False otherwise
+
+    """
+    output = file_.run(f'objdump -x {file_.path}')
+    assert output.rc == 0
+    return not bool(re.search(r'(RPATH|RUNPATH).*:$', output.stdout))
