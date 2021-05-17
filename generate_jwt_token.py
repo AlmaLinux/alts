@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+# -*- mode:python; coding:utf-8; -*-
+# author: Vasily Kleschov <vkleschov@cloudlinux.com>
+# created: 2021-05-05
+
+"""AlmaLinux Test System generating JTW token script."""
 
 import os
 import sys
@@ -11,18 +16,44 @@ from alts.shared.config_loader import get_config_dict_from_yaml
 
 
 class Config(BaseModel):
+
+    """Config for jwt token."""
+
     jwt_secret: str
     hash_algorithm: str = 'HS256'
 
 
 def generate_token(jwt_secret: str, email: str,
                    hashing_algorithm: str = 'HS256'):
+    """
+    Generates jwt token for authenticating user.
+    Parameters
+    ----------
+    jwt_secret : str
+        Secret passphrase for generating token.
+    email : str
+        User's email for generating token.
+    hashing_algorithm : str
+        Hashing algorithm which will be used for encoding.
 
+    Returns
+    -------
+    str
+        Generated jwt token.
+    """
     return jwt.encode({'email': email}, jwt_secret,
                       algorithm=hashing_algorithm)
 
 
 def main():
+    """
+    Test System script for generating user's jwt token.
+
+    Returns
+    -------
+    int
+        Program exit code.
+    """
     parser = ArgumentParser()
     parser.add_argument('-c', '--config', default='',
                         help='Path to config file')

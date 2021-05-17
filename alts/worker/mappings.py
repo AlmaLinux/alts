@@ -1,3 +1,9 @@
+# -*- mode:python; coding:utf-8; -*-
+# author: Vasily Kleschov <vkleschov@cloudlinux.com>
+# created: 2021-05-01
+
+"""AlmaLinux Test System environments mapping."""
+
 from alts.worker.runners import DockerRunner, OpennebulaRunner
 
 
@@ -8,4 +14,3 @@ RUNNER_MAPPING = {
     'docker': DockerRunner,
     'opennebula': OpennebulaRunner,
 }
-
