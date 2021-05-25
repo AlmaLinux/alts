@@ -7,7 +7,8 @@
 __all__ = ['ALTSBaseError', 'ConfigNotFoundError', 'DBUpdateError',
            'InstallPackageError', 'ProvisionError', 'PublishArtifactsError',
            'StartEnvironmentError', 'StopEnvironmentError',
-           'TerraformInitializationError', 'WorkDirPreparationError']
+           'TerraformInitializationError', 'WorkDirPreparationError',
+           'PackageIntegrityTestsError']
 
 
 class ALTSBaseError(Exception):
@@ -77,4 +78,8 @@ class StopEnvironmentError(ALTSBaseError):
 
     """Destroying Terraform environment error."""
 
+    pass
+
+
+class PackageIntegrityTestsError(ALTSBaseError):
     pass

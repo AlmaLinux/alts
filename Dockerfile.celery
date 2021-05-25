@@ -16,12 +16,13 @@ RUN wget -q https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${T
     && unzip /tmp/terraform_linux_${ARCH}.zip -d /usr/local/bin \
     && chmod 755 /usr/local/bin/terraform \
     && rm -f /tmp/terraform_linux_${ARCH}.zip
-COPY requirements/celery.txt /tmp/requirements.txt
+COPY requirements/ /tmp/requirements
 RUN cd /code \
     && virtualenv -p python3.6 env \
     && source env/bin/activate \
-    && pip3 install -U pip setuptools && pip3 install -r /tmp/requirements.txt \
+    && pip3 install --no-cache -U pip setuptools \
+    && pip3 install --no-cache -r /tmp/requirements/celery.txt \
     && deactivate \
-    && rm -f /tmp/requirements.txt
+    && rm -rf /tmp/requirements
 COPY . /code
 WORKDIR /code

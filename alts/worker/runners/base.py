@@ -12,11 +12,7 @@ from boto3.exceptions import S3UploadFailedError
 from mako.lookup import TemplateLookup
 from plumbum import local
 
-from alts.shared.exceptions import (
-    InstallPackageError, ProvisionError, PublishArtifactsError,
-    StartEnvironmentError, StopEnvironmentError, TerraformInitializationError,
-    WorkDirPreparationError,
-)
+from alts.shared.exceptions import *
 from alts.shared.types import ImmutableDict
 from alts.worker import CONFIG, RESOURCES_DIR
 
@@ -56,8 +52,6 @@ class BaseRunner(object):
     like Docker container, virtual machine, etc.
 
     """
-    DEBIAN_FLAVORS = ('debian', 'ubuntu', 'raspbian')
-    RHEL_FLAVORS = ('fedora', 'centos', 'almalinux', 'cloudlinux')
     TYPE = 'base'
     ARCHITECTURES_MAPPING = ImmutableDict(
         aarch64=['arm64', 'aarch64'],
@@ -71,6 +65,7 @@ class BaseRunner(object):
     ANSIBLE_CONFIG = 'ansible.cfg'
     ANSIBLE_INVENTORY_FILE = 'hosts'
     TEMPFILE_PREFIX = 'base_test_runner_'
+    INTEGRITY_TESTS_DIR = 'package_tests'
 
     def __init__(self, task_id: str, dist_name: str,
                  dist_version: Union[str, int],
@@ -81,6 +76,8 @@ class BaseRunner(object):
         self._logger = logging.getLogger(__file__)
         self._work_dir = None
         self._artifacts_dir = None
+        self._inventory_file_path = None
+        self._integrity_tests_dir = None
         self._class_resources_dir = os.path.join(RESOURCES_DIR, self.TYPE)
         self._template_lookup = TemplateLookup(
             directories=[RESOURCES_DIR, self._class_resources_dir])
@@ -105,12 +102,12 @@ class BaseRunner(object):
     @property
     def pkg_manager(self):
         if (self._dist_name == 'fedora' or
-                (self._dist_name in self.RHEL_FLAVORS
+                (self._dist_name in CONFIG.rhel_flavors
                  and self._dist_version.startswith('8'))):
             return 'dnf'
-        elif self._dist_name in self.RHEL_FLAVORS:
+        elif self._dist_name in CONFIG.rhel_flavors:
             return 'yum'
-        elif self._dist_name in self.DEBIAN_FLAVORS:
+        elif self._dist_name in CONFIG.debian_flavors:
             return 'apt-get'
         else:
             raise ValueError(f'Unknown distribution: {self._dist_name}')
@@ -165,10 +162,10 @@ class BaseRunner(object):
             f.write(content)
 
     def _create_ansible_inventory_file(self, vm_ip: str = None):
-        inventory_file_path = os.path.join(self._work_dir,
-                                           self.ANSIBLE_INVENTORY_FILE)
+        self._inventory_file_path = os.path.join(
+            self._work_dir, self.ANSIBLE_INVENTORY_FILE)
         self._render_template(
-            f'{self.ANSIBLE_INVENTORY_FILE}.tmpl', inventory_file_path,
+            f'{self.ANSIBLE_INVENTORY_FILE}.tmpl', self._inventory_file_path,
             env_name=self.env_name, vm_ip=vm_ip,
             connection_type=self.ansible_connection_type
         )
@@ -206,6 +203,12 @@ class BaseRunner(object):
                 os.path.join(self._class_resources_dir, self.TF_VERSIONS_FILE),
                 os.path.join(self._work_dir, self.TF_VERSIONS_FILE)
             )
+            # Copy integrity tests into working directory
+            self._integrity_tests_dir = os.path.join(
+                self._work_dir, self.INTEGRITY_TESTS_DIR)
+            shutil.copytree(os.path.join(RESOURCES_DIR,
+                                         self.INTEGRITY_TESTS_DIR),
+                            self._integrity_tests_dir)
 
             if create_ansible_inventory:
                 self._create_ansible_inventory_file()
@@ -272,6 +275,38 @@ class BaseRunner(object):
             f'Running "ansible-playbook {cmd_args_str}" command')
         return local['ansible-playbook'].run(
             args=cmd_args, retcode=None, cwd=self._work_dir)
+
+    @command_decorator(PackageIntegrityTestsError, 'package_integrity_tests',
+                       'Package integrity tests failed')
+    def run_package_integrity_tests(self, package_name: str,
+                                    package_version: str = None):
+        """
+        Run basic integrity tests for the package
+
+        Parameters
+        ----------
+        package_name:       str
+            Package name
+        package_version:    str
+            Package version
+
+        Returns
+        -------
+        tuple
+            Exit code, stdout and stderr from executed command
+
+        """
+        self._logger.info(f'Running package integrity tests for '
+                          f'{self.env_name}...')
+        cmd_args = ['--tap-stream', '--tap-files', '--tap-outdir',
+                    self._artifacts_dir, '--hosts', 'ansible://all',
+                    '--ansible-inventory', self._inventory_file_path,
+                    '--package-name', package_name]
+        if package_version:
+            cmd_args.extend(['--package-version', package_version])
+        cmd_args.append('tests')
+        return local['py.test'].run(args=cmd_args, retcode=None,
+                                    cwd=self._integrity_tests_dir)
 
     def publish_artifacts_to_storage(self):
         # Should upload artifacts from artifacts directory to preferred
