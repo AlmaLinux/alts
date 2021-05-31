@@ -1,6 +1,14 @@
 ---
+use_ssl: true
+ssl_config:
+  security_cert_store: '/etc/ssl/certs/*.crt'
+  security_key: ''
+  security_certificate: ''
+  broker_ca_certificates: ''
+  security_digest: 'sha256'
 rabbitqm_host: 'rabbitmq'
 rabbitmq_port: 5672
+rabbitmq_ssl_port: 5671
 rabbitmq_user: 'test-system'
 rabbitmq_password:
 rabbitmq_vhost: 'test_system'

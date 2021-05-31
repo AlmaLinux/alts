@@ -1,0 +1,105 @@
+---
+
+- name: Install python-pip and python-venv
+  yum:
+    name: ["python3-pip", "python3-virtualenv"]
+    state: present
+
+- name: Install git
+  yum:
+    name: git
+    state: present
+
+- name: Add scheduler user
+  user:
+    name: "{{ test_system_user }}"
+    generate_ssh_key: yes
+    ssh_key_bits: 4096
+    ssh_key_file: .ssh/id_rsa
+    state: present
+
+- name: Configure scheduler user
+  become: yes
+  become_user: "{{ test_system_user }}"
+  block:
+    - name: Clone ALTS repository
+      git:
+        repo: https://github.com/AlmaLinux/alts
+        dest: ~/alts
+        depth: 1
+
+    - name: Install scheduler dependencies
+      pip:
+        virtualenv: "{{ scheduler_venv_dir }}"
+        requirements: ~/alts/requirements/scheduler.txt
+
+    - name: Create config and SSL folder
+      file:
+        path: "{{ item }}"
+        mode: 0755
+        state: directory
+      with_items:
+        - "{{ test_system_config_dir }}"
+        - "{{ celery_ssl_dir }}"
+
+    - name: Copy the ssl certificates
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: "{{ test_system_user }}"
+        group: "{{ test_system_user }}"
+        mode: 0600
+        backup: "yes"
+      with_items:
+        - { src: "{{ celery_src_cacert }}", dest: "{{ celery_cacert }}" }
+        - { src: "{{ celery_ssl_src_key }}", dest: "{{ celery_ssl_key }}" }
+        - { src: "{{ celery_ssl_src_certificate }}", dest: "{{ celery_ssl_certificate }}" }
+      when: celery_ssl
+
+    - name: Create scheduler config
+      template:
+        src: service_config.yaml.j2
+        dest: "{{ test_system_config_dir }}/scheduler.yaml"
+
+- name: Create scheduler working directory
+  file:
+    path: "{{ scheduler_working_directory }}"
+    mode: 0755
+    owner: "{{ test_system_user }}"
+    group: "{{ test_system_user }}"
+    state: directory
+  when: scheduler_working_directory is defined and scheduler_working_directory
+
+
+- name: Enable HTTP/HTTPS services on firewall
+  firewalld:
+    zone: public
+    service: "{{ item }}"
+    state: enabled
+    permanent: yes
+  with_items:
+    - http
+    - https
+
+- name: Add scheduler port to firewall
+  firewalld:
+    zone: public
+    port: "{{ scheduler_http_port }}/tcp"
+    state: enabled
+    permanent: yes
+    immediate: yes
+
+- name: Create scheduler Systemd service file
+  template:
+    src: alts-scheduler.service.j2
+    dest: /etc/systemd/system/alts-scheduler.service
+    mode: 0644
+
+- name: Reload scheduler service file
+  command: systemctl daemon-reload
+
+- name: Enable and start scheduler service
+  service:
+    name: alts-scheduler
+    enabled: yes
+    state: started

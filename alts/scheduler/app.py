@@ -31,6 +31,7 @@ from alts.worker.mappings import RUNNER_MAPPING
 from alts.worker.tasks import run_tests
 from alts.scheduler import CONFIG
 from alts.scheduler.db import database, Session, Task
+from alts.shared.exceptions import ALTSBaseError
 from alts.shared.models import (
     TaskRequestResponse,
     TaskRequestPayload,
@@ -66,6 +67,12 @@ def get_celery_task_result(task_id: str, timeout: int = 1) -> dict:
         result['result'] = task_data.get(timeout=timeout)
     except TimeoutError:
         pass
+    except ALTSBaseError as e:
+        logging.warning(f'Task has failed with error: '
+                        f'{e.__class__.__name__}: {e}')
+    except Exception as e:
+        logging.error(f'Unknown exception while getting resutls from Celery: '
+                      f'{e.__class__.__name__}: {e}')
     result['state'] = task_data.state
     return result
 

@@ -1,0 +1,14 @@
+[Unit]
+Description=Scheduler service for AL test system
+After=network.target
+
+[Service]
+User={{ test_system_user }}
+Group={{ test_system_user }}
+Environment=CELERY_CONFIG_PATH={{ test_system_config_dir }}/scheduler.yaml
+Environment=SCHEDULER_FILE_PATH={{ test_system_config_dir }}/scheduler.yaml
+ExecStart=/bin/sh -c 'source {{ scheduler_venv_dir }}/bin/activate && cd ~/alts && uvicorn --host 0.0.0.0 \
+    --port {{ scheduler_http_port }} alts.scheduler.app:app'
+
+[Install]
+WantedBy=multi-user.target

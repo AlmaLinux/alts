@@ -1,0 +1,8 @@
+---
+
+celery_venv_dir: ~/.venv-celery
+opennebula_endpoint:
+opennebula_user:
+opennebula_password:
+opennebula_vm_group:
+scheduler_http_port: 8000

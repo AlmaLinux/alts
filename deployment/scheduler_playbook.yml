@@ -1,0 +1,7 @@
+---
+
+- name: Configure scheduler
+  hosts: scheduler
+  roles:
+    - base
+    - scheduler

@@ -304,3 +304,10 @@ terraform.rc
 
 # Ignore configs for docker-compose deploy
 configs/alts_config*.yaml
+
+# Ignore sensitive files from deployment
+deployment/hosts
+deployment/files/*.pem
+deployment/files/*.crt
+deployment/files/*/*.pem
+deployment/files/*/*.crt

@@ -1,0 +1,6 @@
+---
+
+- name: Reload Celery service file
+  systemd:
+    service: alts-celery
+    state: reloaded

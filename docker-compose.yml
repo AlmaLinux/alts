@@ -6,12 +6,26 @@ services:
     container_name: "rabbitmq-ts"
     ports:
       - 5672:5672
+      - 5671:5671
       - 15672:15672
     environment:
       RABBITMQ_ERLANG_COOKIE: PyekdgANDctdPgRzU8AVaRBK
       RABBITMQ_DEFAULT_USER: test-system
       RABBITMQ_DEFAULT_PASS: # Your secret password here
       RABBITMQ_DEFAULT_VHOST: test_system
+      RABBITMQ_SSL_CACERTFILE: /opt/ssl/ca_certificate.pem
+      RABBITMQ_SSL_CERTFILE: /opt/ssl/server/server_certificate.pem
+      RABBITMQ_SSL_KEYFILE: /opt/ssl/server/server_key.pem
+      RABBITMQ_SSL_VERIFY: "verify_peer"
+      RABBITMQ_SSL_FAIL_IF_NO_PEER_CERT: "true"
+      RABBITMQ_MANAGEMENT_SSL_CACERTFILE: /opt/ssl/ca_certificate.pem
+      RABBITMQ_MANAGEMENT_SSL_CERTFILE: /opt/ssl/server/server_certificate.pem
+      RABBITMQ_MANAGEMENT_SSL_KEYFILE: /opt/ssl/server/server_key.pem
+      RABBITMQ_MANAGEMENT_SSL_VERIFY: "verify_peer"
+      RABBITMQ_MANAGEMENT_SSL_FAIL_IF_NO_PEER_CERT: "true"
+    volumes:
+      - $your_ssl_folder:/opt/ssl
+
     restart: always
 
   celery:
@@ -29,6 +43,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./configs/alts_config.yaml:/celery_config.yaml
+      - $your_ssl_folder:/opt/ssl
     depends_on:
       - rabbitmq
 
@@ -47,5 +62,6 @@ services:
       - 8000:8000
     volumes:
       - ./configs/alts_config.yaml:/scheduler_config.yaml
+      - $your_ssl_folder:/opt/ssl
     depends_on:
       - rabbitmq

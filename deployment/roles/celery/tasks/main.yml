@@ -1,0 +1,95 @@
+---
+
+- name: Install python-pip and python-venv
+  yum:
+    name: ["python3-pip", "python3-virtualenv"]
+    state: present
+
+- name: Install git
+  yum:
+    name: git
+    state: present
+
+- name: Add Celery user
+  user:
+    name: "{{ test_system_user }}"
+    groups: docker
+    generate_ssh_key: yes
+    ssh_key_bits: 4096
+    ssh_key_file: .ssh/id_rsa
+    state: present
+
+- name: Configure Celery user
+  become: yes
+  become_user: "{{ test_system_user }}"
+  block:
+    - name: Clone ALTS repository
+      git:
+        repo: https://github.com/AlmaLinux/alts
+        dest: ~/alts
+        depth: 1
+
+    - name: Install Celery dependencies
+      pip:
+        virtualenv: "{{ celery_venv_dir }}"
+        requirements: ~/alts/requirements/celery.txt
+
+    - name: Create config and SSL folder
+      file:
+        path: "{{ item }}"
+        mode: 0755
+        state: directory
+      with_items:
+        - "{{ test_system_config_dir }}"
+        - "{{ celery_ssl_dir }}"
+
+    - name: Copy the ssl certificates
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: "{{ test_system_user }}"
+        group: "{{ test_system_user }}"
+        mode: 0600
+        backup: "yes"
+      with_items:
+        - { src: "{{ celery_src_cacert }}", dest: "{{ celery_cacert }}" }
+        - { src: "{{ celery_ssl_src_key }}", dest: "{{ celery_ssl_key }}" }
+        - { src: "{{ celery_ssl_src_certificate }}", dest: "{{ celery_ssl_certificate }}" }
+      when: celery_ssl
+
+    - name: Create Celery config
+      template:
+        src: service_config.yaml.j2
+        dest: "{{ test_system_config_dir }}/celery.yaml"
+
+- name: Create Celery Systemd service file
+  template:
+    src: alts-celery.service.j2
+    dest: /etc/systemd/system/alts-celery.service
+    mode: 0644
+
+- name: Create PID files directory for Celery service
+  file:
+    path: "{{ celery_pid_file_dir }}"
+    mode: 0755
+    owner: "{{ test_system_user }}"
+    group: "{{ test_system_user }}"
+    state: directory
+
+- name: Create folder for Celery local results
+  file:
+    path: "{{ celery_result_folder }}"
+    mode: 0755
+    owner: "{{ test_system_user }}"
+    group: "{{ test_system_user }}"
+    state: directory
+  when: result_backend_name is defined and result_backend_name == 'local'
+
+- name: Reload Celery service file
+  command: systemctl daemon-reload
+
+- name: Enable and start Celery service
+  service:
+    name: alts-celery
+    enabled: yes
+    state: started

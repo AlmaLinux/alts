@@ -303,3 +303,4 @@ terraform.rc
 
 # Ignore configs for docker-compose deploy
 configs/alts_config*.yaml
+deployment

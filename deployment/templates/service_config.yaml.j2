@@ -1,0 +1,54 @@
+---
+{% if celery_ssl %}
+use_ssl: true
+ssl_config:
+  security_key: {{ celery_ssl_key }}
+  security_certificate: {{ celery_ssl_certificate }}
+  broker_ca_certificates: {{ celery_cacert }}
+{% endif %}
+
+rabbitmq_host: {{ rabbitmq_host }}
+rabbitmq_port: {{ rabbitmq_port }}
+{% if celery_ssl %}
+rabbitmq_ssl_port: {{ rabbitmq_ssl_port }}
+{% endif %}
+rabbitmq_user: {{ test_system_user }}
+rabbitmq_password: {{ test_system_password }}
+rabbitmq_vhost: {{ test_system_vhost }}
+
+{% if result_backend_name == 'local' and celery_result_folder %}
+result_backend: file://{{ celery_result_folder }}
+{% else %}
+result_backend: result_backend_name
+{% endif %}
+
+{% if result_backend_name == 's3' %}
+s3_access_key_id: {{ s3_key_id }}
+s3_secret_access_key: {{ s3_access_key }}
+s3_bucket: {{ s3_bucket }}
+s3_base_path: 'celery_result_backend/'
+s3_region: {{ s3_region }}
+s3_endpoint_url:
+{% endif %}
+
+task_default_queue: 'default'
+task_acks_late: true
+task_track_started: true
+artifacts_root_directory: 'test_system_artifacts'
+worker_prefetch_multiplier: 1
+
+{% if opennebula_endpoint and opennebula_user and opennebula_password and opennebula_vm_group and opennebula_templates %}
+opennebula_rpc_endpoint: {{ opennebula_endpoint }}
+opennebula_username: {{ opennebula_user }}
+opennebula_password: {{ opennebula_password }}
+opennebula_vm_group: {{ opennebula_vm_group }}
+opennebula_templates:
+    {{ opennebula_templates }}
+{% endif %}
+
+{% if jwt_secret | default('') %}
+jwt_secret: {{ jwt_secret }}
+{% endif %}
+{% if scheduler_working_directory | default('') %}
+working_directory: {{ scheduler_working_directory }}
+{% endif %}

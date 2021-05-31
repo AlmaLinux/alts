@@ -1,0 +1,9 @@
+---
+
+scheduler_venv_dir: ~/.venv-scheduler
+
+opennebula_endpoint:
+opennebula_user:
+opennebula_password:
+opennebula_vm_group:
+scheduler_http_port: 8000
