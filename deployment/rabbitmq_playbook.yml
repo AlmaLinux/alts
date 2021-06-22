@@ -1,0 +1,6 @@
+---
+- name: Install RabbitMQ and setup TLS
+  hosts: rabbitmq
+  roles:
+    - base
+    - rabbitmq-server

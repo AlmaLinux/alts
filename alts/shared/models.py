@@ -1,3 +1,5 @@
+import os
+import ssl
 import typing
 
 import jmespath
@@ -43,20 +45,40 @@ class TaskResultResponse(BaseModel):
     result: typing.Optional[dict]
 
 
+class SslConfig(BaseModel):
+    security_key: str
+    security_certificate: str
+    security_digest: str = 'sha256'
+    broker_ca_certificates: str
+    cert_required: int = ssl.CERT_REQUIRED
+
+    @property
+    def security_cert_store(self) -> str:
+        # FIXME: Find correct way to search for certs store
+        search_folder = '/etc/ssl/certs/'
+        for file_ in os.listdir(search_folder):
+            if file_.startswith('ca-') and '.trust' not in file_:
+                return os.path.join(search_folder, file_)
+        raise ValueError('Cannot find SSL certificates file')
+
+
 class CeleryConfig(BaseModel):
     # Needed for broker_url property
-    rabbitqm_host: str
+    use_ssl: bool = False
+    ssl_config: typing.Optional[SslConfig] = None
+    rabbitmq_host: str
     rabbitmq_port: int = 5672
+    rabbitmq_ssl_port: int = 5671
     rabbitmq_user: str
     rabbitmq_password: str
     rabbitmq_vhost: str
     result_backend: str
     # Celery configuration variables
-    s3_access_key_id: str
-    s3_secret_access_key: str
-    s3_bucket: str
+    s3_access_key_id: str = ''
+    s3_secret_access_key: str = ''
+    s3_bucket: str = ''
     s3_base_path: str = 'celery_result_backend/'
-    s3_region: str
+    s3_region: str = ''
     s3_endpoint_url: typing.Optional[str] = None
     task_default_queue: str = 'default'
     task_acks_late: bool = True
@@ -85,9 +107,14 @@ class CeleryConfig(BaseModel):
 
     @property
     def broker_url(self) -> str:
-        return (f'amqp://{self.rabbitmq_user}:{self.rabbitmq_password}@'
-                f'{self.rabbitqm_host}:{self.rabbitmq_port}/'
-                f'{self.rabbitmq_vhost}')
+        if self.use_ssl:
+            schema = 'amqps'
+            port = self.rabbitmq_ssl_port
+        else:
+            schema = 'amqp'
+            port = self.rabbitmq_port
+        return (f'{schema}://{self.rabbitmq_user}:{self.rabbitmq_password}@'
+                f'{self.rabbitmq_host}:{port}/{self.rabbitmq_vhost}')
 
     def get_opennebula_template_id(self, dist_name: str, dist_version: str,
                                    dist_arch: str):

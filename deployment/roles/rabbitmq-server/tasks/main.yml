@@ -1,0 +1,162 @@
+---
+
+- name: Install RabbitMQ repository
+  block:
+    - name: Download repository setup script
+      get_url:
+        url: https://packagecloud.io/install/repositories/rabbitmq/rabbitmq-server/script.rpm.sh
+        dest: /tmp/rabbitm-repo-setup.sh
+        mode: 0755
+
+    - name: Execute repository setup script
+      command: /tmp/rabbitm-repo-setup.sh
+      environment:
+        os: el
+        dist: 8
+
+    - name: Delete setup script
+      file:
+        path: /tmp/rabbitm-repo-setup.sh
+        state: absent
+
+- name: Add Erlang repository
+  yum_repository:
+    name: erlang-latest
+    file: erlang
+    description: Erlang repository
+    baseurl: https://packagecloud.io/rabbitmq/erlang/el/$releasever/$basearch
+    gpgcheck: yes
+    state: present
+
+- name: Add Erlang repository GPG key
+  rpm_key:
+    key: https://packagecloud.io/rabbitmq/erlang/gpgkey
+    state: present
+
+- name: Install RabbitMQ server
+  yum:
+    name: rabbitmq-server
+    state: present
+    enablerepo: epel,powertools
+
+- name: Enable management plugin
+  rabbitmq_plugin:
+    names: rabbitmq_management
+    state: enabled
+  notify:
+    - restart rabbitmq
+
+- name: Flush handlers
+  meta: flush_handlers
+
+- name: Add RabbitMQ user
+  rabbitmq_user:
+    user: "{{ rabbitmq_admin_user }}"
+    password: "{{ rabbitmq_admin_password }}"
+    vhost: /
+    tags: administrator
+    configure_priv: .*
+    read_priv: .*
+    write_priv: .*
+    state: present
+
+- name: Add test system vhost
+  rabbitmq_vhost:
+    name: "{{ rabbitmq_test_system_vhost }}"
+    state: present
+
+- name: Add RabbitMQ test system user
+  rabbitmq_user:
+    user: "{{ test_system_user }}"
+    password: "{{ rabbitmq_test_system_password }}"
+    vhost: "{{ rabbitmq_test_system_vhost }}"
+    tags: test-system
+    configure_priv: .*
+    read_priv: .*
+    write_priv: .*
+    state: present
+
+- name: Add AMQP port to firewall
+  firewalld:
+    zone: public
+    port: "{{ item }}"
+    state: enabled
+    permanent: yes
+    immediate: yes
+  with_items:
+    - "{{ rabbitmq_port }}/tcp"
+    - "{{ rabbitmq_port }}/udp"
+
+- name: Configure SSL
+  block:
+    - name: Create SSL folder for rabbitmq
+      file:
+        path: "/etc/rabbitmq/ssl/"
+        owner: "rabbitmq"
+        group: "rabbitmq"
+        mode: 0750
+        state: "directory"
+      when: rabbitmq_ssl and rabbitmq_copy_ssl_files
+
+    - name: Copy the ssl certificates
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: "rabbitmq"
+        group: "rabbitmq"
+        mode: 0640
+        backup: "yes"
+      with_items:
+        - { src: "{{ rabbitmq_cacert }}", dest: "{{ rabbitmq_conf_ssl_options_cacertfile }}" }
+        - { src: "{{ rabbitmq_server_key }}", dest: "{{ rabbitmq_conf_ssl_options_keyfile }}" }
+        - { src: "{{ rabbitmq_server_cert }}", dest: "{{ rabbitmq_conf_ssl_options_certfile }}" }
+
+    - name: Update configuration file as per parameters
+      ini_file:
+        path: /etc/rabbitmq/rabbitmq.conf
+        section:
+        option: "{{ item.name }}"
+        value: "{{ item.value }}"
+        state: present
+      with_items:
+        - { name: listeners.ssl.default, value: "{{ rabbitmq_ssl_port }}" }
+        - { name: ssl_options.verify, value: "{{ rabbitmq_ssl_verify }}" }
+        - { name: ssl_options.fail_if_no_peer_cert, value: "{{ rabbitmq_ssl_fail_if_no_peer_cert | to_json }}" }
+        - { name: ssl_options.cacertfile, value: "{{ rabbitmq_conf_ssl_options_cacertfile }}" }
+        - { name: ssl_options.certfile, value: "{{ rabbitmq_conf_ssl_options_certfile }}" }
+        - { name:  ssl_options.keyfile, value: "{{ rabbitmq_conf_ssl_options_keyfile }}" }
+
+      notify:
+        - restart rabbitmq
+
+    - name: Add AMQPS port to firewall
+      firewalld:
+        zone: public
+        port: "{{ item }}"
+        state: enabled
+        permanent: yes
+        immediate: yes
+      with_items:
+        - "{{ rabbitmq_ssl_port }}/tcp"
+        - "{{ rabbitmq_ssl_port }}/udp"
+
+    - name: Flush handlers
+      meta: flush_handlers
+
+  when: rabbitmq_ssl and rabbitmq_copy_ssl_files
+
+- name: Enable AMQP/AMQPS services on firewall
+  firewalld:
+    zone: public
+    service: "{{ item }}"
+    state: enabled
+    permanent: yes
+  with_items:
+    - amqp
+    - amqps
+
+- name: Enable and start RabbitMQ service
+  service:
+    name: rabbitmq-server
+    enabled: yes
+    state: started

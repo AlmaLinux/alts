@@ -1,0 +1,9 @@
+---
+
+- name: Install Celery
+  hosts: celery
+  roles:
+    - base
+    - docker
+    - celery
+    - terraform

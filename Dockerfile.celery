@@ -3,7 +3,7 @@ FROM centos:8
 ARG ARCH="amd64"
 ARG TF_VERSION="0.15.3"
 
-RUN mkdir -p /code ~/.terraform.d/plugin-cache ~/.ssh \
+RUN mkdir -p /code ~/.terraform.d/plugin-cache ~/.ssh /srv/celery_results \
     && echo "plugin_cache_dir = \"\$HOME/.terraform.d/plugin-cache\"" > ~/.terraformrc \
     && yum update -y \
     && yum install -y python3-virtualenv epel-release wget unzip yum-utils openssh-clients \
