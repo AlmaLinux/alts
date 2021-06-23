@@ -17,10 +17,13 @@ from alts.shared.types import ImmutableDict
 from alts.worker import CONFIG, RESOURCES_DIR
 
 
-__all__ = ['BaseRunner', 'GenericVMRunner', 'command_decorator']
+__all__ = ['BaseRunner', 'GenericVMRunner', 'command_decorator', 'TESTS_SECTION_NAME']
 
 
-def command_decorator(exception_class, artifacts_key, error_message):
+TESTS_SECTION_NAME = 'tests'
+
+
+def command_decorator(exception_class, artifacts_key, error_message, additional_section_name=None):
     def method_wrapper(fn):
         @wraps(fn)
         def inner_wrapper(*args, **kwargs):
@@ -29,7 +32,12 @@ def command_decorator(exception_class, artifacts_key, error_message):
             if not self._work_dir or not os.path.exists(self._work_dir):
                 return
             exit_code, stdout, stderr = fn(self, *args, **kwargs)
-            self._artifacts[artifacts_key] = {
+            add_to = self._artifacts
+            if additional_section_name:
+                if additional_section_name not in self._artifacts:
+                    self._artifacts[additional_section_name] = {}
+                    add_to = self._artifacts[additional_section_name]
+            add_to[artifacts_key] = {
                 'exit_code': exit_code,
                 'stderr': stderr,
                 'stdout': stdout
@@ -277,7 +285,8 @@ class BaseRunner(object):
             args=cmd_args, retcode=None, cwd=self._work_dir)
 
     @command_decorator(PackageIntegrityTestsError, 'package_integrity_tests',
-                       'Package integrity tests failed')
+                       'Package integrity tests failed',
+                       additional_section_name=TESTS_SECTION_NAME)
     def run_package_integrity_tests(self, package_name: str,
                                     package_version: str = None):
         """
@@ -311,17 +320,27 @@ class BaseRunner(object):
     def publish_artifacts_to_storage(self):
         # Should upload artifacts from artifacts directory to preferred
         # artifacts storage (S3, Minio, etc.)
-        for artifact_key, content in self.artifacts.items():
+
+        def write_to_file(file_base_name: str, artifacts_section: dict):
             log_file_path = os.path.join(self._artifacts_dir,
-                                         f'{artifact_key}.log')
+                                         f'{file_base_name}.log')
             with open(log_file_path, 'w+t') as f:
-                f.write(f'Exit code: {content["exit_code"]}\n')
-                f.write(content['stdout'])
-            if content['stderr']:
+                f.write(f'Exit code: {artifacts_section["exit_code"]}\n')
+                f.write(artifacts_section['stdout'])
+            if artifacts_section['stderr']:
                 error_log_path = os.path.join(self._artifacts_dir,
-                                              f'{artifact_key}_error.log')
+                                              f'{file_base_name}_error.log')
                 with open(error_log_path, 'w+t') as f:
-                    f.write(content['stderr'])
+                    f.write(artifacts_section['stderr'])
+
+        for artifact_key, content in self.artifacts.items():
+            if artifact_key == TESTS_SECTION_NAME:
+                for inner_artifact_key, inner_content in content.items():
+                    log_base_name = f'{TESTS_SECTION_NAME}_{inner_artifact_key}'
+                    write_to_file(log_base_name, inner_content)
+
+            else:
+                write_to_file(artifact_key, content)
 
         client = boto3.client(
             's3', region_name=CONFIG.s3_region,
