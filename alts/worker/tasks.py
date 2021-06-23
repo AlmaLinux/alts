@@ -8,6 +8,7 @@ import logging
 
 from alts.worker.app import celery_app
 from alts.worker.mappings import RUNNER_MAPPING
+from alts.worker.runners.base import TESTS_SECTION_NAME
 
 
 __all__ = ['run_tests']
@@ -28,6 +29,10 @@ def run_tests(task_params: dict):
     dict
         Result summary of a test execution.
     """
+
+    def is_success(stage_data: dict):
+        return stage_data['exit_code'] == 0
+
     logging.info(f'Starting work with the following params: {task_params}')
 
     for key in ['task_id', 'runner_type', 'dist_name', 'dist_version',
@@ -54,14 +59,19 @@ def run_tests(task_params: dict):
         runner.run_package_integrity_tests(package_name, package_version)
     finally:
         runner.teardown()
+        summary = {}
+        for stage, stage_data in runner.artifacts.items():
+            # FIXME: Temporary solution, needs to be removed when this
+            #  test system will be the only running one
+            if stage == TESTS_SECTION_NAME:
+                if TESTS_SECTION_NAME not in summary:
+                    summary[TESTS_SECTION_NAME] = {}
+                for inner_stage, inner_data in stage_data.items():
+                    summary[TESTS_SECTION_NAME][inner_stage] = {
+                        'success': is_success(inner_data),
+                        'output': inner_data['stdout']
+                    }
+            else:
+                summary[stage] = {'success': is_success(stage_data)}
 
-    # TODO: Add summary for tests execution
-    summary = {}
-    for stage, stage_data in runner.artifacts.items():
-        if stage_data['exit_code'] == 0:
-            success = True
-        else:
-            success = False
-        summary[stage] = {'success': success}
-
-    return summary
+        return summary
