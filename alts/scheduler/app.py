@@ -283,6 +283,7 @@ async def schedule_task(task_data: TaskRequestPayload,
     task_params = task_data.dict()
     task_params['task_id'] = task_id
     task_params['runner_type'] = runner_type
+    task_params['repositories'] = repositories
     try:
         run_tests.apply_async((task_params,), task_id=task_id,
                               queue=queue_name)

@@ -15,6 +15,7 @@
           yum_repository:
             name: "{{ item.name }}"
             baseurl: "{{ item.url }}"
+            description: "Repository {{ item.name }}"
             enabled: yes
             gpgcheck: no
           with_items: "{{ repositories }}"

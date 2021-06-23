@@ -10,6 +10,12 @@
     name: git
     state: present
 
+- name: Install Ansible
+  yum:
+    name: ansible
+    state: present
+    enablerepo: epel
+
 - name: Add Celery user
   user:
     name: "{{ test_system_user }}"
@@ -27,7 +33,6 @@
       git:
         repo: https://github.com/AlmaLinux/alts
         dest: ~/alts
-        depth: 1
 
     - name: Install Celery dependencies
       pip:

@@ -251,9 +251,13 @@ class BaseRunner(object):
     @command_decorator(ProvisionError, 'initial_provision',
                        'Cannot run initial provision')
     def initial_provision(self, verbose=False):
+        # To pass dictionary into Ansible variables we need to pass
+        # variables itself as a dictionary thus doing this weird
+        # temporary dictionary
+        var_dict = {'repositories': self._repositories}
         cmd_args = ['-i', self.ANSIBLE_INVENTORY_FILE, self.ANSIBLE_PLAYBOOK,
-                    '-e', f'repositories={self._repositories}',
-                    '-t', 'initial_provision']
+                    '-e', f'{var_dict}', '-t', 'initial_provision']
+        self._logger.info(f'Command args: {cmd_args}')
         if verbose:
             cmd_args.append('-vvvv')
         cmd_args_str = ' '.join(cmd_args)
