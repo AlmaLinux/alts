@@ -9,7 +9,7 @@ Environment=CELERY_CONFIG_PATH={{ test_system_config_dir }}/celery.yaml
 ExecStart=/bin/sh -c 'source {{ celery_venv_dir }}/bin/activate && cd ~/alts && celery -A alts.worker.app worker \
     --pool=threads --concurrency={{ celery_concurrency }} --loglevel={{ celery_loglevel }} \
     -Q {{ celery_queues|join(",") }} --pidfile={{ celery_pid_file }}'
-ExecStop=/bin/sh -c 'source ~/{{ celery_venv_dir }}/bin/activate && celery -A alts.worker.app stop --pidfile={{ celery_pid_file }}'
+ExecStop=/bin/sh -c 'source {{ celery_venv_dir }}/bin/activate && celery -A alts.worker.app stop --pidfile={{ celery_pid_file }}'
 
 [Install]
 WantedBy=multi-user.target
