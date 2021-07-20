@@ -5,12 +5,13 @@
 """AlmaLinux Test System docker environment runner."""
 
 import os
+import shutil
 from typing import Union, List
 
 from plumbum import local
 
 from alts.shared.exceptions import ProvisionError
-from alts.worker import CONFIG
+from alts.worker import CONFIG, RESOURCES_DIR
 from alts.worker.runners.base import BaseRunner
 
 
@@ -34,6 +35,7 @@ class DockerRunner(BaseRunner):
         'i586': 'i386',
         'i386': 'i386',
     }
+    DOCKER_RUN_SCRIPT = 'run.sh'
 
     def __init__(self, task_id: str, dist_name: str,
                  dist_version: Union[str, int],
@@ -76,7 +78,8 @@ class DockerRunner(BaseRunner):
         self._render_template(
             f'{self.TF_MAIN_FILE}.tmpl', docker_tf_file,
             dist_name=self._dist_name, dist_version=self._dist_version,
-            image_arch=image_arch, container_name=self.env_name
+            image_arch=image_arch, container_name=self.env_name,
+            work_dir=self._work_dir
         )
 
     def _render_tf_variables_file(self):
@@ -94,6 +97,8 @@ class DockerRunner(BaseRunner):
         """
         super().prepare_work_dir_files(
             create_ansible_inventory=create_ansible_inventory)
+        shutil.copy(os.path.join(RESOURCES_DIR, self.TYPE, self.DOCKER_RUN_SCRIPT),
+                    os.path.join(self._work_dir, self.DOCKER_RUN_SCRIPT))
 
     def _exec(self, cmd_with_args: ()):
         """
