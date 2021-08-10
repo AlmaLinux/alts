@@ -6,6 +6,9 @@
 
 import logging
 
+import requests
+
+from alts.shared.constants import API_VERSION
 from alts.worker.app import celery_app
 from alts.worker.mappings import RUNNER_MAPPING
 from alts.worker.runners.base import TESTS_SECTION_NAME
@@ -30,8 +33,8 @@ def run_tests(task_params: dict):
         Result summary of a test execution.
     """
 
-    def is_success(stage_data: dict):
-        return stage_data['exit_code'] == 0
+    def is_success(stage_data_: dict):
+        return stage_data_['exit_code'] == 0
 
     logging.info(f'Starting work with the following params: {task_params}')
 
@@ -73,5 +76,10 @@ def run_tests(task_params: dict):
                     }
             else:
                 summary[stage] = {'success': is_success(stage_data)}
+        if task_params.get('callback_url'):
+            url = task_params['callback_url']
+            payload = {'api_version': API_VERSION, 'result': summary}
+            response = requests.post(url, json=payload)
+            response.raise_for_status()
 
         return summary
