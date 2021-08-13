@@ -98,8 +98,9 @@ async def startup():
         tasks_for_update = []
         for task in session.query(Task).filter(Task.status == 'STARTED'):
             task_result = celery_app.AsyncResult(task.task_id)
-            task.status = task_result.state
-            tasks_for_update.append(task)
+            if task.status != task_result.state:
+                task.status = task_result.state
+                tasks_for_update.append(task)
         if tasks_for_update:
             session.add_all(tasks_for_update)
             session.commit()
