@@ -6,14 +6,12 @@
 
 import logging
 import random
-import time
+import signal
 import traceback
 import uuid
-from datetime import datetime, timedelta
+from threading import Event
 
-import requests
 from celery.exceptions import TimeoutError
-from celery.states import READY_STATES
 from fastapi import (
     BackgroundTasks,
     Depends,
@@ -26,21 +24,25 @@ from fastapi.security import HTTPBearer
 from jose import JWTError, jwt
 from pydantic import ValidationError
 
-from alts.worker.app import celery_app
-from alts.worker.mappings import RUNNER_MAPPING
-from alts.worker.tasks import run_tests
 from alts.scheduler import CONFIG
 from alts.scheduler.db import database, Session, Task
+from alts.scheduler.monitoring import TasksMonitor
+from alts.shared.constants import API_VERSION
 from alts.shared.exceptions import ALTSBaseError
 from alts.shared.models import (
     TaskRequestResponse,
     TaskRequestPayload,
     TaskResultResponse,
 )
+from alts.worker.app import celery_app
+from alts.worker.mappings import RUNNER_MAPPING
+from alts.worker.tasks import run_tests
 
-# YYYYMMDD format for API version
-API_VERSION = '20210512'
+
 app = FastAPI()
+monitor = None
+terminate_event = Event()
+graceful_terminate_event = Event()
 http_bearer_scheme = HTTPBearer()
 
 
@@ -77,49 +79,6 @@ def get_celery_task_result(task_id: str, timeout: int = 1) -> dict:
     return result
 
 
-# TODO: Make background functions react to application stop
-def check_celery_task_result(task_id: str, callback_url: str = None):
-    """
-    Gets Test System task result info from Celery.
-
-    Parameters
-    ----------
-    task_id : str
-        Test System task identifier.
-    callback_url : str
-        Url to update Test System task execution result.
-    """
-    task_status = None
-    later = datetime.now() + timedelta(seconds=CONFIG.task_tracking_timeout)
-    session = Session()
-    logging.info(f'Starting to monitor task {task_id}')
-    while task_status not in READY_STATES and datetime.now() <= later:
-        try:
-            task_result = celery_app.AsyncResult(task_id)
-            task_status = task_result.state
-        except Exception as e:
-            logging.error(f'Cannot fetch task result for task ID {task_id}:'
-                          f' {e}')
-        try:
-            task_record = (session.query(Task).filter(Task.task_id == task_id)
-                           .first())
-            if task_record.status != task_status:
-                task_record.status = task_status
-                session.add(task_record)
-                session.commit()
-                logging.info(f'Updated task {task_id} status to {task_status}')
-        except Exception as e:
-            logging.error(f'Cannot update task DB record: {e}')
-        time.sleep(10)
-
-    if callback_url:
-        task_result = get_celery_task_result(task_id)
-        task_result['api_version'] = API_VERSION
-        requests.post(callback_url, json=task_result)
-
-    logging.info(f'Finished monitoring for task {task_id}')
-
-
 @app.on_event('startup')
 async def startup():
 
@@ -136,15 +95,41 @@ async def startup():
     #     # TODO: Add query to database and update tasks
     #     pass
     try:
-        for task in (session.query(Task.task_id, Task.status)
-                     .filter(Task.status == 'STARTED')):
+        tasks_for_update = []
+        for task in session.query(Task).filter(Task.status == 'STARTED'):
             task_result = celery_app.AsyncResult(task.task_id)
-            task.status = task_result.state
-            session.add(task)
-        session.commit()
+            if task.status != task_result.state:
+                task.status = task_result.state
+                tasks_for_update.append(task)
+        if tasks_for_update:
+            session.add_all(tasks_for_update)
+            session.commit()
+            del tasks_for_update
     except Exception as e:
-        logging.error(f'Cannot save task info: {e}')
+        logging.error(f'Cannot save tasks info: {e}')
         session.rollback()
+    finally:
+        session.close()
+
+    global graceful_terminate_event
+    global terminate_event
+    global monitor
+
+    def signal_handler(signum, frame):
+        logging.info('Terminating all threads...')
+        terminate_event.set()
+
+    def sigusr_handler(signum, frame):
+        logging.info('Gracefully terminating all threads...')
+        graceful_terminate_event.set()
+
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGUSR1, sigusr_handler)
+
+    monitor = TasksMonitor(terminate_event, graceful_terminate_event,
+                           celery_app)
+    monitor.start()
 
 
 @app.on_event('shutdown')
@@ -153,6 +138,7 @@ async def shutdown():
     """Shutting down Test System task scheduler app."""
 
     await database.disconnect()
+    graceful_terminate_event.set()
 
 
 async def authenticate_user(credentials: str = Depends(http_bearer_scheme)):
@@ -300,8 +286,6 @@ async def schedule_task(task_data: TaskRequestPayload,
                                status='NEW')
             session.add(task_record)
             session.commit()
-            b_tasks.add_task(check_celery_task_result, task_id,
-                             callback_url=task_params.get('callback_url', ''))
             response_content.update({'success': True, 'task_id': task_id})
             return JSONResponse(status_code=201, content=response_content)
         except Exception as e:
@@ -310,3 +294,5 @@ async def schedule_task(task_data: TaskRequestPayload,
             response_content.update({'success': False, 'task_id': task_id,
                                      'error_description': str(e)})
             return JSONResponse(status_code=400, content=response_content)
+        finally:
+            session.close()

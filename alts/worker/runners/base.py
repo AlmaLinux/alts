@@ -309,8 +309,12 @@ class BaseRunner(object):
             Exit code, stdout and stderr from executed command
 
         """
+        if package_version:
+            full_pkg_name = f'{package_name}-{package_version}'
+        else:
+            full_pkg_name = package_name
         self._logger.info(f'Running package integrity tests for '
-                          f'{self.env_name}...')
+                          f'{full_pkg_name} on {self.env_name}...')
         cmd_args = ['--tap-stream', '--tap-files', '--tap-outdir',
                     self._artifacts_dir, '--hosts', 'ansible://all',
                     '--ansible-inventory', self._inventory_file_path,

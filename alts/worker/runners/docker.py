@@ -97,8 +97,10 @@ class DockerRunner(BaseRunner):
         """
         super().prepare_work_dir_files(
             create_ansible_inventory=create_ansible_inventory)
+        run_script_path = os.path.join(self._work_dir, self.DOCKER_RUN_SCRIPT)
         shutil.copy(os.path.join(RESOURCES_DIR, self.TYPE, self.DOCKER_RUN_SCRIPT),
-                    os.path.join(self._work_dir, self.DOCKER_RUN_SCRIPT))
+                    run_script_path)
+        os.chmod(run_script_path, 755)
 
     def _exec(self, cmd_with_args: ()):
         """
