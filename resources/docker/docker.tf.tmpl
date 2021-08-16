@@ -13,12 +13,7 @@ resource "docker_container" "${container_name}" {
   }
 }
 
-data "docker_registry_image" "${dist_name}" {
-  name = "quay.io/${dist_name}/${dist_name}:${dist_version}"
-}
-
 resource "docker_image" "${dist_name}" {
-  name          = data.docker_registry_image.${dist_name}.name
-  pull_triggers = [data.docker_registry_image.${dist_name}.sha256_digest]
+  name          = "${dist_name}:${dist_version}"
   keep_locally = true
 }
