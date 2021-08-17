@@ -137,8 +137,8 @@ async def shutdown():
 
     """Shutting down Test System task scheduler app."""
 
-    await database.disconnect()
     graceful_terminate_event.set()
+    await database.disconnect()
 
 
 async def authenticate_user(credentials: str = Depends(http_bearer_scheme)):
@@ -200,7 +200,6 @@ async def get_task_result(task_id: str,
               400: {'model': TaskRequestResponse},
           })
 async def schedule_task(task_data: TaskRequestPayload,
-                        b_tasks: BackgroundTasks,
                         _=Depends(authenticate_user)) -> JSONResponse:
     """
     Schedules new tasks in Test System.
