@@ -1,4 +1,4 @@
-celery==5.0.5
+celery==5.1.2
 celery[s3]
 mako==1.1.4
 plumbum==1.7.0
@@ -8,3 +8,4 @@ ruamel.yaml==0.17.4
 jmespath==0.10.0
 requests==2.25.1
 cryptography==3.4.7
+azure-storage-blob==12.8.1

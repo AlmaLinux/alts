@@ -14,6 +14,6 @@ resource "docker_container" "${container_name}" {
 }
 
 resource "docker_image" "${dist_name}" {
-  name          = "${dist_name}:${dist_version}"
+  name         = "${image_name}"
   keep_locally = true
 }

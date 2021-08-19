@@ -25,12 +25,8 @@ class DockerRunner(BaseRunner):
     TYPE = 'docker'
     TF_MAIN_FILE = 'docker.tf'
     TEMPFILE_PREFIX = 'docker_test_runner_'
+    X32_ARCHES = ('i686', 'i586', 'i386')
     ARCH_MAPPING = {
-        'x86_64': 'amd64',
-        'x86-64': 'amd64',
-        'amd64': 'amd64',
-        'arm64': 'arm64/v8',
-        'aarch64': 'arm64/v8',
         'i686': 'i386',
         'i586': 'i386',
         'i386': 'i386',
@@ -71,15 +67,19 @@ class DockerRunner(BaseRunner):
             with image architecture.
         """
         docker_tf_file = os.path.join(self._work_dir, self.TF_MAIN_FILE)
-        image_arch = self.ARCH_MAPPING.get(self.dist_arch)
-        if not image_arch:
-            raise ValueError(
-                f'Cannot get image for architecture {self.dist_arch}')
+        if self.dist_arch in self.X32_ARCHES:
+            image_arch = self.ARCH_MAPPING.get(self.dist_arch)
+            if not image_arch:
+                raise ValueError(
+                    f'Cannot get image for architecture {self.dist_arch}')
+            image_name = f'{image_arch}/{self.dist_name}:{self.dist_version}'
+        else:
+            image_name = f'{self.dist_name}:{self.dist_version}'
+
         self._render_template(
             f'{self.TF_MAIN_FILE}.tmpl', docker_tf_file,
-            dist_name=self._dist_name, dist_version=self._dist_version,
-            image_arch=image_arch, container_name=self.env_name,
-            work_dir=self._work_dir
+            dist_name=self.dist_name, image_name=image_name,
+            container_name=self.env_name, work_dir=self._work_dir
         )
 
     def _render_tf_variables_file(self):

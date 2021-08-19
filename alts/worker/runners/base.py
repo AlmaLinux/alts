@@ -7,13 +7,13 @@ from functools import wraps
 from pathlib import Path
 from typing import List, Union
 
-import boto3
-from boto3.exceptions import S3UploadFailedError
 from mako.lookup import TemplateLookup
 from plumbum import local
 
 from alts.shared.exceptions import *
 from alts.shared.types import ImmutableDict
+from alts.shared.uploaders.base import BaseLogsUploader
+from alts.shared.uploaders.azure import AzureLogsUploader
 from alts.worker import CONFIG, RESOURCES_DIR
 
 
@@ -77,7 +77,8 @@ class BaseRunner(object):
 
     def __init__(self, task_id: str, dist_name: str,
                  dist_version: Union[str, int],
-                 repositories: List[dict] = None, dist_arch: str = 'x86_64'):
+                 repositories: List[dict] = None, dist_arch: str = 'x86_64',
+                 artifacts_uploader: BaseLogsUploader = None):
         # Environment ID and working directory preparation
         self._task_id = task_id
         self._env_name = f'{self.TYPE}_{task_id}'
@@ -89,6 +90,11 @@ class BaseRunner(object):
         self._class_resources_dir = os.path.join(RESOURCES_DIR, self.TYPE)
         self._template_lookup = TemplateLookup(
             directories=[RESOURCES_DIR, self._class_resources_dir])
+        if not artifacts_uploader:
+            self._uploader = AzureLogsUploader(CONFIG.azure_connection_string,
+                                               CONFIG.azure_logs_container)
+        else:
+            self._uploader = artifacts_uploader
 
         # Basic commands and tools setup
         self._ansible_connection_type = 'ssh'
@@ -350,24 +356,11 @@ class BaseRunner(object):
             else:
                 write_to_file(artifact_key, content)
 
-        client = boto3.client(
-            's3', region_name=CONFIG.s3_region,
-            aws_access_key_id=CONFIG.s3_access_key_id,
-            aws_secret_access_key=CONFIG.s3_secret_access_key
-        )
-        error_when_uploading = False
-        for artifact in os.listdir(self._artifacts_dir):
-            artifact_path = os.path.join(self._artifacts_dir, artifact)
-            object_name = os.path.join(CONFIG.artifacts_root_directory,
-                                       self._task_id, artifact)
-            try:
-                self._logger.info(f'Uploading artifact {artifact_path} to S3')
-                client.upload_file(artifact_path, CONFIG.s3_bucket, object_name)
-            except (S3UploadFailedError, ValueError) as e:
-                self._logger.error(f'Cannot upload artifact {artifact_path}'
-                                   f' to S3: {e}')
-                error_when_uploading = True
-        if error_when_uploading:
+        upload_dir = os.path.join(CONFIG.artifacts_root_directory,
+                                  self._task_id)
+        _, success = self._uploader.upload(
+            self._artifacts_dir, upload_dir=upload_dir)
+        if not success:
             raise PublishArtifactsError('One or more artifacts were not'
                                         ' uploaded')
 

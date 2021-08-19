@@ -18,17 +18,18 @@ rabbitmq_vhost: {{ test_system_vhost }}
 
 {% if result_backend_name == 'local' and celery_result_folder %}
 result_backend: file://{{ celery_result_folder }}
-{% else %}
-result_backend: result_backend_name
-{% endif %}
-
-{% if result_backend_name == 's3' %}
+{% elif result_backend_name == 'azure' and azure_connection_str and azureblockblob_container_name %}
+result_backend: "azureblockblob://{{ azure_connection_str }}"
+azureblockblob_container_name: {{ azureblockblob_container_name }}
+{% elif result_backend_name == 's3' %}
 s3_access_key_id: {{ s3_key_id }}
 s3_secret_access_key: {{ s3_access_key }}
 s3_bucket: {{ s3_bucket }}
 s3_base_path: 'celery_result_backend/'
 s3_region: {{ s3_region }}
-s3_endpoint_url:
+s3_endpoint_url: 
+{% else %}
+result_backend: result_backend_name
 {% endif %}
 
 task_default_queue: 'default'
