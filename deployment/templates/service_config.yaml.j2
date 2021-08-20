@@ -21,6 +21,9 @@ result_backend: file://{{ celery_result_folder }}
 {% elif result_backend_name == 'azure' and azure_connection_str and azureblockblob_container_name %}
 result_backend: "azureblockblob://{{ azure_connection_str }}"
 azureblockblob_container_name: {{ azureblockblob_container_name }}
+azureblockblob_base_path: 'celery_results/'
+azure_connection_string: {{ azure_connection_str }}
+azure_logs_container: {{ azure_logs_container }}
 {% elif result_backend_name == 's3' %}
 s3_access_key_id: {{ s3_key_id }}
 s3_secret_access_key: {{ s3_access_key }}
