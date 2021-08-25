@@ -7,6 +7,7 @@
 import logging
 
 import requests
+import tap.parser
 
 from alts.shared.constants import API_VERSION
 from alts.worker.app import celery_app
@@ -15,6 +16,40 @@ from alts.worker.runners.base import TESTS_SECTION_NAME
 
 
 __all__ = ['run_tests']
+
+
+def are_tap_tests_success(tests_output: str):
+    """
+    Checks if TAP tests were successful. Returns one of the 3 values:
+    True - all tests are successful
+    False - one or more tests have failed
+    None - not a TAP input
+
+    Parameters
+    ----------
+    tests_output
+
+    Returns
+    -------
+
+    """
+    parser = tap.parser.Parser()
+    try:
+        tap_data = list(parser.parse(tests_output))
+    except Exception:
+        return None
+    errors = 0
+    for test_case in tap_data:
+        if test_case.category == 'test':
+            if test_case.todo:
+                continue
+            elif test_case.skip:
+                continue
+            elif test_case.ok:
+                continue
+            else:
+                errors += 1
+    return errors == 0
 
 
 @celery_app.task()
@@ -34,6 +69,9 @@ def run_tests(task_params: dict):
     """
 
     def is_success(stage_data_: dict):
+        tap_result = are_tap_tests_success(stage_data_['stdout'])
+        if tap_result is not None:
+            return tap_result
         return stage_data_['exit_code'] == 0
 
     logging.info(f'Starting work with the following params: {task_params}')
