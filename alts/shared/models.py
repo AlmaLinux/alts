@@ -80,10 +80,14 @@ class CeleryConfig(BaseModel):
     s3_base_path: str = 'celery_result_backend/'
     s3_region: str = ''
     s3_endpoint_url: typing.Optional[str] = None
+    azureblockblob_container_name: str
+    azureblockblob_base_path: str = 'celery_result_backend/'
+    azure_connection_string: str
+    azure_logs_container: str
     task_default_queue: str = 'default'
     task_acks_late: bool = True
     task_track_started: bool = True
-    artifacts_root_directory: str = 'test_system_artifacts'
+    artifacts_root_directory: str = 'alts_artifacts'
     worker_prefetch_multiplier: int = 1
     # Task track timeout
     task_tracking_timeout: int = 3600

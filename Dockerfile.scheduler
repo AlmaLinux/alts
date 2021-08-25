@@ -1,4 +1,4 @@
-FROM centos:8
+FROM almalinux:8
 
 RUN mkdir -p /code && yum update -y && yum install python3-virtualenv -y
 COPY requirements/ /tmp/requirements

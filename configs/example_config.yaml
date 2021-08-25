@@ -12,13 +12,17 @@ rabbitmq_ssl_port: 5671
 rabbitmq_user: 'test-system'
 rabbitmq_password:
 rabbitmq_vhost: 'test_system'
-result_backend: 's3'
+result_backend: 's3' #  'azureblockblob://$connection_string'
 s3_access_key_id:
 s3_secret_access_key:
 s3_bucket:
 s3_base_path: 'celery_result_backend/'
 s3_region:
 s3_endpoint_url:
+azureblockblob_container_name:
+azureblockblob_base_path:
+azure_connection_string:
+azure_logs_container:
 task_default_queue: 'default'
 task_acks_late: true
 task_track_started: true
