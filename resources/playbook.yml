@@ -10,6 +10,10 @@
             name: "*"
             state: latest
 
+        - name: Install file package
+          yum:
+            name: file
+            state: present
 
         - name: Add required repositories
           yum_repository:
