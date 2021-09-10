@@ -5,6 +5,8 @@ import typing
 import jmespath
 from pydantic import BaseModel, ValidationError, validator
 
+from alts.shared.constants import DRIVERS
+
 
 __all__ = ['CeleryConfig', 'Repository', 'SchedulerConfig',
            'TaskRequestResponse', 'TaskRequestPayload', 'TaskResultResponse']
@@ -23,12 +25,13 @@ class TaskRequestPayload(BaseModel):
     repositories: typing.List[Repository] = []
     package_name: str
     package_version: typing.Optional[str] = None
-    callback_url: str = None
+    callback_href: str = None
 
     @validator('runner_type')
     def validate_runner_type(cls, value: str) -> str:
         # TODO: Add config or constant to have all possible runner types
-        if value not in ('any', 'docker', 'opennebula'):
+        runner_types = DRIVERS + ('any',)
+        if value not in runner_types:
             raise ValidationError(f'Unknown runner type: {value}')
         return value
 
@@ -72,8 +75,10 @@ class CeleryConfig(BaseModel):
     rabbitmq_user: str
     rabbitmq_password: str
     rabbitmq_vhost: str
-    result_backend: str
     # Celery configuration variables
+    result_backend: str
+    result_backend_always_retry: bool = True
+    result_backend_max_retries: int = 10
     s3_access_key_id: str = ''
     s3_secret_access_key: str = ''
     s3_bucket: str = ''
@@ -89,6 +94,7 @@ class CeleryConfig(BaseModel):
     task_track_started: bool = True
     artifacts_root_directory: str = 'alts_artifacts'
     worker_prefetch_multiplier: int = 1
+    broker_pool_limit: int = 20
     # Task track timeout
     task_tracking_timeout: int = 3600
     # Supported architectures and distributions
@@ -108,6 +114,9 @@ class CeleryConfig(BaseModel):
     opennebula_templates: dict = {}
     # SSH section
     ssh_public_key_path: str = '~/.ssh/id_rsa.pub'
+    # Build system settings
+    bs_host: str
+    bs_token: str
 
     @property
     def broker_url(self) -> str:

@@ -6,11 +6,12 @@ resource "docker_container" "${container_name}" {
   image = docker_image.${dist_name}.latest
   name = "${container_name}"
   must_run = true
-  command = ["/run.sh",]
-  volumes {
-    host_path = "${work_dir}/run.sh"
-    container_path = "/run.sh"
+  command = ["sleep", "21600"]
+% if external_network:
+  networks_advanced {
+    name = "${external_network}"
   }
+% endif
 }
 
 resource "docker_image" "${dist_name}" {

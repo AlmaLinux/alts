@@ -1,3 +1,4 @@
+import fcntl
 import logging
 import os
 import shutil
@@ -21,6 +22,7 @@ __all__ = ['BaseRunner', 'GenericVMRunner', 'command_decorator', 'TESTS_SECTION_
 
 
 TESTS_SECTION_NAME = 'tests'
+TF_INIT_LOCK_PATH = '/tmp/tf_init_lock'
 
 
 def command_decorator(exception_class, artifacts_key, error_message, additional_section_name=None):
@@ -63,7 +65,7 @@ class BaseRunner(object):
     TYPE = 'base'
     ARCHITECTURES_MAPPING = ImmutableDict(
         aarch64=['arm64', 'aarch64'],
-        x86_64=['x86_64', 'amd64', 'i686'],
+        x86_64=['x86_64', 'amd64', 'i686', 'i386', 'i486', 'i586'],
     )
     COST = 0
     TF_VARIABLES_FILE = None
@@ -224,8 +226,7 @@ class BaseRunner(object):
                                          self.INTEGRITY_TESTS_DIR),
                             self._integrity_tests_dir)
 
-            if create_ansible_inventory:
-                self._create_ansible_inventory_file()
+            self._create_ansible_inventory_file()
             self._render_tf_main_file()
             self._render_tf_variables_file()
         except Exception as e:
@@ -239,7 +240,22 @@ class BaseRunner(object):
         self._logger.info(f'Initializing Terraform environment '
                           f'for {self.env_name}...')
         self._logger.debug('Running "terraform init" command')
-        return local['terraform'].run('init', retcode=None, cwd=self._work_dir)
+        lock = None
+        try:
+            lock = open(TF_INIT_LOCK_PATH, 'a+')
+            while True:
+                try:
+                    fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    time.sleep(1)
+                else:
+                    break
+            return local['terraform'].run('init', retcode=None,
+                                          cwd=self._work_dir)
+        finally:
+            if lock:
+                fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+                lock.close()
 
     # After: initialize_terraform
     @command_decorator(StartEnvironmentError, 'start_environment',
@@ -449,7 +465,6 @@ class GenericVMRunner(BaseRunner):
             error_message = f'Cannot get VM IP: {stderr}'
             self._logger.error(error_message)
             raise StartEnvironmentError(error_message)
-        self._create_ansible_inventory_file(vm_ip=stdout)
         self._logger.info('Waiting for SSH port to be available')
         is_online = self._wait_for_ssh()
         if not is_online:

@@ -1,4 +1,5 @@
 import logging
+import random
 import threading
 import time
 
@@ -38,6 +39,7 @@ class TasksMonitor(threading.Thread):
                                      f'to {task_result.state}')
                     task.status = task_result.state
                     updated_tasks.append(task)
+                time.sleep(0.5)
 
             if updated_tasks:
                 try:
@@ -47,4 +49,4 @@ class TasksMonitor(threading.Thread):
                     self.logger.error(f'Cannot update tasks statuses: {e}')
                     session.rollback()
             session.close()
-            time.sleep(30)
+            self.__terminated_event.wait(random.randint(5, 10))

@@ -9,3 +9,5 @@ requests==2.25.1
 cryptography==3.4.7
 azure-storage-blob==12.8.1
 tap.py==3.0
+amqp==5.0.6
+librabbitmq==2.0.0

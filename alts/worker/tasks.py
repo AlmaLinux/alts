@@ -5,11 +5,13 @@
 """AlmaLinux Test System package testing tasks running."""
 
 import logging
+import urllib.parse
 
 import requests
 import tap.parser
 
 from alts.shared.constants import API_VERSION
+from alts.worker import CONFIG
 from alts.worker.app import celery_app
 from alts.worker.mappings import RUNNER_MAPPING
 from alts.worker.runners.base import TESTS_SECTION_NAME
@@ -114,10 +116,13 @@ def run_tests(task_params: dict):
                     }
             else:
                 summary[stage] = {'success': is_success(stage_data)}
-        if task_params.get('callback_url'):
-            url = task_params['callback_url']
+        if task_params.get('callback_href'):
+            full_url = urllib.parse.urljoin(CONFIG.bs_host,
+                                            task_params['callback_href'])
             payload = {'api_version': API_VERSION, 'result': summary}
-            response = requests.post(url, json=payload)
+            response = requests.post(
+                full_url, json=payload,
+                headers={'Authorization': f'Bearer {CONFIG.bs_token}'})
             response.raise_for_status()
 
         return summary
