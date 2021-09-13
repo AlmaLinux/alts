@@ -1,8 +1,10 @@
 System overview
 --
 
-AlmaLinux Test System - ALTS - is a method to test rpm/deb packages under realistic circumstances, on real systems with installation, launching, integrity checks, etc. If needed, it also supports third-party test scripts.
+AlmaLinux Test System (ALTS) - is a way to test rpm/deb packages under realistic circumstances, on real systems with installation, launching, integrity checks, etc. If needed, it also supports third-party test scripts.
+
 AlmaLinux Test System is designed to be a fast, scalable and easily maintainable solution for end-to-end packages testing. 
+
 The system consists of API and task manager. API accepts a request for testing a package and creates a task on it. The manager picks up as many tasks as possible. 
 
 The process of picking up a created task is:
@@ -57,7 +59,7 @@ Filling options in the config file
 Here is the description of what is necessary to fill in at alts_config.yaml:
 
 ```
-rabbitqm_host: 'rabbitmq # hostname for the message broker'
+rabbitqm_host: 'rabbitmq' # hostname for the message broker
 rabbitmq_port: 5672 # unprotected broker port
 rabbitmq_ssl_port: 5671 # protected broker port. They are used separetly depending on the flag 'use_ssl'
 rabbitmq_user: 'test-system' # the user as message broker for connection
