@@ -56,12 +56,14 @@ Filling options in the config file
 
 Here is the description of what is necessary to fill in at alts_config.yaml:
 
-`rabbitqm_host: 'rabbitmq # hostname for the message broker'` 
-`rabbitmq_port: 5672 # unprotected broker port` 
-`rabbitmq_ssl_port: 5671 # protected broker port. They are used separetly depending on the flag 'use_ssl'`
-`rabbitmq_user: 'test-system' # the user as message broker for connection` 
-`rabbitmq_password: # the user's password`
-`rabbitmq_vhost: 'test_system' # message "base" on broker` 
+```
+rabbitqm_host: 'rabbitmq # hostname for the message broker'
+rabbitmq_port: 5672 # unprotected broker port
+rabbitmq_ssl_port: 5671 # protected broker port. They are used separetly depending on the flag 'use_ssl'
+rabbitmq_user: 'test-system' # the user as message broker for connection
+rabbitmq_password: # the user's password
+rabbitmq_vhost: 'test_system' # message "base" on broker
+```
 
 Choosing a backend in the`results backend` option, you define which parameter S3 or Azure you need:
 `result_backend: 's3' #  'azureblockblob://$connection_string' # a type of results backend - S3 or connection string to Azure`
