@@ -36,8 +36,8 @@ services:
     environment:
       CELERY_CONFIG_PATH: "/celery_config.yaml"
     command: "bash -c 'source env/bin/activate && celery
-      -A alts.worker.app worker --pool=threads --concurrency=10
-      --loglevel=INFO -Q docker-x86_64-0,opennebula-x86_64-0'"
+      -A alts.worker.app worker --pool=threads --concurrency=20
+      --loglevel=INFO -Q docker-x86_64-0'"
     restart: on-failure
     privileged: true
     volumes:
@@ -56,7 +56,7 @@ services:
       CELERY_CONFIG_PATH: "/scheduler_config.yaml"
       SCHEDULER_CONFIG_PATH: "/scheduler_config.yaml"
     command: "bash -c 'source env/bin/activate && uvicorn --host 0.0.0.0
-      alts.scheduler.app:app'"
+      alts.scheduler.app:app --limit-concurrency 100 --backlog 1000'"
     restart: on-failure
     ports:
       - 8000:8000

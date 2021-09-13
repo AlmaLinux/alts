@@ -5,13 +5,12 @@
 """AlmaLinux Test System docker environment runner."""
 
 import os
-import shutil
 from typing import Union, List
 
 from plumbum import local
 
 from alts.shared.exceptions import ProvisionError
-from alts.worker import CONFIG, RESOURCES_DIR
+from alts.worker import CONFIG
 from alts.worker.runners.base import BaseRunner
 
 
@@ -25,13 +24,6 @@ class DockerRunner(BaseRunner):
     TYPE = 'docker'
     TF_MAIN_FILE = 'docker.tf'
     TEMPFILE_PREFIX = 'docker_test_runner_'
-    X32_ARCHES = ('i686', 'i586', 'i386')
-    ARCH_MAPPING = {
-        'i686': 'i386',
-        'i586': 'i386',
-        'i386': 'i386',
-    }
-    DOCKER_RUN_SCRIPT = 'run.sh'
 
     def __init__(self, task_id: str, dist_name: str,
                  dist_version: Union[str, int],
@@ -67,40 +59,17 @@ class DockerRunner(BaseRunner):
             with image architecture.
         """
         docker_tf_file = os.path.join(self._work_dir, self.TF_MAIN_FILE)
-        if self.dist_arch in self.X32_ARCHES:
-            image_arch = self.ARCH_MAPPING.get(self.dist_arch)
-            if not image_arch:
-                raise ValueError(
-                    f'Cannot get image for architecture {self.dist_arch}')
-            image_name = f'{image_arch}/{self.dist_name}:{self.dist_version}'
-        else:
-            image_name = f'{self.dist_name}:{self.dist_version}'
+        image_name = f'{self.dist_name}:{self.dist_version}'
+        external_network = os.environ.get('EXTERNAL_NETWORK', None)
 
         self._render_template(
             f'{self.TF_MAIN_FILE}.tmpl', docker_tf_file,
             dist_name=self.dist_name, image_name=image_name,
-            container_name=self.env_name, work_dir=self._work_dir
+            container_name=self.env_name, external_network=external_network
         )
 
     def _render_tf_variables_file(self):
         pass
-
-    def prepare_work_dir_files(self, create_ansible_inventory=True):
-        """
-        Prepares configuration files in temporary working directory.
-
-        Parameters
-        ----------
-        create_ansible_inventory : bool
-            True if ansible inventory file should be created,
-            False otherwise.
-        """
-        super().prepare_work_dir_files(
-            create_ansible_inventory=create_ansible_inventory)
-        run_script_path = os.path.join(self._work_dir, self.DOCKER_RUN_SCRIPT)
-        shutil.copy(os.path.join(RESOURCES_DIR, self.TYPE, self.DOCKER_RUN_SCRIPT),
-                    run_script_path)
-        os.chmod(run_script_path, 755)
 
     def _exec(self, cmd_with_args: ()):
         """
