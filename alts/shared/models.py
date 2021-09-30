@@ -99,7 +99,7 @@ class CeleryConfig(BaseModel):
     task_tracking_timeout: int = 3600
     # Supported architectures and distributions
     supported_architectures: typing.List[str] = ['x86_64', 'i686', 'amd64',
-                                                 'arm64', 'aarch64']
+                                                 'arm64', 'aarch64', 'ppc64le']
     supported_distributions: typing.List[str] = ['almalinux', 'centos',
                                                  'ubuntu', 'debian']
     rhel_flavors: typing.Tuple[str] = ('fedora', 'centos', 'almalinux',

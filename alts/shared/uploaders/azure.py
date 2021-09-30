@@ -41,7 +41,7 @@ class AzureBaseUploader(BaseUploader):
                                f' to Azure: {e}')
 
     def upload(self, artifacts_dir: str, **kwargs) -> \
-            typing.Tuple[typing.List[str], bool]:
+            typing.Tuple[typing.Dict[str, str], bool]:
         """
         Uploads files from provided directory into Azure Blob storage.
 
@@ -59,7 +59,7 @@ class AzureBaseUploader(BaseUploader):
         """
         # To avoid warning about signature we assume that `s3_upload_dir`
         # is required keyword argument.
-        artifacts = []
+        artifacts = {}
         success = True
 
         if not kwargs.get('upload_dir'):
@@ -69,7 +69,8 @@ class AzureBaseUploader(BaseUploader):
         for file_ in self.get_artifacts_list(artifacts_dir):
             reference = self.upload_single_file(file_, azure_upload_dir)
             if reference:
-                artifacts.append(reference)
+                file_name = os.path.basename(file_)
+                artifacts[file_name] = reference
             else:
                 success = False
         return artifacts, success
