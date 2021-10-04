@@ -5,7 +5,7 @@ import typing
 import jmespath
 from pydantic import BaseModel, ValidationError, validator
 
-from alts.shared.constants import DRIVERS
+from alts.shared import constants
 
 
 __all__ = ['CeleryConfig', 'Repository', 'SchedulerConfig',
@@ -30,7 +30,7 @@ class TaskRequestPayload(BaseModel):
     @validator('runner_type')
     def validate_runner_type(cls, value: str) -> str:
         # TODO: Add config or constant to have all possible runner types
-        runner_types = DRIVERS + ('any',)
+        runner_types = constants.DRIVERS + ('any',)
         if value not in runner_types:
             raise ValidationError(f'Unknown runner type: {value}')
         return value
@@ -98,13 +98,10 @@ class CeleryConfig(BaseModel):
     # Task track timeout
     task_tracking_timeout: int = 3600
     # Supported architectures and distributions
-    supported_architectures: typing.List[str] = ['x86_64', 'i686', 'amd64',
-                                                 'arm64', 'aarch64']
-    supported_distributions: typing.List[str] = ['almalinux', 'centos',
-                                                 'ubuntu', 'debian']
-    rhel_flavors: typing.Tuple[str] = ('fedora', 'centos', 'almalinux',
-                                       'cloudlinux')
-    debian_flavors: typing.Tuple[str] = ('debian', 'ubuntu', 'raspbian')
+    supported_architectures: typing.List[str] = constants.SUPPORTED_ARCHITECTURES
+    supported_distributions: typing.List[str] = constants.SUPPORTED_DISTRIBUTIONS
+    rhel_flavors: typing.Tuple[str] = constants.RHEL_FLAVORS
+    debian_flavors: typing.Tuple[str] = constants.DEBIAN_FLAVORS
     supported_runners: typing.Union[typing.List[str], str] = 'all'
     # OpenNebula section
     opennebula_rpc_endpoint: str = ''

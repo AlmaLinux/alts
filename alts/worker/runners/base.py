@@ -4,6 +4,7 @@ import os
 import shutil
 import tempfile
 import time
+import typing
 from functools import wraps
 from pathlib import Path
 from typing import List, Union
@@ -110,10 +111,15 @@ class BaseRunner(object):
         self._repositories = repositories or []
 
         self._artifacts = {}
+        self._uploaded_logs = None
 
     @property
     def artifacts(self):
         return self._artifacts
+
+    @property
+    def uploaded_logs(self) -> typing.Dict[str, str]:
+        return self._uploaded_logs
 
     @property
     def pkg_manager(self):
@@ -374,8 +380,9 @@ class BaseRunner(object):
 
         upload_dir = os.path.join(CONFIG.artifacts_root_directory,
                                   self._task_id)
-        _, success = self._uploader.upload(
+        artifacts, success = self._uploader.upload(
             self._artifacts_dir, upload_dir=upload_dir)
+        self._uploaded_logs = artifacts
         if not success:
             raise PublishArtifactsError('One or more artifacts were not'
                                         ' uploaded')
