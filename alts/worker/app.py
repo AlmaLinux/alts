@@ -1,4 +1,5 @@
 import itertools
+import logging
 
 from celery import Celery
 from kombu import Exchange, Queue
@@ -11,6 +12,9 @@ from alts.worker import CONFIG
 __all__ = ['celery_app']
 
 
+# Disable too verbose logging from Azure SDK
+logging.getLogger('azure.core.pipeline.policies.http_logging_policy').setLevel(
+    'WARNING')
 celery_app = Celery('alts', include=['alts.worker.tasks'])
 celery_app.config_from_object(CONFIG)
 celery_app.conf.update(result_accept_content=['json'])
