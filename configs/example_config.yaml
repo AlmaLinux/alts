@@ -40,3 +40,9 @@ opennebula_templates:
   ubuntu:
     '20.04':
       amd64:
+
+bs_host:
+bs_token:
+pulp_host:
+pulp_user:
+pulp_password:

@@ -14,8 +14,8 @@ from plumbum import local
 
 from alts.shared.exceptions import *
 from alts.shared.types import ImmutableDict
-from alts.shared.uploaders.base import BaseLogsUploader
-from alts.shared.uploaders.azure import AzureLogsUploader
+from alts.shared.uploaders.base import BaseLogsUploader, UploadError
+from alts.shared.uploaders.pulp import PulpLogsUploader
 from alts.worker import CONFIG, RESOURCES_DIR
 
 
@@ -94,8 +94,8 @@ class BaseRunner(object):
         self._template_lookup = TemplateLookup(
             directories=[RESOURCES_DIR, self._class_resources_dir])
         if not artifacts_uploader:
-            self._uploader = AzureLogsUploader(CONFIG.azure_connection_string,
-                                               CONFIG.azure_logs_container)
+            self._uploader = PulpLogsUploader(
+                CONFIG.pulp_host, CONFIG.pulp_user, CONFIG.pulp_password)
         else:
             self._uploader = artifacts_uploader
 
@@ -249,9 +249,10 @@ class BaseRunner(object):
         lock = None
         try:
             lock = open(TF_INIT_LOCK_PATH, 'a+')
+            lock_fileno = lock.fileno()
             while True:
                 try:
-                    fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    fcntl.flock(lock_fileno, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 except BlockingIOError:
                     time.sleep(1)
                 else:
@@ -260,7 +261,7 @@ class BaseRunner(object):
                                           cwd=self._work_dir)
         finally:
             if lock:
-                fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+                fcntl.flock(lock_fileno, fcntl.LOCK_UN)
                 lock.close()
 
     # After: initialize_terraform
@@ -358,15 +359,14 @@ class BaseRunner(object):
         # artifacts storage (S3, Minio, etc.)
 
         def write_to_file(file_base_name: str, artifacts_section: dict):
-            log_file_path = os.path.join(self._artifacts_dir,
-                                         f'{file_base_name}.log')
+            log_file_path = os.path.join(
+                self._artifacts_dir, f'{file_base_name}_{self._task_id}.log')
             with open(log_file_path, 'w+t') as f:
                 f.write(f'Exit code: {artifacts_section["exit_code"]}\n')
+                f.write(f'Stdout:\n\n')
                 f.write(artifacts_section['stdout'])
-            if artifacts_section['stderr']:
-                error_log_path = os.path.join(self._artifacts_dir,
-                                              f'{file_base_name}_error.log')
-                with open(error_log_path, 'w+t') as f:
+                if artifacts_section.get('stderr'):
+                    f.write(f'Stderr:\n\n')
                     f.write(artifacts_section['stderr'])
 
         for artifact_key, content in self.artifacts.items():
@@ -380,12 +380,12 @@ class BaseRunner(object):
 
         upload_dir = os.path.join(CONFIG.artifacts_root_directory,
                                   self._task_id)
-        artifacts, success = self._uploader.upload(
-            self._artifacts_dir, upload_dir=upload_dir)
-        self._uploaded_logs = artifacts
-        if not success:
-            raise PublishArtifactsError('One or more artifacts were not'
-                                        ' uploaded')
+        try:
+            artifacts = self._uploader.upload(
+                self._artifacts_dir, upload_dir=upload_dir)
+            self._uploaded_logs = artifacts
+        except UploadError as e:
+            raise PublishArtifactsError from e
 
     # After: install_package and run_tests
     @command_decorator(StopEnvironmentError, 'stop_environment',
