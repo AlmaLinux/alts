@@ -12,6 +12,7 @@ from pulpcore.client.pulpcore.api.tasks_api import TasksApi
 from pulpcore.client.pulpcore.api.uploads_api import UploadsApi
 from pulpcore.client.pulpcore.api.artifacts_api import ArtifactsApi
 
+from alts.shared.constants import DEFAULT_FILE_CHUNK_SIZE
 from alts.shared.uploaders.base import BaseUploader, UploadError, BaseLogsUploader
 from alts.shared.utils.file_utils import hash_file
 
@@ -29,7 +30,7 @@ class PulpBaseUploader(BaseUploader):
     """
 
     def __init__(self, host: str, username: str, password: str,
-                 chunk_size: int = 8388608):
+                 chunk_size: int = DEFAULT_FILE_CHUNK_SIZE):
         """
         Initiate uploader.
 
@@ -198,8 +199,8 @@ class PulpBaseUploader(BaseUploader):
             try:
                 artifacts.append(self.upload_single_file(artifact))
             except Exception as e:
-                self._logger.error(f'Cannot upload {artifact}, error: {e}',
-                                   exc_info=e)
+                self._logger.exception('Cannot upload %s' % artifact,
+                                       exc_info=e)
                 errored_uploads.append(artifact)
         # TODO: Decide what to do with successfully uploaded artifacts
         #  in case of errors during upload.
