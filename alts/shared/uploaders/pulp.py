@@ -199,7 +199,7 @@ class PulpBaseUploader(BaseUploader):
             try:
                 artifacts.append(self.upload_single_file(artifact))
             except Exception as e:
-                self._logger.exception('Cannot upload %s' % artifact,
+                self._logger.exception('Cannot upload %s', artifact,
                                        exc_info=e)
                 errored_uploads.append(artifact)
         # TODO: Decide what to do with successfully uploaded artifacts
@@ -237,3 +237,4 @@ class PulpBaseUploader(BaseUploader):
 
 class PulpLogsUploader(PulpBaseUploader, BaseLogsUploader):
     pass
+
