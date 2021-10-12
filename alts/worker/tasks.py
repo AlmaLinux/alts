@@ -110,27 +110,13 @@ def run_tests(task_params: dict):
                 if TESTS_SECTION_NAME not in summary:
                     summary[TESTS_SECTION_NAME] = {}
                 for inner_stage, inner_data in stage_data.items():
-                    log_file_name = f'{stage}_{inner_stage}.log'
-                    error_log = f'{stage}_{inner_stage}_error.log'
-                    stage_dict = {
+                    summary[TESTS_SECTION_NAME][inner_stage] = {
                         'success': is_success(inner_data),
                         'output': inner_data['stdout']
                     }
-                    if log_file_name in runner.uploaded_logs:
-                        stage_dict['log'] = runner.uploaded_logs[log_file_name]
-                    if error_log in runner.uploaded_logs:
-                        stage_dict['error_log'] = \
-                            runner.uploaded_logs[error_log]
-                    summary[TESTS_SECTION_NAME][inner_stage] = stage_dict
             else:
-                log_file_name = f'{stage}.log'
-                error_log = f'{stage}_error.log'
-                stage_dict = {'success': is_success(stage_data)}
-                if log_file_name in runner.uploaded_logs:
-                    stage_dict['log'] = runner.uploaded_logs[log_file_name]
-                if error_log in runner.uploaded_logs:
-                    stage_dict['error_log'] = runner.uploaded_logs[error_log]
-                summary[stage] = stage_dict
+                summary[stage] = {'success': is_success(stage_data)}
+        summary['logs'] = runner.uploaded_logs
         if task_params.get('callback_href'):
             full_url = urllib.parse.urljoin(CONFIG.bs_host,
                                             task_params['callback_href'])

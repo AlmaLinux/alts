@@ -114,6 +114,10 @@ class CeleryConfig(BaseModel):
     # Build system settings
     bs_host: str
     bs_token: str
+    # Pulp settings
+    pulp_host: str
+    pulp_user: str
+    pulp_password: str
 
     @property
     def broker_url(self) -> str:
