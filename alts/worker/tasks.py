@@ -11,6 +11,10 @@ import requests
 import tap.parser
 
 from alts.shared.constants import API_VERSION
+from alts.shared.exceptions import (
+    InstallPackageError,
+    PackageIntegrityTestsError,
+)
 from alts.worker import CONFIG
 from alts.worker.app import celery_app
 from alts.worker.mappings import RUNNER_MAPPING
@@ -76,12 +80,12 @@ def run_tests(task_params: dict):
             return tap_result
         return stage_data_['exit_code'] == 0
 
-    logging.info(f'Starting work with the following params: {task_params}')
+    logging.info('Starting work with the following params: %s', task_params)
 
     for key in ['task_id', 'runner_type', 'dist_name', 'dist_version',
                 'dist_arch', 'repositories', 'package_name']:
         if task_params.get(key) is None:
-            logging.error(f'Parameter {key} is not specified')
+            logging.error('Parameter %s is not specified', key)
             return
 
     runner_args = (task_params['task_id'], task_params['dist_name'],
@@ -100,6 +104,10 @@ def run_tests(task_params: dict):
         runner.setup()
         runner.install_package(package_name, package_version)
         runner.run_package_integrity_tests(package_name, package_version)
+    except InstallPackageError as exc:
+        logging.exception('Cannot install package: %s', exc)
+    except PackageIntegrityTestsError as exc:
+        logging.exception('Package integrity tests failed: %s', exc)
     finally:
         runner.teardown()
         summary = {}
@@ -117,13 +125,16 @@ def run_tests(task_params: dict):
             else:
                 summary[stage] = {'success': is_success(stage_data)}
         summary['logs'] = runner.uploaded_logs
-        if task_params.get('callback_href'):
-            full_url = urllib.parse.urljoin(CONFIG.bs_host,
-                                            task_params['callback_href'])
-            payload = {'api_version': API_VERSION, 'result': summary}
-            response = requests.post(
-                full_url, json=payload,
-                headers={'Authorization': f'Bearer {CONFIG.bs_token}'})
+    if task_params.get('callback_href'):
+        full_url = urllib.parse.urljoin(CONFIG.bs_host,
+                                        task_params['callback_href'])
+        payload = {'api_version': API_VERSION, 'result': summary}
+        response = requests.post(
+            full_url, json=payload,
+            headers={'Authorization': f'Bearer {CONFIG.bs_token}'})
+        try:
             response.raise_for_status()
+        except Exception as exc:
+            logging.exception('Cannot create test result: %s', exc)
 
-        return summary
+    return summary
