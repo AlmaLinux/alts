@@ -125,16 +125,13 @@ def run_tests(task_params: dict):
             else:
                 summary[stage] = {'success': is_success(stage_data)}
         summary['logs'] = runner.uploaded_logs
-    if task_params.get('callback_href'):
-        full_url = urllib.parse.urljoin(CONFIG.bs_host,
-                                        task_params['callback_href'])
-        payload = {'api_version': API_VERSION, 'result': summary}
-        response = requests.post(
-            full_url, json=payload,
-            headers={'Authorization': f'Bearer {CONFIG.bs_token}'})
-        try:
+        if task_params.get('callback_href'):
+            full_url = urllib.parse.urljoin(CONFIG.bs_host,
+                                            task_params['callback_href'])
+            payload = {'api_version': API_VERSION, 'result': summary}
+            response = requests.post(
+                full_url, json=payload,
+                headers={'Authorization': f'Bearer {CONFIG.bs_token}'})
             response.raise_for_status()
-        except Exception as exc:
-            logging.exception('Cannot create test result: %s', exc)
 
-    return summary
+        return summary
