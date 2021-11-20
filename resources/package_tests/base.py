@@ -143,8 +143,10 @@ def resolve_symlink(host: Host, file_: Union[str, GNUFile],
         resolve_depth -= 1
 
     resolve_out = '\n'.join(resolve_items)
-    raise ValueError(f'Broken or circular symlink found: {initial_file}\n'
-                     f'Full resolution output:\n{resolve_out}')
+    message = f'Broken or circular symlink found: {initial_file}'
+    if resolve_out:
+        message += '\nFull resolution output:\n{resolve_out}'
+    raise ValueError(message)
 
 
 def has_missing_shared_libraries(file_: GNUFile) -> MissingSOResult:
