@@ -12,6 +12,11 @@ resource "docker_container" "${container_name}" {
     name = "${external_network}"
   }
 % endif
+  volumes {
+    host_path = "${tests_dir}/"
+    container_path = "/tests"
+    read_only = true
+  }
 }
 
 resource "docker_image" "${dist_name}" {

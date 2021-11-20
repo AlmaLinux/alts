@@ -1,8 +1,8 @@
 celery==5.1.2
-mako==1.1.4
+mako==1.1.6
 plumbum==1.7.0
-boto3==1.17.50
-pydantic==1.8.1
+boto3==1.20.10
+pydantic==1.8.2
 ruamel.yaml==0.17.4
 jmespath==0.10.0
 requests==2.25.1

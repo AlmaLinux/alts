@@ -9,10 +9,9 @@ from typing import Union, List
 
 from plumbum import local
 
-from alts.shared.exceptions import ProvisionError
+from alts.shared.exceptions import ProvisionError, PackageIntegrityTestsError
 from alts.worker import CONFIG
-from alts.worker.runners.base import BaseRunner
-
+from alts.worker.runners.base import BaseRunner, command_decorator, TESTS_SECTION_NAME
 
 __all__ = ['DockerRunner']
 
@@ -65,7 +64,8 @@ class DockerRunner(BaseRunner):
         self._render_template(
             f'{self.TF_MAIN_FILE}.tmpl', docker_tf_file,
             dist_name=self.dist_name, image_name=image_name,
-            container_name=self.env_name, external_network=external_network
+            container_name=self.env_name, external_network=external_network,
+            tests_dir=self._integrity_tests_dir
         )
 
     def _render_tf_variables_file(self):
@@ -124,3 +124,37 @@ class DockerRunner(BaseRunner):
                                      f'{stderr}')
             self._logger.info('Installation is completed')
         return super().initial_provision(verbose=verbose)
+
+    @command_decorator(PackageIntegrityTestsError, 'package_integrity_tests',
+                       'Package integrity tests failed',
+                       additional_section_name=TESTS_SECTION_NAME)
+    def run_package_integrity_tests(self, package_name: str,
+                                    package_version: str = None):
+        """
+        Run basic integrity tests for the package
+
+        Parameters
+        ----------
+        package_name:       str
+            Package name
+        package_version:    str
+            Package version
+
+        Returns
+        -------
+        tuple
+            Exit code, stdout and stderr from executed command
+
+        """
+        if package_version:
+            full_pkg_name = f'{package_name}-{package_version}'
+        else:
+            full_pkg_name = package_name
+        self._logger.info(f'Running package integrity tests for '
+                          f'{full_pkg_name} on {self.env_name}...')
+        cmd_args = ['py.test', '--rootdir', '/tests', '--tap-stream',
+                    '--package-name', package_name]
+        if package_version:
+            cmd_args.extend(['--package-version', package_version])
+        cmd_args.append('tests')
+        return self._exec(cmd_args)

@@ -421,7 +421,11 @@ class BaseRunner(object):
     def teardown(self, publish_artifacts: bool = True):
         self.stop_env()
         if publish_artifacts:
-            self.publish_artifacts_to_storage()
+            try:
+                self.publish_artifacts_to_storage()
+            except Exception as e:
+                self._logger.warning('Exception while publishing artifacts: '
+                                     '%s', str(e))
         self.erase_work_dir()
 
 
