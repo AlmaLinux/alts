@@ -146,15 +146,14 @@ class DockerRunner(BaseRunner):
             Exit code, stdout and stderr from executed command
 
         """
-        if package_version:
-            full_pkg_name = f'{package_name}-{package_version}'
-        else:
-            full_pkg_name = package_name
-        self._logger.info(f'Running package integrity tests for '
-                          f'{full_pkg_name} on {self.env_name}...')
         cmd_args = ['py.test', '--rootdir', '/tests', '--tap-stream',
                     '--package-name', package_name]
         if package_version:
+            full_pkg_name = f'{package_name}-{package_version}'
             cmd_args.extend(['--package-version', package_version])
+        else:
+            full_pkg_name = package_name
         cmd_args.append('tests')
+        self._logger.info('Running package integrity tests for '
+                          '%s on %s...', full_pkg_name, self.env_name)
         return self._exec(cmd_args)
