@@ -23,7 +23,7 @@ def test_package_is_installed(host, package_name, package_version):
     """
 
     package = host.package(package_name)
-    assert package.is_installed
+    check.is_true(package.is_installed)
     if package_version:
         check.is_in(package.version, package_version, 'Version does not match')
         if isinstance(package, RpmPackage):
