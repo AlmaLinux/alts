@@ -1,3 +1,4 @@
+import pytest_check as check
 from testinfra.modules.package import RpmPackage
 
 from ..base import *
@@ -22,11 +23,12 @@ def test_package_is_installed(host, package_name, package_version):
     """
 
     package = host.package(package_name)
-    assert package.is_installed
+    check.is_true(package.is_installed)
     if package_version:
-        assert package.version in package_version
+        check.is_in(package.version, package_version, 'Version does not match')
         if isinstance(package, RpmPackage):
-            assert package.release in package_version
+            check.is_in(package.release, package_version,
+                        'Release does not match')
 
 
 def test_all_package_files_exist(host, package_name):
@@ -51,10 +53,13 @@ def test_all_package_files_exist(host, package_name):
 
     for file_ in get_package_files(package):
         file_obj = host.file(file_)
-        assert file_obj.exists
+        check.is_true(file_obj.exists)
         # Check all symlinks point to existing files
         if file_obj.is_symlink:
-            resolve_symlink(host, file_obj)
+            resolved = resolve_symlink(host, file_obj)
+            check.is_not_none(resolved)
+            file_obj = host.file(resolved)
+            check.is_true(file_obj.exists)
 
 
 def test_binaries_have_all_dependencies(host, package_name):
@@ -83,7 +88,7 @@ def test_binaries_have_all_dependencies(host, package_name):
             file_ = host.file(resolve_symlink(host, file_))
         if is_file_dynamically_linked(file_):
             check_result = has_missing_shared_libraries(file_)
-            assert not check_result.missing, check_result.output
+            check.is_false(check_result.missing, check_result.output)
 
 
 def test_check_rpath_is_correct(host, package_name):
@@ -107,4 +112,4 @@ def test_check_rpath_is_correct(host, package_name):
         return
 
     for library in get_shared_libraries(package):
-        assert is_rpath_correct(host.file(library))
+        check.is_true(is_rpath_correct(host.file(library)))

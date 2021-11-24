@@ -32,7 +32,7 @@ class TaskRequestPayload(BaseModel):
         # TODO: Add config or constant to have all possible runner types
         runner_types = constants.DRIVERS + ('any',)
         if value not in runner_types:
-            raise ValidationError(f'Unknown runner type: {value}')
+            raise ValidationError(f'Unknown runner type: {value}', cls)
         return value
 
 
