@@ -283,7 +283,8 @@ class BaseRunner(object):
         # To pass dictionary into Ansible variables we need to pass
         # variables itself as a dictionary thus doing this weird
         # temporary dictionary
-        var_dict = {'repositories': self._repositories}
+        var_dict = {'repositories': self._repositories,
+                    'integrity_tests_dir': self._integrity_tests_dir}
         cmd_args = ['-i', self.ANSIBLE_INVENTORY_FILE, self.ANSIBLE_PLAYBOOK,
                     '-e', f'{var_dict}', '-t', 'initial_provision']
         self._logger.info(f'Command args: {cmd_args}')

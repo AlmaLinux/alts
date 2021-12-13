@@ -64,14 +64,13 @@ class DockerRunner(BaseRunner):
         self._render_template(
             f'{self.TF_MAIN_FILE}.tmpl', docker_tf_file,
             dist_name=self.dist_name, image_name=image_name,
-            container_name=self.env_name, external_network=external_network,
-            tests_dir=self._integrity_tests_dir
+            container_name=self.env_name, external_network=external_network
         )
 
     def _render_tf_variables_file(self):
         pass
 
-    def _exec(self, cmd_with_args: ()):
+    def _exec(self, cmd_with_args: (), workdir: str = None):
         """
         Executes a command inside docker container.
 
@@ -86,10 +85,14 @@ class DockerRunner(BaseRunner):
         tuple
             Executed command exit code, standard output and standard error.
         """
-        cmd = ('exec', str(self.env_name), *cmd_with_args)
+        cmd = ['exec']
+        if workdir:
+            cmd.extend(['--workdir', workdir])
+        cmd.extend([str(self.env_name), *cmd_with_args])
         cmd_str = ' '.join(cmd)
         self._logger.debug(f'Running "docker {cmd_str}" command')
-        return local['docker'].run(args=cmd, retcode=None, cwd=self._work_dir)
+        return local['docker'].run(
+            args=tuple(cmd), retcode=None, cwd=self._work_dir)
 
     def initial_provision(self, verbose=False):
         """
@@ -146,7 +149,9 @@ class DockerRunner(BaseRunner):
             Exit code, stdout and stderr from executed command
 
         """
-        cmd_args = ['py.test', '--rootdir', '/tests', '--tap-stream',
+        tests_dir_basename = os.path.basename(self._integrity_tests_dir)
+        remote_tests_path = os.path.join('/tests', tests_dir_basename)
+        cmd_args = ['py.test', '--tap-stream',
                     '--package-name', package_name]
         if package_version:
             full_pkg_name = f'{package_name}-{package_version}'
@@ -156,4 +161,4 @@ class DockerRunner(BaseRunner):
         cmd_args.append('tests')
         self._logger.info('Running package integrity tests for '
                           '%s on %s...', full_pkg_name, self.env_name)
-        return self._exec(cmd_args)
+        return self._exec(cmd_args, workdir=remote_tests_path)
