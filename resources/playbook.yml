@@ -45,6 +45,13 @@
       tags:
         - initial_provision
 
+    - name: Copy tests to test environment
+      copy:
+        src: "{{ integrity_tests_dir }}"
+        dest: /tests
+      tags:
+        - initial_provision
+
     - name: Install tools for running tests
       pip:
         name:

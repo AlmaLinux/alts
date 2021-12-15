@@ -50,6 +50,8 @@ def test_all_package_files_exist(host, package_name):
     package = host.package(package_name)
     if is_package_empty(package):
         return
+    if is_debuginfo_package(package):
+        return
 
     for file_ in get_package_files(package):
         file_obj = host.file(file_)
@@ -81,6 +83,8 @@ def test_binaries_have_all_dependencies(host, package_name):
     package = host.package(package_name)
     if is_package_empty(package):
         return
+    if is_debuginfo_package(package):
+        return
 
     for file_path in get_package_files(package):
         file_ = host.file(file_path)
@@ -109,6 +113,8 @@ def test_check_rpath_is_correct(host, package_name):
     """
     package = host.package(package_name)
     if is_package_empty(package):
+        return
+    if is_debuginfo_package(package):
         return
 
     for library in get_shared_libraries(package):

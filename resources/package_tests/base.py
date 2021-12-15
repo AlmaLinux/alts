@@ -9,9 +9,15 @@ from testinfra.modules.package import DebianPackage, RpmPackage
 
 
 __all__ = [
-    'get_package_files', 'get_shared_libraries', 'is_package_empty',
-    'is_file_dynamically_linked', 'is_rpath_correct',
-    'has_missing_shared_libraries', 'resolve_symlink', 'MissingSOResult'
+    'get_package_files',
+    'get_shared_libraries',
+    'has_missing_shared_libraries',
+    'is_package_empty',
+    'is_debuginfo_package',
+    'is_file_dynamically_linked',
+    'is_rpath_correct',
+    'resolve_symlink',
+    'MissingSOResult',
 ]
 
 
@@ -86,6 +92,24 @@ def is_package_empty(pkg: Union[DebianPackage, RpmPackage]) -> bool:
 
     """
     return not bool(get_package_files(pkg))
+
+
+def is_debuginfo_package(pkg: Union[DebianPackage, RpmPackage]) -> bool:
+    """
+    Checks if packages is containing debug information
+
+    Parameters
+    ----------
+    pkg: DebianPackage | RpmPackage
+        Package instance
+
+    Returns
+    -------
+    bool
+        True if package is debuginfo, False otherwise
+
+    """
+    return bool(re.search(r'debug(info|source)', pkg.name))
 
 
 def is_file_dynamically_linked(file_: GNUFile) -> bool:
