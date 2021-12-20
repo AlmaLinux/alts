@@ -25,6 +25,9 @@ class TaskRequestPayload(BaseModel):
     repositories: typing.List[Repository] = []
     package_name: str
     package_version: typing.Optional[str] = None
+    module_name: typing.Optional[str] = None
+    module_stream: typing.Optional[str] = None
+    module_version: typing.Optional[str] = None
     callback_href: str = None
 
     @validator('runner_type')

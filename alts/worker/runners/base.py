@@ -299,7 +299,9 @@ class BaseRunner(object):
 
     @command_decorator(InstallPackageError, 'install_package',
                        'Cannot install package')
-    def install_package(self, package_name: str, package_version: str = None):
+    def install_package(self, package_name: str, package_version: str = None,
+                        module_name: str = None, module_stream: str = None,
+                        module_version: str = None):
         if package_version:
             if self.pkg_manager in ('yum', 'dnf'):
                 full_pkg_name = f'{package_name}-{package_version}'
@@ -310,8 +312,12 @@ class BaseRunner(object):
 
         self._logger.info(f'Installing {full_pkg_name} on {self.env_name}...')
         cmd_args = ['-i', self.ANSIBLE_INVENTORY_FILE, self.ANSIBLE_PLAYBOOK,
-                    '-e', f'pkg_name={full_pkg_name}',
-                    '-t', 'install_package']
+                    '-e', f'pkg_name={full_pkg_name}']
+        if module_name and module_stream and module_version:
+            cmd_args.extend(['-e', f'module_name={module_name}',
+                             '-e', f'module_stream={module_stream}',
+                             '-e', f'module_version={module_version}'])
+        cmd_args.extend(['-t', 'install_package'])
         cmd_args_str = ' '.join(cmd_args)
         self._logger.debug(
             f'Running "ansible-playbook {cmd_args_str}" command')
