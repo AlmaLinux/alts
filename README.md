@@ -167,8 +167,14 @@ After acquiring the token, you can put it in Authorize section on the http://loc
   
 `/tasks/{task_id}/result` endpoint returns the result of task. `task_id` - task ID string.
 
+
 Unresolved issues
 --
 - Provision for production server is required;
 - Only supports Docker containers;
 - No basic tests;
+
+
+Reporting issues 
+--
+All issues should be reported to the [Build System project](https://github.com/AlmaLinux/build-system).
