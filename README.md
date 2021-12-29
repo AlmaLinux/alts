@@ -170,9 +170,7 @@ After acquiring the token, you can put it in Authorize section on the http://loc
 
 Unresolved issues
 --
-- Provision for production server is required;
-- Only supports Docker containers;
-- No basic tests;
+- Add support for external test projects like LTP;
 
 
 Reporting issues 
