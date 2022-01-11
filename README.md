@@ -139,7 +139,7 @@ Scheduler part provides 2 REST API endpoints:
 - `POST /tasks/schedule` - to schedule package for installation/tests run;
 - `GET /tasks/{task_id}/result` - to get result of the task;
 
-Before installing packages from the module and running tests, the module from the build has to be turned on. To do so, use the following payload:
+Before installing packages from the module and running tests, the module from the build has to be turned on. To do so, use the following payload in the `/tasks/schedule` endpoint:
 
 ```ruby
 {
