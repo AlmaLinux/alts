@@ -139,6 +139,16 @@ Scheduler part provides 2 REST API endpoints:
 - `POST /tasks/schedule` - to schedule package for installation/tests run;
 - `GET /tasks/{task_id}/result` - to get result of the task;
 
+Before installing packages from the module and running tests, the module from the build has to be turned on. To do so, use the following payload:
+
+```ruby
+{
+  "module_name": "string" # the name of the module to install, it's an optional value that allows being absent
+  "module_stream": "string" # the stream of the module to install, it's an optional value that allows being absent
+  "module_version": "string" # the version of the module to install, it's an optional value that allows being absent
+}
+```
+
 As scheduler uses FastAPI, it has Swagger support built-in. You can open Swagger documentation just by following the http://localhost:8000/docs link.
 
 Authentication is achieved using JWT tokens. For ease of testing, there is a `generate_jwt_token.py` script. You can either specify a config file to parse the JWT secret and hashing algorithm or provide them via a parameter. For details on all script parameters, run python `generate_jwt_token.py --help`. Usage example with config:
