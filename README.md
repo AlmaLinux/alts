@@ -1,11 +1,11 @@
 System overview
 --
 
-AlmaLinux Test System (ALTS) - is a way to test rpm/deb packages under realistic circumstances, on real systems with installation, launching, integrity checks, etc. If needed, it also supports third-party test scripts.
+AlmaLinux Test System (ALTS) - is a way to test rpm packages under realistic circumstances, on real systems with installation, launching, integrity checks, etc. If needed, it also supports third-party test scripts.
 
 AlmaLinux Test System is designed to be a fast, scalable and easily maintainable solution for end-to-end packages testing. 
 
-The system consists of API and task manager. API accepts a request for testing a package and creates a task on it. The manager picks up as many tasks as possible. 
+The system consists of the ALTS scheduler and the ALTS worker. The scheduler sends received test tasks to RabbitMQ queues and monitors them. The worker takes a task from the RabbitMQ queues, manages the test environment and reports task results to the Web-Server.
 
 The process of picking up a created task is:
 - Starting up a clean environment like Docker or OpenNebula with its initial configurations;
@@ -22,12 +22,16 @@ The system contains several parts:
 
 Mentioned tools and libraries are required for ALTS to run in current state:
 
-- Terraform >= 0.13;
-- Ansible (current version is 2.9);
+- Terraform >= 0.13
+- Ansible (current version is 2.9)
 - RabbitMQ;
-- Celery >= 5.1;
+- Celery >= 5.1
 - SQLite;
-- Docker (for development purposes);
+- Docker (for development purposes)
+- Python 3 (>= 3.6)
+- FastAPI
+- Pytest
+- Testinfra
 
 
 Test system flow
@@ -58,7 +62,7 @@ Filling options in the config file
 
 Here is the description of what is necessary to fill in at alts_config.yaml:
 
-```
+```ruby
 rabbitqm_host: 'rabbitmq' # hostname for the message broker
 rabbitmq_port: 5672 # unprotected broker port
 rabbitmq_ssl_port: 5671 # protected broker port. They are used separetly depending on the flag 'use_ssl'
@@ -72,7 +76,7 @@ Choosing a backend in the`results backend` option, you define which parameter S3
 
 Now a group of S3 options for authorization on S3:
 
-```
+```ruby
 s3_access_key_id:
 s3_secret_access_key:
 s3_bucket:
@@ -84,7 +88,7 @@ result_backend: 's3'
 
 Options to connect to Azure:
 
-```
+```ruby
 azureblockblob_container_name: # container name for Celery on Azure
 azureblockblob_base_path: # a directory to store testing results
 azure_connection_string: # connection string to Azure
@@ -135,6 +139,16 @@ Scheduler part provides 2 REST API endpoints:
 - `POST /tasks/schedule` - to schedule package for installation/tests run;
 - `GET /tasks/{task_id}/result` - to get result of the task;
 
+Before installing packages from the module and running tests, the module from the build has to be turned on. To do so, use the following payload in the `/tasks/schedule` endpoint:
+
+```ruby
+{
+  "module_name": "string" # the name of the module to install, it's an optional value that allows being absent
+  "module_stream": "string" # the stream of the module to install, it's an optional value that allows being absent
+  "module_version": "string" # the version of the module to install, it's an optional value that allows being absent
+}
+```
+
 As scheduler uses FastAPI, it has Swagger support built-in. You can open Swagger documentation just by following the http://localhost:8000/docs link.
 
 Authentication is achieved using JWT tokens. For ease of testing, there is a `generate_jwt_token.py` script. You can either specify a config file to parse the JWT secret and hashing algorithm or provide them via a parameter. For details on all script parameters, run python `generate_jwt_token.py --help`. Usage example with config:
@@ -149,22 +163,26 @@ After acquiring the token, you can put it in Authorize section on the http://loc
 
 `/tasks/schedule` endpoint accepts the following payload:
 
-```
+```ruby
 {
-  "runner_type": "string", # the instance backend to use (docker, opennebula, etc.). For now only `docker` and `any` values are supported
-  "dist_name": "string", # name of distribution you want to test on (debian, ubuntu, centos, etc.)
-  "dist_version": "string", # distribution version (20.04, 8, etc.)
-  "dist_arch": "string", # CPU architecture you want to test package for. Supported values - 'x86_64', 'i686', 'amd64', 'aarch64', 'arm64'
-  "repositories": [], # a list of repositories to add before attempting package installation. Each repository is a dictionary with `name` and `url` values. name` is optional
-  "package_name": "string", # the name of the package to install
+  "runner_type": "string" # the instance backend to use (docker, opennebula, etc.). For now only 'docker' and 'any'' values are supported
+  "dist_name": "string" # name of distribution you want to test on (debian, ubuntu, centos, etc.)
+  "dist_version": "string" # distribution version (20.04, 8, etc.)
+  "dist_arch": "string" # CPU architecture you want to test package for. Supported values - 'x86_64', 'i686', 'amd64', 'aarch64', 'arm64'
+  "repositories": [] # a list of repositories to add before attempting package installation. Each repository is a dictionary with 'name' and 'url' values. 'name' is optional
+  "package_name": "string" # the name of the package to install
   "package_version": "string" # optional, version of the package you want to install
 }
 ```
   
 `/tasks/{task_id}/result` endpoint returns the result of task. `task_id` - task ID string.
 
+
 Unresolved issues
 --
-- Provision for production server is required;
-- Only supports Docker containers;
-- No basic tests;
+- Add support for external test projects like LTP;
+
+
+Reporting issues 
+--
+All issues should be reported to the [Build System project](https://github.com/AlmaLinux/build-system).
