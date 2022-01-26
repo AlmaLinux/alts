@@ -10,7 +10,7 @@ import urllib.parse
 import requests
 import tap.parser
 
-from alts.shared.constants import API_VERSION
+from alts.shared.constants import API_VERSION, DEFAULT_REQUEST_TIMEOUT
 from alts.shared.exceptions import (
     InstallPackageError,
     PackageIntegrityTestsError,
@@ -138,7 +138,9 @@ def run_tests(task_params: dict):
             payload = {'api_version': API_VERSION, 'result': summary}
             response = requests.post(
                 full_url, json=payload,
-                headers={'Authorization': f'Bearer {CONFIG.bs_token}'})
+                headers={'Authorization': f'Bearer {CONFIG.bs_token}'},
+                timeout=DEFAULT_REQUEST_TIMEOUT
+            )
             response.raise_for_status()
 
         return summary
