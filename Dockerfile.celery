@@ -1,24 +1,17 @@
 FROM almalinux:8
 
-ARG ARCH="amd64"
-ARG TF_VERSION="1.0.6"
-
 RUN mkdir -p /code ~/.terraform.d/plugin-cache ~/.ssh /srv/celery_results \
     && echo "plugin_cache_dir = \"\$HOME/.terraform.d/plugin-cache\"" > ~/.terraformrc \
     && yum update -y \
-    && yum install -y python3-virtualenv epel-release wget unzip yum-utils openssh-clients \
+    && yum install -y python3-virtualenv python39 epel-release wget unzip yum-utils openssh-clients \
     && yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo \
-    && yum install -y docker-ce docker-ce-cli containerd.io ansible --enablerepo=epel \
+    && yum-config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo \
+    && yum install -y docker-ce docker-ce-cli containerd.io ansible terraform --enablerepo=epel \
     && yum clean all \
     && cat /dev/zero | ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -q -N ""
-RUN wget -q https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_${ARCH}.zip \
-    -O /tmp/terraform_linux_${ARCH}.zip \
-    && unzip /tmp/terraform_linux_${ARCH}.zip -d /usr/local/bin \
-    && chmod 755 /usr/local/bin/terraform \
-    && rm -f /tmp/terraform_linux_${ARCH}.zip
 COPY requirements/ /tmp/requirements
 RUN cd /code \
-    && virtualenv -p python3.6 env \
+    && virtualenv -p python3.9 env \
     && source env/bin/activate \
     && pip3 install --no-cache -U pip setuptools \
     && pip3 install --no-cache -r /tmp/requirements/celery.txt \
