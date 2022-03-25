@@ -328,6 +328,7 @@ class BaseRunner(object):
                        'Package integrity tests failed',
                        additional_section_name=TESTS_SECTION_NAME)
     def run_package_integrity_tests(self, package_name: str,
+                                    dist_name: str,
                                     package_version: str = None):
         """
         Run basic integrity tests for the package
@@ -348,7 +349,8 @@ class BaseRunner(object):
         cmd_args = ['--tap-stream', '--tap-files', '--tap-outdir',
                     self._artifacts_dir, '--hosts', 'ansible://all',
                     '--ansible-inventory', self._inventory_file_path,
-                    '--package-name', package_name]
+                    '--package-name', package_name '--platform_name',
+                    dist_name]
         if package_version:
             full_pkg_name = f'{package_name}-{package_version}'
             cmd_args.extend(['--package-version', package_version])

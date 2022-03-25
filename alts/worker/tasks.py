@@ -110,7 +110,9 @@ def run_tests(task_params: dict):
             module_name=module_name, module_stream=module_stream,
             module_version=module_version
         )
-        runner.run_package_integrity_tests(package_name, package_version)
+        runner.run_package_integrity_tests(package_name,
+                                           task_params['dist_name'],
+                                           package_version)
     except InstallPackageError as exc:
         logging.exception('Cannot install package: %s', exc)
     except PackageIntegrityTestsError as exc:

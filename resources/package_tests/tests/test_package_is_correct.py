@@ -31,7 +31,7 @@ def test_package_is_installed(host, package_name, package_version):
                         'Release does not match')
 
 
-def test_all_package_files_exist(host, package_name):
+def test_all_package_files_exist(host, package_name, platform_name):
     """
     Check that all files from the package are present on the filesystem.
 
@@ -50,6 +50,8 @@ def test_all_package_files_exist(host, package_name):
     package = host.package(package_name)
     if is_package_empty(package):
         return
+    if is_alma_platform(platform_name):
+        return
     if is_debuginfo_package(package):
         return
 
@@ -64,7 +66,7 @@ def test_all_package_files_exist(host, package_name):
             check.is_true(file_obj.exists)
 
 
-def test_binaries_have_all_dependencies(host, package_name):
+def test_binaries_have_all_dependencies(host, package_name, platform_name):
     """
     Check that all binaries have corresponding shared libraries.
 
@@ -82,6 +84,8 @@ def test_binaries_have_all_dependencies(host, package_name):
 
     package = host.package(package_name)
     if is_package_empty(package):
+        return
+    if is_alma_platform(platform_name):
         return
     if is_debuginfo_package(package):
         return

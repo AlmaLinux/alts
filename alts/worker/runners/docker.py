@@ -132,6 +132,7 @@ class DockerRunner(BaseRunner):
                        'Package integrity tests failed',
                        additional_section_name=TESTS_SECTION_NAME)
     def run_package_integrity_tests(self, package_name: str,
+                                    dist_name: str,
                                     package_version: str = None):
         """
         Run basic integrity tests for the package
@@ -152,7 +153,8 @@ class DockerRunner(BaseRunner):
         tests_dir_basename = os.path.basename(self._integrity_tests_dir)
         remote_tests_path = os.path.join('/tests', tests_dir_basename)
         cmd_args = ['py.test', '--tap-stream',
-                    '--package-name', package_name]
+                    '--package-name', package_name,
+                    '--platform-name', dist_name]
         if package_version:
             full_pkg_name = f'{package_name}-{package_version}'
             cmd_args.extend(['--package-version', package_version])
