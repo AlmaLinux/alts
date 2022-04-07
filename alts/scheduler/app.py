@@ -7,13 +7,11 @@
 import logging
 import random
 import signal
-import traceback
 import uuid
 from threading import Event
 
 from celery.exceptions import TimeoutError
 from fastapi import (
-    BackgroundTasks,
     Depends,
     FastAPI,
     HTTPException,
@@ -87,29 +85,27 @@ async def startup():
     logging.basicConfig(level=logging.INFO)
     await database.connect()
 
-    session = Session()
     # TODO: Get workers capacity and queues mapping
     # TODO: Get queues maximum capacity
     # inspect_instance = celery_app.control.inspect()
     # for _, tasks in inspect_instance.active(safe=True).items():
     #     # TODO: Add query to database and update tasks
     #     pass
-    try:
-        tasks_for_update = []
-        for task in session.query(Task).filter(Task.status == 'STARTED'):
-            task_result = celery_app.AsyncResult(task.task_id)
-            if task.status != task_result.state:
-                task.status = task_result.state
-                tasks_for_update.append(task)
-        if tasks_for_update:
-            session.add_all(tasks_for_update)
-            session.commit()
-            del tasks_for_update
-    except Exception as e:
-        logging.error(f'Cannot save tasks info: {e}')
-        session.rollback()
-    finally:
-        session.close()
+    with Session() as session:
+        with session.begin():
+            tasks_for_update = []
+            for task in session.query(Task).filter(Task.status == 'STARTED'):
+                task_result = celery_app.AsyncResult(task.task_id)
+                if task.status != task_result.state:
+                    task.status = task_result.state
+                    tasks_for_update.append(task)
+            if tasks_for_update:
+                try:
+                    session.add_all(tasks_for_update)
+                    session.commit()
+                except Exception as e:
+                    logging.exception('Cannot save tasks info:')
+    del tasks_for_update
 
     global graceful_terminate_event
     global terminate_event
@@ -273,25 +269,27 @@ async def schedule_task(task_data: TaskRequestPayload,
         run_tests.apply_async((task_params,), task_id=task_id,
                               queue=queue_name)
     except Exception as e:
-        logging.error(f'Cannot launch the task: {e}')
-        logging.error(traceback.format_exc())
-        response_content.update(
-            {'success': False, 'error_description': str(e)})
+        logging.exception('Cannot launch the task:')
+        response_content.update({'success': False,
+                                 'error_description': str(e)})
         return JSONResponse(status_code=400, content=response_content)
     else:
-        session = Session()
-        try:
-            task_record = Task(task_id=task_id, queue_name=queue_name,
-                               status='NEW')
-            session.add(task_record)
-            session.commit()
-            response_content.update({'success': True, 'task_id': task_id})
-            return JSONResponse(status_code=201, content=response_content)
-        except Exception as e:
-            logging.error(f'Cannot save task data into DB: {e}')
-            session.rollback()
-            response_content.update({'success': False, 'task_id': task_id,
-                                     'error_description': str(e)})
-            return JSONResponse(status_code=400, content=response_content)
-        finally:
-            session.close()
+        with Session() as session:
+            with session.begin():
+                try:
+                    task_record = Task(task_id=task_id, queue_name=queue_name,
+                                       status='NEW')
+                    session.add(task_record)
+                    session.commit()
+                    response_content.update({'success': True,
+                                             'task_id': task_id})
+                    return JSONResponse(status_code=201,
+                                        content=response_content)
+                except Exception as e:
+                    logging.exception('Cannot save task data into DB:')
+                    response_content.update({
+                        'success': False, 'task_id': task_id,
+                        'error_description': str(e)
+                    })
+                    return JSONResponse(status_code=400,
+                                        content=response_content)

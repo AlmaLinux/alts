@@ -23,30 +23,30 @@ class TasksMonitor(threading.Thread):
     def run(self) -> None:
         while not self.__graceful_terminate.is_set() or \
                 not self.__terminated_event.is_set():
-            session = Session()
             updated_tasks = []
-            for task in session.query(Task).filter(
-                    Task.status.notin_(READY_STATES)):
-                task_result = self.__celery.AsyncResult(task.task_id)
-                # Ensure that task state will be updated
-                # by getting task result
-                try:
-                    _ = task_result.get(timeout=self.__get_result_timeout)
-                except TimeoutError:
-                    pass
-                if task_result.state != task.status:
-                    self.logger.info(f'Updating task {task.task_id} status '
-                                     f'to {task_result.state}')
-                    task.status = task_result.state
-                    updated_tasks.append(task)
-                time.sleep(0.5)
-
-            if updated_tasks:
-                try:
-                    session.add_all(updated_tasks)
-                    session.commit()
-                except Exception as e:
-                    self.logger.error(f'Cannot update tasks statuses: {e}')
-                    session.rollback()
-            session.close()
+            with Session() as session:
+                with session.begin():
+                    for task in session.query(Task).filter(
+                            Task.status.notin_(READY_STATES)):
+                        task_result = self.__celery.AsyncResult(task.task_id)
+                        # Ensure that task state will be updated
+                        # by getting task result
+                        try:
+                            _ = task_result.get(
+                                timeout=self.__get_result_timeout)
+                        except TimeoutError:
+                            pass
+                        if task_result.state != task.status:
+                            self.logger.info('Updating task %s status to %s',
+                                             task.task_id, task_result.state)
+                            task.status = task_result.state
+                            updated_tasks.append(task)
+                        time.sleep(0.5)
+                    if updated_tasks:
+                        try:
+                            session.add_all(updated_tasks)
+                            session.commit()
+                        except Exception as e:
+                            self.logger.exception(
+                                'Cannot update tasks statuses:')
             self.__terminated_event.wait(random.randint(5, 10))
