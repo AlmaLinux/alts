@@ -9,7 +9,7 @@ import os
 import sqlalchemy
 from databases import Database
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, scoped_session
+from sqlalchemy.orm import sessionmaker
 
 from alts.scheduler import CONFIG, DATABASE_NAME
 
@@ -28,10 +28,6 @@ engine = sqlalchemy.engine.create_engine(
     database_url, connect_args={"check_same_thread": False}
 )
 Base = declarative_base()
-# engine = sqlalchemy.engine.create_engine(
-#     database_url, pool_pre_ping=True, pool_recycle=3600)
-# sync_session_factory = sessionmaker(engine, expire_on_commit=False)
-# Session = scoped_session(sync_session_factory)
 Session = sessionmaker(bind=engine)
 
 
