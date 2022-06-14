@@ -67,6 +67,8 @@ class BaseRunner(object):
     ARCHITECTURES_MAPPING = ImmutableDict(
         aarch64=['arm64', 'aarch64'],
         x86_64=['x86_64', 'amd64', 'i686', 'i386', 'i486', 'i586'],
+        ppc64le=['ppc64le'],
+        s390x=['s390x'],
     )
     COST = 0
     TF_VARIABLES_FILE = None

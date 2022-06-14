@@ -19,7 +19,7 @@ from alts.shared.uploaders.base import BaseUploader, UploadError, BaseLogsUpload
 from alts.shared.utils.file_utils import hash_file
 
 
-__all__ = ['PulpBaseUploader', 'PulpRpmUploader']
+__all__ = ['PulpBaseUploader', 'PulpLogsUploader']
 
 
 class TaskFailedError(Exception):
@@ -209,7 +209,7 @@ class PulpBaseUploader(BaseUploader):
         success_uploads = []
         errored_uploads = []
         self._logger.info('Starting files upload')
-        with ThreadPoolExecutor(max_workers=4) as executor:
+        with ThreadPoolExecutor(max_workers=1) as executor:
             futures = {
                 executor.submit(self.upload_single_file, artifact): artifact
                 for artifact in self.get_artifacts_list(artifacts_dir)
