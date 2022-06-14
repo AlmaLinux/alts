@@ -97,7 +97,8 @@ class BaseRunner(object):
             directories=[RESOURCES_DIR, self._class_resources_dir])
         if not artifacts_uploader:
             self._uploader = PulpLogsUploader(
-                CONFIG.pulp_host, CONFIG.pulp_user, CONFIG.pulp_password)
+                CONFIG.pulp_host, CONFIG.pulp_user, CONFIG.pulp_password,
+                concurrency=CONFIG.uploader_concurrency)
         else:
             self._uploader = artifacts_uploader
 

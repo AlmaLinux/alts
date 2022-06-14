@@ -14,8 +14,15 @@ from pulpcore.client.pulpcore.api.tasks_api import TasksApi
 from pulpcore.client.pulpcore.api.uploads_api import UploadsApi
 from pulpcore.client.pulpcore.api.artifacts_api import ArtifactsApi
 
-from alts.shared.constants import DEFAULT_FILE_CHUNK_SIZE
-from alts.shared.uploaders.base import BaseUploader, UploadError, BaseLogsUploader
+from alts.shared.constants import (
+    DEFAULT_FILE_CHUNK_SIZE,
+    DEFAULT_UPLOADER_CONCURRENCY,
+)
+from alts.shared.uploaders.base import (
+    BaseLogsUploader,
+    BaseUploader,
+    UploadError,
+)
 from alts.shared.utils.file_utils import hash_file
 
 
@@ -36,6 +43,7 @@ class PulpBaseUploader(BaseUploader):
 
     def __init__(self, host: str, username: str, password: str,
                  chunk_size: int = DEFAULT_FILE_CHUNK_SIZE,
+                 concurrency: int = DEFAULT_UPLOADER_CONCURRENCY,
                  requests_timeout: int = DEFAULT_TIMEOUT):
         """
         Initiate uploader.
@@ -58,6 +66,7 @@ class PulpBaseUploader(BaseUploader):
         self._file_splitter = Filesplit()
         self._chunk_size = chunk_size
         self._requests_timeout = requests_timeout
+        self._concurrency = concurrency
         self._logger = logging.getLogger(__file__)
 
     @staticmethod
@@ -209,7 +218,7 @@ class PulpBaseUploader(BaseUploader):
         success_uploads = []
         errored_uploads = []
         self._logger.info('Starting files upload')
-        with ThreadPoolExecutor(max_workers=1) as executor:
+        with ThreadPoolExecutor(max_workers=self._concurrency) as executor:
             futures = {
                 executor.submit(self.upload_single_file, artifact): artifact
                 for artifact in self.get_artifacts_list(artifacts_dir)
