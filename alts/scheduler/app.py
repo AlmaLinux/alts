@@ -222,17 +222,17 @@ async def schedule_task(task_data: TaskRequestPayload,
         runner_mapping = {key: value for key, value in RUNNER_MAPPING.items()
                           if key in CONFIG.supporter_runners}
     else:
-        raise ValidationError(f'Misconfiguration found: supported_runners is '
-                              f'{CONFIG.supported_runners}')
+        raise ValueError(f'Misconfiguration found: supported_runners is '
+                         f'{CONFIG.supported_runners}')
     runner_type = task_data.runner_type
     if runner_type == 'any':
         runner_type = random.choice(list(runner_mapping.keys()))
     runner_class = RUNNER_MAPPING[runner_type]
 
     if task_data.dist_arch not in CONFIG.supported_architectures:
-        raise ValidationError(f'Unknown architecture: {task_data.dist_arch}')
+        raise ValueError(f'Unknown architecture: {task_data.dist_arch}')
     if task_data.dist_name not in CONFIG.supported_distributions:
-        raise ValidationError(f'Unknown distribution: {task_data.dist_name}')
+        raise ValueError(f'Unknown distribution: {task_data.dist_name}')
 
     # TODO: Make decision on what queue to use for particular task based on
     #  queues load
@@ -242,8 +242,8 @@ async def schedule_task(task_data: TaskRequestPayload,
             queue_arch = arch
 
     if not queue_arch:
-        raise ValidationError('Cannot map requested architecture to any '
-                              'host architecture, possible coding error')
+        raise ValueError('Cannot map requested architecture to any '
+                         'host architecture, possible coding error')
 
     # Make sure all repositories have their names
     # (needed only for RHEL-like distributions)
