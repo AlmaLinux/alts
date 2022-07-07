@@ -18,6 +18,7 @@ __all__ = [
     'is_rpath_correct',
     'resolve_symlink',
     'MissingSOResult',
+    'is_alma_platform',
 ]
 
 
@@ -218,3 +219,23 @@ def is_rpath_correct(file_: GNUFile) -> bool:
     output = file_.run(f'objdump -x {file_.path}')
     assert output.rc == 0
     return not bool(re.search(r'(RPATH|RUNPATH).*:$', output.stdout))
+
+
+def is_alma_platform(platform_name: str):
+    """
+    Check AlmaLinux platform.
+
+    Parameters
+    ----------
+    pkg: DebianPackage | RpmPackage
+        Package instance
+
+    Returns
+    -------
+    list
+        A list of all files from the package
+
+    """
+    with open('test_test.log','w') as logs:
+        logs.write(platform_name)
+    return 'AlmaLinux' in platform_name
