@@ -121,6 +121,7 @@ class CeleryConfig(BaseModel):
     pulp_host: str
     pulp_user: str
     pulp_password: str
+    uploader_concurrency: int = constants.DEFAULT_UPLOADER_CONCURRENCY
 
     @property
     def broker_url(self) -> str:

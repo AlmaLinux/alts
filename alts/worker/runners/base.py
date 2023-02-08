@@ -68,6 +68,8 @@ class BaseRunner(object):
     ARCHITECTURES_MAPPING = ImmutableDict(
         aarch64=['arm64', 'aarch64'],
         x86_64=['x86_64', 'amd64', 'i686', 'i386', 'i486', 'i586'],
+        ppc64le=['ppc64le'],
+        s390x=['s390x'],
     )
     COST = 0
     TF_VARIABLES_FILE = None
@@ -96,7 +98,8 @@ class BaseRunner(object):
             directories=[RESOURCES_DIR, self._class_resources_dir])
         if not artifacts_uploader:
             self._uploader = PulpLogsUploader(
-                CONFIG.pulp_host, CONFIG.pulp_user, CONFIG.pulp_password)
+                CONFIG.pulp_host, CONFIG.pulp_user, CONFIG.pulp_password,
+                concurrency=CONFIG.uploader_concurrency)
         else:
             self._uploader = artifacts_uploader
 
