@@ -371,12 +371,14 @@ class BaseRunner(object):
         def write_to_file(file_base_name: str, artifacts_section: dict):
             log_file_path = os.path.join(
                 self._artifacts_dir, f'{file_base_name}_{self._task_id}.log')
-            with open(log_file_path, 'wb') as f:
-                content = f'Exit code: {artifacts_section["exit_code"]}\n'
-                content += f'Stdout:\n\n{artifacts_section["stdout"]}'
+            with open(log_file_path, 'wb') as file_:
+                content = (
+                    f'Exit code: {artifacts_section["exit_code"]}\n'
+                    f'Stdout:\n\n{artifacts_section["stdout"]}'
+                )
                 if artifacts_section.get('stderr'):
                     content += f'Stderr:\n\n{artifacts_section["stderr"]}'
-                f.write(gzip.compress(content.encode()))
+                file_.write(gzip.compress(content.encode()))
 
         for artifact_key, content in self.artifacts.items():
             if artifact_key == TESTS_SECTION_NAME:
