@@ -13,6 +13,7 @@ import tap.parser
 from alts.shared.constants import API_VERSION, DEFAULT_REQUEST_TIMEOUT
 from alts.shared.exceptions import (
     InstallPackageError,
+    UninstallPackageError,
     PackageIntegrityTestsError,
 )
 from alts.worker import CONFIG
@@ -111,10 +112,17 @@ def run_tests(task_params: dict):
             module_version=module_version
         )
         runner.run_package_integrity_tests(package_name, package_version)
+        runner.uninstall_package(
+            package_name, package_version,
+            module_name=module_name, module_stream=module_stream,
+            module_version=module_version
+        )
     except InstallPackageError as exc:
         logging.exception('Cannot install package: %s', exc)
     except PackageIntegrityTestsError as exc:
         logging.exception('Package integrity tests failed: %s', exc)
+    except UninstallPackageError as exc:
+        logging.exception('Cannot uninstall package: %s', exc)
     finally:
         runner.teardown()
         summary = {}

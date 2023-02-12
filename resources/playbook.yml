@@ -83,3 +83,19 @@
       when: ansible_distribution_file_variety == 'Debian'
       tags:
         - install_package
+
+    - name: Uninstall package
+      yum:
+        name: "{{ pkg_name }}"
+        state: absent
+      when: ansible_distribution_file_variety == 'RedHat'
+      tags:
+        - uninstall_package
+
+    - name: Uninstall package
+      apt:
+        name: "{{ pkg_name }}"
+        state: absent
+      when: ansible_distribution_file_variety == 'Debian'
+      tags:
+        - uninstall_package

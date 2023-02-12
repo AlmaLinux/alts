@@ -8,7 +8,7 @@ __all__ = ['ALTSBaseError', 'ConfigNotFoundError', 'DBUpdateError',
            'InstallPackageError', 'ProvisionError', 'PublishArtifactsError',
            'StartEnvironmentError', 'StopEnvironmentError',
            'TerraformInitializationError', 'WorkDirPreparationError',
-           'PackageIntegrityTestsError']
+           'PackageIntegrityTestsError', 'UninstallPackageError']
 
 
 class ALTSBaseError(Exception):
@@ -63,6 +63,13 @@ class ProvisionError(ALTSBaseError):
 class InstallPackageError(ALTSBaseError):
 
     """Error occurred while installing a package."""
+
+    pass
+
+
+class UninstallPackageError(ALTSBaseError):
+
+    """Error occurred while uninstalling a package."""
 
     pass
 
