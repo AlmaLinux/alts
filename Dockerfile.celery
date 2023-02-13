@@ -16,6 +16,7 @@ RUN cd /code \
     && pip3 install --no-cache -U pip setuptools \
     && pip3 install --no-cache -r /tmp/requirements/celery.txt \
     && deactivate \
-    && rm -rf /tmp/requirements
+    && rm -rf /tmp/requirements \
+    && ansible-galaxy collection install community.docker
 COPY . /code
 WORKDIR /code

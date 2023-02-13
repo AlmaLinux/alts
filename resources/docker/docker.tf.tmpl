@@ -3,7 +3,7 @@ provider "docker" {
 }
 
 resource "docker_container" "${container_name}" {
-  image = docker_image.${dist_name}.latest
+  image = docker_image.${dist_name}.image_id
   name = "${container_name}"
   must_run = true
   command = ["sleep", "21600"]
