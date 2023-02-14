@@ -2,6 +2,7 @@ import fcntl
 import gzip
 import logging
 import os
+import re
 import shutil
 import tempfile
 import time
@@ -397,17 +398,22 @@ class BaseRunner(object):
         # Should upload artifacts from artifacts directory to preferred
         # artifacts storage (S3, Minio, etc.)
 
+        def replace_host_name(log_string) -> str:
+            return re.sub(r'\[local\]', f'[{self._task_id}', log_string)
+
         def write_to_file(file_base_name: str, artifacts_section: dict):
             log_file_path = os.path.join(
                 self._artifacts_dir, f'{file_base_name}_{self._task_id}.log')
             with open(log_file_path, 'wb') as fd:
-                content = (
+                stdout = replace_host_name(artifacts_section["stdout"])
+                file_content = (
                     f'Exit code: {artifacts_section["exit_code"]}\n'
-                    f'Stdout:\n\n{artifacts_section["stdout"]}'
+                    f'Stdout:\n\n{stdout}'
                 )
                 if artifacts_section.get('stderr'):
-                    content += f'Stderr:\n\n{artifacts_section["stderr"]}'
-                fd.write(gzip.compress(content.encode()))
+                    stderr = replace_host_name(artifacts_section["stderr"])
+                    file_content += f'Stderr:\n\n{stderr}'
+                fd.write(gzip.compress(file_content.encode()))
 
         for artifact_key, content in self.artifacts.items():
             if artifact_key == TESTS_SECTION_NAME:
