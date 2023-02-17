@@ -1,4 +1,5 @@
 import fcntl
+import gzip
 import logging
 import os
 import shutil
@@ -370,13 +371,14 @@ class BaseRunner(object):
         def write_to_file(file_base_name: str, artifacts_section: dict):
             log_file_path = os.path.join(
                 self._artifacts_dir, f'{file_base_name}_{self._task_id}.log')
-            with open(log_file_path, 'w+t') as f:
-                f.write(f'Exit code: {artifacts_section["exit_code"]}\n')
-                f.write(f'Stdout:\n\n')
-                f.write(artifacts_section['stdout'])
+            with open(log_file_path, 'wb') as fd:
+                content = (
+                    f'Exit code: {artifacts_section["exit_code"]}\n'
+                    f'Stdout:\n\n{artifacts_section["stdout"]}'
+                )
                 if artifacts_section.get('stderr'):
-                    f.write(f'Stderr:\n\n')
-                    f.write(artifacts_section['stderr'])
+                    content += f'Stderr:\n\n{artifacts_section["stderr"]}'
+                fd.write(gzip.compress(content.encode()))
 
         for artifact_key, content in self.artifacts.items():
             if artifact_key == TESTS_SECTION_NAME:
