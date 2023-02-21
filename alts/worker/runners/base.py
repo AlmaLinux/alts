@@ -328,6 +328,35 @@ class BaseRunner(object):
         return local['ansible-playbook'].run(
             args=cmd_args, retcode=None, cwd=self._work_dir)
 
+    @command_decorator(UninstallPackageError, 'uninstall_package',
+                       'Cannot uninstall package')
+    def uninstall_package(self, package_name: str, package_version: str = None,
+                        module_name: str = None, module_stream: str = None,
+                        module_version: str = None):
+        if package_name in CONFIG.uninstall_excluded_pkgs:
+            return
+        if package_version:
+            if self.pkg_manager in ('yum', 'dnf'):
+                full_pkg_name = f'{package_name}-{package_version}'
+            else:
+                full_pkg_name = f'{package_name}={package_version}'
+        else:
+            full_pkg_name = package_name
+
+        self._logger.info(f'Uninstalling {full_pkg_name} from {self.env_name}...')
+        cmd_args = ['-i', self.ANSIBLE_INVENTORY_FILE, self.ANSIBLE_PLAYBOOK,
+                    '-e', f'pkg_name={full_pkg_name}']
+        if module_name and module_stream and module_version:
+            cmd_args.extend(['-e', f'module_name={module_name}',
+                             '-e', f'module_stream={module_stream}',
+                             '-e', f'module_version={module_version}'])
+        cmd_args.extend(['-t', 'uninstall_package'])
+        cmd_args_str = ' '.join(cmd_args)
+        self._logger.debug(
+            f'Running "ansible-playbook {cmd_args_str}" command')
+        return local['ansible-playbook'].run(
+            args=cmd_args, retcode=None, cwd=self._work_dir)
+
     @command_decorator(PackageIntegrityTestsError, 'package_integrity_tests',
                        'Package integrity tests failed',
                        additional_section_name=TESTS_SECTION_NAME)

@@ -122,6 +122,7 @@ class CeleryConfig(BaseModel):
     pulp_user: str
     pulp_password: str
     uploader_concurrency: int = constants.DEFAULT_UPLOADER_CONCURRENCY
+    uninstall_excluded_pkgs: typing.List[str] = ['almalinux-release', 'kernel', 'dnf']
 
     @property
     def broker_url(self) -> str:
