@@ -15,6 +15,7 @@ from alts.shared.exceptions import (
     InstallPackageError,
     UninstallPackageError,
     PackageIntegrityTestsError,
+    StopEnvironmentError,
 )
 from alts.worker import CONFIG
 from alts.worker.app import celery_app
@@ -117,6 +118,8 @@ def run_tests(task_params: dict):
             module_name=module_name, module_stream=module_stream,
             module_version=module_version
         )
+    except StopEnvironmentError as exc:
+        logging.exception('Cannot start environment: %s', exc)
     except InstallPackageError as exc:
         logging.exception('Cannot install package: %s', exc)
     except PackageIntegrityTestsError as exc:

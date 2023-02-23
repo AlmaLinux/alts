@@ -1,6 +1,7 @@
 import fcntl
 import gzip
 import logging
+import gzip
 import os
 import re
 import shutil
@@ -89,7 +90,9 @@ class BaseRunner(object):
         # Environment ID and working directory preparation
         self._task_id = task_id
         self._env_name = f'{self.TYPE}_{task_id}'
-        self._logger = logging.getLogger(__file__)
+        self._logger = self.init_test_task_logger(task_id, dist_arch)
+        self._task_log_file = None
+        self._task_log_handler = None
         self._work_dir = None
         self._artifacts_dir = None
         self._inventory_file_path = None
@@ -162,6 +165,46 @@ class BaseRunner(object):
     @property
     def env_name(self):
         return self._env_name
+
+    def __init_task_logger(self, log_file):
+        """
+        Task logger initialization, configures a test task   logger to write
+        output to the given log file.
+
+        Parameters
+        ----------
+        log_file : str
+            Task log file path.
+
+        Returns
+        -------
+        logging.Handler
+            Task logging handler.
+        """
+        handler = logging.StreamHandler(
+            gzip.open(log_file, 'wt', encoding='utf-8'),
+        )
+        handler.setLevel(logging.DEBUG)
+        formatter = logging.Formatter("%(asctime)s %(levelname)-8s]: "
+                                      "%(message)s", "%H:%M:%S %d.%m.%y")
+        handler.setFormatter(formatter)
+        self._logger.addHandler(handler)
+        return handler
+
+
+    def __close_task_logger(self, task_handler):
+        """
+        Closes the specified task log handler and removes it from the current
+        test task logger.
+
+        Parameters
+        ----------
+        task_handler : logging.Handler
+            Task log handler.
+        """
+        task_handler.flush()
+        task_handler.close()
+        self._logger.handlers.remove(task_handler)
 
     # TODO: Think of better implementation
     def _create_work_dir(self):
@@ -460,19 +503,58 @@ class BaseRunner(object):
 
     def setup(self):
         self.prepare_work_dir_files()
+        self._task_log_file = os.path.join(
+            self._work_dir, f'alts-{self._task_id}-{self._dist_arch}.log'
+        )
+        self._task_log_handler = self.__init_task_logger(self._task_log_file)
         self.initialize_terraform()
         self.start_env()
         self.initial_provision()
 
     def teardown(self, publish_artifacts: bool = True):
-        self.stop_env()
+        try:
+            self.stop_env()
+        except Exception as e:
+            self._logger.error(f'Error while stop environment:'
+                               f' {e}')
         if publish_artifacts:
             try:
                 self.publish_artifacts_to_storage()
             except Exception as e:
                 self._logger.exception('Exception while publishing artifacts: '
                                        '%s', str(e))
+            finally:
+                if not self._uploaded_logs:
+                    self._uploaded_logs = []
+                self._uploaded_logs.append(
+                    self._uploader.upload_single_file(self._task_log_file)
+                )
+                if self._task_log_handler:
+                    self.__close_task_logger(self._task_log_handler)
+
         self.erase_work_dir()
+
+    @staticmethod
+    def init_test_task_logger(task_id, arch):
+        """
+        Test task logger initialization.
+
+        Returns
+        -------
+        logging.Logger
+            Test task logger.
+        """
+        logger = logging.getLogger(f'test_task-{task_id}-{arch}-logger')
+        logger.handlers = []
+        logger.setLevel(logging.DEBUG)
+        formatter = logging.Formatter("%(asctime)s %(levelname)-8s: "
+                                      "%(message)s",
+                                      "%H:%M:%S %d.%m.%y")
+        handler = logging.StreamHandler()
+        handler.setLevel(logging.DEBUG)
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        return logger
 
 
 class GenericVMRunner(BaseRunner):
