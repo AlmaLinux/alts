@@ -1,5 +1,5 @@
 celery==5.2.3
-mako==1.1.6
+mako==1.2.2
 plumbum==1.7.2
 boto3==1.20.43
 pydantic==1.9.0
