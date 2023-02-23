@@ -477,7 +477,9 @@ class BaseRunner(object):
                 for inner_artifact_key, inner_content in content.items():
                     log_base_name = f'{TESTS_SECTION_NAME}_{inner_artifact_key}'
                     write_to_file(log_base_name, inner_content)
-
+            elif artifact_key == 'initialize_terraform':
+                stdout = content['stdout']
+                content['stdout'] = f'Task ID: {self._task_id}\n\n{stdout}'
             else:
                 write_to_file(artifact_key, content)
 
