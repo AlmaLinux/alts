@@ -480,6 +480,7 @@ class BaseRunner(object):
             elif artifact_key == 'initialize_terraform':
                 stdout = content['stdout']
                 content['stdout'] = f'Task ID: {self._task_id}\n\n{stdout}'
+                write_to_file(artifact_key, content)
             else:
                 write_to_file(artifact_key, content)
 
