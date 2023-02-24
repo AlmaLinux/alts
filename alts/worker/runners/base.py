@@ -1,7 +1,7 @@
+import datetime
 import fcntl
 import gzip
 import logging
-import gzip
 import os
 import re
 import shutil
@@ -37,7 +37,9 @@ def command_decorator(exception_class, artifacts_key, error_message, additional_
             args = args[1:]
             if not self._work_dir or not os.path.exists(self._work_dir):
                 return
+            start = datetime.datetime.utcnow()
             exit_code, stdout, stderr = fn(self, *args, **kwargs)
+            finish = datetime.datetime.utcnow()
             add_to = self._artifacts
             if additional_section_name:
                 if additional_section_name not in self._artifacts:
@@ -47,6 +49,11 @@ def command_decorator(exception_class, artifacts_key, error_message, additional_
                 'exit_code': exit_code,
                 'stderr': stderr,
                 'stdout': stdout
+            }
+            self._stats[artifacts_key] = {
+                'start_ts': start.isoformat(),
+                'finish_ts': finish.isoformat(),
+                'delta': (finish - start).total_seconds()
             }
             if exit_code != 0:
                 self._logger.error(f'{error_message}, exit code: {exit_code},'
@@ -120,6 +127,7 @@ class BaseRunner(object):
 
         self._artifacts = {}
         self._uploaded_logs = None
+        self._stats = {}
 
     @property
     def artifacts(self):
@@ -166,6 +174,10 @@ class BaseRunner(object):
     def env_name(self):
         return self._env_name
 
+    @property
+    def stats(self):
+        return self._stats
+
     def __init_task_logger(self, log_file):
         """
         Task logger initialization, configures a test task   logger to write
@@ -190,7 +202,6 @@ class BaseRunner(object):
         handler.setFormatter(formatter)
         self._logger.addHandler(handler)
         return handler
-
 
     def __close_task_logger(self, task_handler):
         """
@@ -257,6 +268,17 @@ class BaseRunner(object):
 
         """
         raise NotImplementedError
+
+    def _detect_full_package_name(
+            self, package_name: str, package_version: str = None) -> str:
+        if package_version:
+            if self.pkg_manager in ('yum', 'dnf'):
+                full_pkg_name = f'{package_name}-{package_version}'
+            else:
+                full_pkg_name = f'{package_name}={package_version}'
+        else:
+            full_pkg_name = package_name
+        return full_pkg_name
 
     # First step
     def prepare_work_dir_files(self, create_ansible_inventory=False):
@@ -350,13 +372,9 @@ class BaseRunner(object):
     def install_package(self, package_name: str, package_version: str = None,
                         module_name: str = None, module_stream: str = None,
                         module_version: str = None):
-        if package_version:
-            if self.pkg_manager in ('yum', 'dnf'):
-                full_pkg_name = f'{package_name}-{package_version}'
-            else:
-                full_pkg_name = f'{package_name}={package_version}'
-        else:
-            full_pkg_name = package_name
+
+        full_pkg_name = self._detect_full_package_name(
+            package_name, package_version=package_version)
 
         self._logger.info(f'Installing {full_pkg_name} on {self.env_name}...')
         cmd_args = ['-i', self.ANSIBLE_INVENTORY_FILE, self.ANSIBLE_PLAYBOOK,
@@ -375,17 +393,13 @@ class BaseRunner(object):
     @command_decorator(UninstallPackageError, 'uninstall_package',
                        'Cannot uninstall package')
     def uninstall_package(self, package_name: str, package_version: str = None,
-                        module_name: str = None, module_stream: str = None,
-                        module_version: str = None):
+                          module_name: str = None, module_stream: str = None,
+                          module_version: str = None):
         if package_name in CONFIG.uninstall_excluded_pkgs:
             return
-        if package_version:
-            if self.pkg_manager in ('yum', 'dnf'):
-                full_pkg_name = f'{package_name}-{package_version}'
-            else:
-                full_pkg_name = f'{package_name}={package_version}'
-        else:
-            full_pkg_name = package_name
+
+        full_pkg_name = self._detect_full_package_name(
+            package_name, package_version=package_version)
 
         self._logger.info(f'Uninstalling {full_pkg_name} from {self.env_name}...')
         cmd_args = ['-i', self.ANSIBLE_INVENTORY_FILE, self.ANSIBLE_PLAYBOOK,
@@ -463,7 +477,10 @@ class BaseRunner(object):
                 for inner_artifact_key, inner_content in content.items():
                     log_base_name = f'{TESTS_SECTION_NAME}_{inner_artifact_key}'
                     write_to_file(log_base_name, inner_content)
-
+            elif artifact_key == 'initialize_terraform':
+                stdout = content['stdout']
+                content['stdout'] = f'Task ID: {self._task_id}\n\n{stdout}'
+                write_to_file(artifact_key, content)
             else:
                 write_to_file(artifact_key, content)
 
@@ -502,6 +519,7 @@ class BaseRunner(object):
                 self._logger.info('Working directory was successfully removed')
 
     def setup(self):
+        self._stats['started_at'] = datetime.datetime.utcnow().isoformat()
         self.prepare_work_dir_files()
         self._task_log_file = os.path.join(
             self._work_dir, f'alts-{self._task_id}-{self._dist_arch}.log'
@@ -526,11 +544,11 @@ class BaseRunner(object):
             finally:
                 if not self._uploaded_logs:
                     self._uploaded_logs = []
+                if self._task_log_handler:
+                    self.__close_task_logger(self._task_log_handler)
                 self._uploaded_logs.append(
                     self._uploader.upload_single_file(self._task_log_file)
                 )
-                if self._task_log_handler:
-                    self.__close_task_logger(self._task_log_handler)
 
         self.erase_work_dir()
 

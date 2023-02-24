@@ -146,7 +146,8 @@ def run_tests(task_params: dict):
         if task_params.get('callback_href'):
             full_url = urllib.parse.urljoin(CONFIG.bs_host,
                                             task_params['callback_href'])
-            payload = {'api_version': API_VERSION, 'result': summary}
+            payload = {'api_version': API_VERSION, 'result': summary,
+                       'stats': runner.stats}
             response = requests.post(
                 full_url, json=payload,
                 headers={'Authorization': f'Bearer {CONFIG.bs_token}'},
