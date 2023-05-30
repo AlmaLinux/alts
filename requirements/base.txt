@@ -1,4 +1,4 @@
-celery==5.2.7
+celery[redis]==5.2.7
 mako==1.2.4
 plumbum==1.8.2
 boto3==1.26.142
