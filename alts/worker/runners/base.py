@@ -113,7 +113,7 @@ class BaseRunner(object):
                     CONFIG.logs_uploader_config.pulp_host,
                     CONFIG.logs_uploader_config.pulp_user,
                     CONFIG.logs_uploader_config.pulp_password,
-                    concurrency=CONFIG.uploader_concurrency
+                    concurrency=CONFIG.logs_uploader_config.uploader_concurrency
                 )
         else:
             self._uploader = artifacts_uploader

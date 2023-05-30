@@ -74,6 +74,7 @@ class BaseBrokerConfig(BaseModel):
 
 
 class BaseLogsConfig(BaseModel):
+    uploader_concurrency: int = constants.DEFAULT_UPLOADER_CONCURRENCY
     artifacts_root_directory: str = 'alts_artifacts'
     skip_artifacts_upload: bool = False
 
@@ -208,7 +209,6 @@ class CeleryConfig(BaseModel):
     bs_token: typing.Optional[str]
     # Log uploader settings
     logs_uploader_config: typing.Union[AzureLogsConfig, PulpLogsConfig]
-    uploader_concurrency: int = constants.DEFAULT_UPLOADER_CONCURRENCY
     uninstall_excluded_pkgs: typing.List[str] = ['almalinux-release', 'kernel', 'dnf']
 
     @property
