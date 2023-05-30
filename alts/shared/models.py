@@ -208,8 +208,14 @@ class CeleryConfig(BaseModel):
     bs_host: typing.Optional[str]
     bs_token: typing.Optional[str]
     # Log uploader settings
-    logs_uploader_config: typing.Union[AzureLogsConfig, PulpLogsConfig]
-    uninstall_excluded_pkgs: typing.List[str] = ['almalinux-release', 'kernel', 'dnf']
+    logs_uploader_config: typing.Optional[
+        typing.Union[AzureLogsConfig, PulpLogsConfig]
+    ]
+    uninstall_excluded_pkgs: typing.List[str] = [
+        'almalinux-release',
+        'kernel',
+        'dnf',
+    ]
 
     @property
     def result_backend(self) -> str:
