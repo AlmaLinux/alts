@@ -108,13 +108,14 @@ class RedisBrokerConfig(BaseBrokerConfig):
     redis_host: str
     redis_port: int = 6379
     redis_db_number: int = 0
+    redis_user: str = 'default'
     redis_password: typing.Optional[str]
 
     @property
     def broker_url(self) -> str:
-        if self.redis_password:
+        if self.redis_user and self.redis_password:
             return (
-                f'redis://{self.redis_password}@'
+                f'redis://{self.redis_user}:{self.redis_password}@'
                 f'{self.redis_host}:{self.redis_port}/{self.redis_db_number}'
             )
         return (f'redis://{self.redis_host}:{self.redis_port}/'
