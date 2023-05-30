@@ -122,13 +122,13 @@ class RedisBrokerConfig(BaseBrokerConfig):
 
 
 class AzureResultsConfig(BaseResultsConfig):
-    azureblockblob_container_name: str
+    azureblockblob_container_name: typing.Optional[str]
     azureblockblob_base_path: str = 'celery_result_backend/'
-    azure_connection_string: str
+    azure_connection_string: typing.Optional[str]
 
 
 class FilesystemResultsConfig(BaseResultsConfig):
-    path: str
+    path: typing.Optional[str]
 
 
 class RedisResultsConfig(BaseResultsConfig, RedisBrokerConfig):
@@ -136,22 +136,22 @@ class RedisResultsConfig(BaseResultsConfig, RedisBrokerConfig):
 
 
 class S3ResultsConfig(BaseResultsConfig):
-    s3_access_key_id: str = ''
-    s3_secret_access_key: str = ''
-    s3_bucket: str = ''
+    s3_access_key_id: typing.Optional[str]
+    s3_secret_access_key: typing.Optional[str]
+    s3_bucket: typing.Optional[str]
     s3_base_path: str = 'celery_result_backend/'
-    s3_region: str = ''
+    s3_region: typing.Optional[str]
     s3_endpoint_url: typing.Optional[str] = None
 
 
 class AzureLogsConfig(BaseLogsConfig, AzureResultsConfig):
-    azure_logs_container: str
+    azure_logs_container: typing.Optional[str]
 
 
 class PulpLogsConfig(BaseLogsConfig):
-    pulp_host: str
-    pulp_user: str
-    pulp_password: str
+    pulp_host: typing.Optional[str]
+    pulp_user: typing.Optional[str]
+    pulp_password: typing.Optional[str]
 
 
 class CeleryConfig(BaseModel):
@@ -196,15 +196,15 @@ class CeleryConfig(BaseModel):
     debian_flavors: typing.Tuple[str] = constants.DEBIAN_FLAVORS
     supported_runners: typing.Union[typing.List[str], str] = 'all'
     # OpenNebula section
-    opennebula_rpc_endpoint: str = ''
-    opennebula_username: str = ''
-    opennebula_password: str = ''
-    opennebula_vm_group: str = ''
+    opennebula_rpc_endpoint: typing.Optional[str]
+    opennebula_username: typing.Optional[str]
+    opennebula_password: typing.Optional[str]
+    opennebula_vm_group: typing.Optional[str]
     # SSH section
     ssh_public_key_path: str = '~/.ssh/id_rsa.pub'
     # Build system settings
-    bs_host: str
-    bs_token: str
+    bs_host: typing.Optional[str]
+    bs_token: typing.Optional[str]
     # Log uploader settings
     logs_uploader_config: typing.Union[AzureLogsConfig, PulpLogsConfig]
     uploader_concurrency: int = constants.DEFAULT_UPLOADER_CONCURRENCY
