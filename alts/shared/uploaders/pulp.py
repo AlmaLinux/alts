@@ -267,4 +267,3 @@ class PulpBaseUploader(BaseUploader):
 
 class PulpLogsUploader(PulpBaseUploader, BaseLogsUploader):
     pass
-

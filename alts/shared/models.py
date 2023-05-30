@@ -74,7 +74,8 @@ class BaseBrokerConfig(BaseModel):
 
 
 class BaseLogsConfig(BaseModel):
-    pass
+    artifacts_root_directory: str = 'alts_artifacts'
+    skip_artifacts_upload: bool = False
 
 
 class BaseResultsConfig(BaseModel):
@@ -107,7 +108,7 @@ class RedisBrokerConfig(BaseBrokerConfig):
     redis_host: str
     redis_port: int = 6379
     redis_db_number: int = 0
-    redis_password: str = ''
+    redis_password: typing.Optional[str]
 
     @property
     def broker_url(self) -> str:
@@ -184,7 +185,6 @@ class CeleryConfig(BaseModel):
     task_default_queue: str = 'default'
     task_acks_late: bool = True
     task_track_started: bool = True
-    artifacts_root_directory: str = 'alts_artifacts'
     worker_prefetch_multiplier: int = 1
     broker_pool_limit: int = 20
     # Task track timeout
