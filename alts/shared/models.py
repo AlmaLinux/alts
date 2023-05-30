@@ -2,7 +2,6 @@ import os
 import ssl
 import typing
 
-import jmespath
 from pydantic import BaseModel, ValidationError, validator
 
 from alts.shared import constants
@@ -68,8 +67,21 @@ class SslConfig(BaseModel):
         raise ValueError('Cannot find SSL certificates file')
 
 
-class CeleryConfig(BaseModel):
-    # Needed for broker_url property
+class BaseBrokerConfig(BaseModel):
+    @property
+    def broker_url(self) -> str:
+        raise NotImplementedError()
+
+
+class BaseLogsConfig(BaseModel):
+    pass
+
+
+class BaseResultsConfig(BaseModel):
+    pass
+
+
+class RabbitmqBrokerConfig(BaseBrokerConfig):
     use_ssl: bool = False
     ssl_config: typing.Optional[SslConfig] = None
     rabbitmq_host: str
@@ -78,20 +90,97 @@ class CeleryConfig(BaseModel):
     rabbitmq_user: str
     rabbitmq_password: str
     rabbitmq_vhost: str
-    # Celery configuration variables
-    result_backend: str
-    result_backend_always_retry: bool = True
-    result_backend_max_retries: int = 10
+
+    @property
+    def broker_url(self) -> str:
+        if self.use_ssl:
+            schema = 'amqps'
+            port = self.rabbitmq_ssl_port
+        else:
+            schema = 'amqp'
+            port = self.rabbitmq_port
+        return (f'{schema}://{self.rabbitmq_user}:{self.rabbitmq_password}@'
+                f'{self.rabbitmq_host}:{port}/{self.rabbitmq_vhost}')
+
+
+class RedisBrokerConfig(BaseBrokerConfig):
+    redis_host: str
+    redis_port: int = 6379
+    redis_db_number: int = 0
+    redis_password: str = ''
+
+    @property
+    def broker_url(self) -> str:
+        if self.redis_password:
+            return (
+                f'redis://{self.redis_password}@'
+                f'{self.redis_host}:{self.redis_port}/{self.redis_db_number}'
+            )
+        return (f'redis://{self.redis_host}:{self.redis_port}/'
+                f'{self.redis_db_number}')
+
+
+class AzureResultsConfig(BaseResultsConfig):
+    azureblockblob_container_name: str
+    azureblockblob_base_path: str = 'celery_result_backend/'
+    azure_connection_string: str
+
+
+class FilesystemResultsConfig(BaseResultsConfig):
+    path: str
+
+
+class RedisResultsConfig(BaseResultsConfig, RedisBrokerConfig):
+    pass
+
+
+class S3ResultsConfig(BaseResultsConfig):
     s3_access_key_id: str = ''
     s3_secret_access_key: str = ''
     s3_bucket: str = ''
     s3_base_path: str = 'celery_result_backend/'
     s3_region: str = ''
     s3_endpoint_url: typing.Optional[str] = None
-    azureblockblob_container_name: str
-    azureblockblob_base_path: str = 'celery_result_backend/'
-    azure_connection_string: str
+
+
+class AzureLogsConfig(BaseLogsConfig, AzureResultsConfig):
     azure_logs_container: str
+
+
+class PulpLogsConfig(BaseLogsConfig):
+    pulp_host: str
+    pulp_user: str
+    pulp_password: str
+
+
+class CeleryConfig(BaseModel):
+    def __init__(self, **data):
+        super().__init__(**data)
+        # Fill attributes from results config
+        for field_name, field in self.results_backend_config.__fields__.items():
+            if (field_name == 'broker_url' or
+                    field_name.startswith(('s3_', 'azure'))):
+                setattr(self, field_name, field)
+
+    # Whether to setup Celery SSL
+    use_ssl: bool = False
+    # Celery configuration variables
+    broker_config: typing.Union[RabbitmqBrokerConfig, RedisBrokerConfig]
+    results_backend_config: typing.Union[
+        AzureResultsConfig, FilesystemResultsConfig, RedisResultsConfig,
+        S3ResultsConfig
+    ]
+    result_backend_always_retry: bool = True
+    result_backend_max_retries: int = 10
+    s3_access_key_id: typing.Optional[str]
+    s3_secret_access_key: typing.Optional[str]
+    s3_bucket: typing.Optional[str]
+    s3_base_path: typing.Optional[str]
+    s3_region: typing.Optional[str]
+    s3_endpoint_url: typing.Optional[str] = None
+    azureblockblob_container_name: typing.Optional[str]
+    azureblockblob_base_path: str = 'celery_result_backend/'
+    azure_connection_string: typing.Optional[str]
     task_default_queue: str = 'default'
     task_acks_late: bool = True
     task_track_started: bool = True
@@ -111,38 +200,38 @@ class CeleryConfig(BaseModel):
     opennebula_username: str = ''
     opennebula_password: str = ''
     opennebula_vm_group: str = ''
-    opennebula_templates: dict = {}
     # SSH section
     ssh_public_key_path: str = '~/.ssh/id_rsa.pub'
     # Build system settings
     bs_host: str
     bs_token: str
-    # Pulp settings
-    pulp_host: str
-    pulp_user: str
-    pulp_password: str
+    # Log uploader settings
+    logs_uploader_config: typing.Union[AzureLogsConfig, PulpLogsConfig]
     uploader_concurrency: int = constants.DEFAULT_UPLOADER_CONCURRENCY
     uninstall_excluded_pkgs: typing.List[str] = ['almalinux-release', 'kernel', 'dnf']
 
     @property
-    def broker_url(self) -> str:
-        if self.use_ssl:
-            schema = 'amqps'
-            port = self.rabbitmq_ssl_port
+    def result_backend(self) -> str:
+        if isinstance(self.results_backend_config, RedisResultsConfig):
+            return self.results_backend_config.broker_url
+        elif isinstance(self.results_backend_config, AzureResultsConfig):
+            con_str = self.results_backend_config.azure_connection_string
+            return f'azureblockblob://{con_str}'
+        elif isinstance(self.results_backend_config, S3ResultsConfig):
+            return 's3'
+        elif isinstance(self.results_backend_config, FilesystemResultsConfig):
+            return self.results_backend_config.path
         else:
-            schema = 'amqp'
-            port = self.rabbitmq_port
-        return (f'{schema}://{self.rabbitmq_user}:{self.rabbitmq_password}@'
-                f'{self.rabbitmq_host}:{port}/{self.rabbitmq_vhost}')
+            raise ValueError('Cannot figure out the results backend')
+
+    @property
+    def broker_url(self) -> str:
+        return self.broker_config.broker_url
 
     def get_opennebula_template_id(self, dist_name: str, dist_version: str,
                                    dist_arch: str):
-        template_id_path = f'{dist_name}."{dist_version}"."{dist_arch}"'
-        template_id = jmespath.search(
-            template_id_path, self.opennebula_templates)
-        if not template_id:
-            raise KeyError(f'Nothing found for {template_id_path}')
-        return template_id
+        # TODO: Remove the method, for now leave the placeholder
+        return ''
 
 
 class SchedulerConfig(CeleryConfig):

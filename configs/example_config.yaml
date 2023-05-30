@@ -6,23 +6,24 @@ ssl_config:
   security_certificate: ''
   broker_ca_certificates: ''
   security_digest: 'sha256'
-rabbitmq_host: 'rabbitmq'
-rabbitmq_port: 5672
-rabbitmq_ssl_port: 5671
-rabbitmq_user: 'test-system'
-rabbitmq_password:
-rabbitmq_vhost: 'test_system'
-result_backend: 's3' #  'azureblockblob://$connection_string'
-s3_access_key_id:
-s3_secret_access_key:
-s3_bucket:
-s3_base_path: 'celery_result_backend/'
-s3_region:
-s3_endpoint_url:
-azureblockblob_container_name:
-azureblockblob_base_path:
-azure_connection_string:
-azure_logs_container:
+broker_config:
+  use_ssl: true
+  rabbitmq_host: 'rabbitmq'
+  rabbitmq_port: 5672
+  rabbitmq_ssl_port: 5671
+  rabbitmq_user: 'test-system'
+  rabbitmq_password:
+  rabbitmq_vhost: 'test_system'
+result_backend_config:
+  s3_access_key_id:
+  s3_secret_access_key:
+  s3_bucket:
+  s3_base_path: 'celery_result_backend/'
+  s3_region:
+  s3_endpoint_url:
+  azureblockblob_container_name:
+  azureblockblob_base_path:
+  azure_connection_string:
 task_default_queue: 'default'
 task_acks_late: true
 task_track_started: true
@@ -36,13 +37,11 @@ opennebula_rpc_endpoint:
 opennebula_username:
 opennebula_password:
 opennebula_vm_group:
-opennebula_templates:
-  ubuntu:
-    '20.04':
-      amd64:
 
 bs_host:
 bs_token:
-pulp_host:
-pulp_user:
-pulp_password:
+logs_uploader_config:
+  pulp_host:
+  pulp_user:
+  pulp_password:
+  azure_logs_container:

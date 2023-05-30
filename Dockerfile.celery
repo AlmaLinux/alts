@@ -2,12 +2,12 @@ FROM almalinux:8
 
 RUN mkdir -p /code ~/.terraform.d/plugin-cache ~/.ssh /srv/celery_results \
     && echo "plugin_cache_dir = \"\$HOME/.terraform.d/plugin-cache\"" > ~/.terraformrc \
-    && yum update -y \
-    && yum install -y python3-virtualenv python39 epel-release wget unzip yum-utils openssh-clients \
+    && dnf update -y \
+    && dnf install -y python3-virtualenv python39 epel-release wget unzip yum-utils openssh-clients \
     && yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo \
     && yum-config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo \
-    && yum install -y docker-ce docker-ce-cli containerd.io ansible-core terraform --enablerepo=epel \
-    && yum clean all \
+    && dnf install -y docker-ce docker-ce-cli containerd.io ansible-core terraform --enablerepo=epel \
+    && dnf clean all \
     && cat /dev/zero | ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -q -N ""
 COPY requirements/ /tmp/requirements
 RUN cd /code \

@@ -7,32 +7,34 @@ ssl_config:
   broker_ca_certificates: {{ celery_cacert }}
 {% endif %}
 
-rabbitmq_host: {{ rabbitmq_host }}
-rabbitmq_port: {{ rabbitmq_port }}
+broker_config:
+{% if broker_type == 'rabbitmq' %}
+  rabbitmq_host: {{ rabbitmq_host }}
+  rabbitmq_port: {{ rabbitmq_port }}
 {% if celery_ssl %}
-rabbitmq_ssl_port: {{ rabbitmq_ssl_port }}
+  rabbitmq_ssl_port: {{ rabbitmq_ssl_port }}
 {% endif %}
-rabbitmq_user: {{ test_system_user }}
-rabbitmq_password: {{ test_system_password }}
-rabbitmq_vhost: {{ test_system_vhost }}
+  rabbitmq_user: {{ test_system_user }}
+  rabbitmq_password: {{ test_system_password }}
+  rabbitmq_vhost: {{ test_system_vhost }}
+{% endif %}
 
+results_backend_config:
 {% if result_backend_name == 'local' and celery_result_folder %}
-result_backend: file://{{ celery_result_folder }}
+  path: file://{{ celery_result_folder }}
 {% elif result_backend_name == 'azure' and azure_connection_str and azureblockblob_container_name %}
-result_backend: "azureblockblob://{{ azure_connection_str }}"
-azureblockblob_container_name: {{ azureblockblob_container_name }}
-azureblockblob_base_path: 'celery_results/'
-azure_connection_string: {{ azure_connection_str }}
-azure_logs_container: {{ azure_logs_container }}
+  azureblockblob_container_name: {{ azureblockblob_container_name }}
+  azureblockblob_base_path: 'celery_results/'
+  azure_connection_string: {{ azure_connection_str }}
 {% elif result_backend_name == 's3' %}
-s3_access_key_id: {{ s3_key_id }}
-s3_secret_access_key: {{ s3_access_key }}
-s3_bucket: {{ s3_bucket }}
-s3_base_path: 'celery_result_backend/'
-s3_region: {{ s3_region }}
-s3_endpoint_url: 
+  s3_access_key_id: {{ s3_key_id }}
+  s3_secret_access_key: {{ s3_access_key }}
+  s3_bucket: {{ s3_bucket }}
+  s3_base_path: 'celery_result_backend/'
+  s3_region: {{ s3_region }}
+  s3_endpoint_url:
 {% else %}
-result_backend: result_backend_name
+  result_backend: result_backend_name
 {% endif %}
 
 task_default_queue: 'default'
@@ -46,8 +48,6 @@ opennebula_rpc_endpoint: {{ opennebula_endpoint }}
 opennebula_username: {{ opennebula_user }}
 opennebula_password: {{ opennebula_password }}
 opennebula_vm_group: {{ opennebula_vm_group }}
-opennebula_templates:
-    {{ opennebula_templates }}
 {% endif %}
 
 {% if jwt_secret | default('') %}
@@ -55,4 +55,25 @@ jwt_secret: {{ jwt_secret }}
 {% endif %}
 {% if scheduler_working_directory | default('') %}
 working_directory: {{ scheduler_working_directory }}
+{% endif %}
+{% if uploader_concurrency | default('') %}
+uploader_concurrency: {{ uploader_concurrency | int }}
+{% endif %}
+
+{% if bs_host | default('') %}
+bs_host: {{ bs_host }}
+{% endif %}
+{% if bs_token | default('') %}
+bs_token: {{ bs_token }}
+{% endif %}
+logs_uploader_config:
+{% if logs_uploader_type == 'pulp' %}
+{% if pulp_host | default('') %}
+  pulp_host: {{ pulp_host }}
+{% endif %}
+{% if pulp_user | default('') %}
+  pulp_user: {{ pulp_user }}
+{% endif %}
+{% if pulp_password | default('') %}
+  pulp_password: {{ pulp_password }}
 {% endif %}

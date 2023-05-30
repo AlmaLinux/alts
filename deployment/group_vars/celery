@@ -12,7 +12,7 @@ rabbitmq_ssl_port: 5671
 celery_ssl: true
 celery_ssl_src_certificate: "files/celery/client_certificate.pem"
 celery_ssl_src_key: "files/celery/client_key.pem"
-celery_src_cacert: "files/ca_certificate.pem"
+celery_src_cacert: "files/celery/ca_certificate.pem"
 celery_ssl_dir: "{{ test_system_config_dir }}/ssl"
 celery_ssl_certificate: "{{ celery_ssl_dir }}/{{ celery_ssl_src_certificate | basename }}"
 celery_ssl_key: "{{ celery_ssl_dir }}/{{ celery_ssl_src_key | basename }}"
@@ -23,8 +23,9 @@ celery_result_folder: /srv/celery_results
 
 celery_pid_file_dir: /var/run/celery
 celery_pid_file: "{{ celery_pid_file_dir }}/worker.pid"
+celery_log_file_dir: /var/log/celery
+celery_log_file: "{{ celery_log_file_dir }}/celery.log"
 celery_concurrency: 10
 celery_loglevel: INFO
 celery_queues:
   - "docker-x86_64-0"
-opennebula_templates:
