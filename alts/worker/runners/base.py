@@ -464,6 +464,8 @@ class BaseRunner(object):
             with open(log_file_path, 'wb') as fd:
                 stdout = replace_host_name(artifacts_section["stdout"])
                 file_content = (
+                    f'Task ID: {self._task_id}\n'
+                    f'Time: {datetime.datetime.utcnow().isoformat()}\n'
                     f'Exit code: {artifacts_section["exit_code"]}\n'
                     f'Stdout:\n\n{stdout}'
                 )

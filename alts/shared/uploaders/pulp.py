@@ -256,15 +256,15 @@ class PulpBaseUploader(BaseUploader):
         """
         file_sha256 = hash_file(filename, hash_type='sha256')
         reference = self.check_if_artifact_exists(file_sha256)
-        if not reference:
-            reference = self._send_file(filename)
+        if reference:
+            raise UploadError((f"File {filename} with reference: {reference} Already exists"))
+
         return dict(
             name=os.path.basename(filename),
-            href=reference,
+            href=self._send_file(filename),
             type=type_
         )
 
 
 class PulpLogsUploader(PulpBaseUploader, BaseLogsUploader):
     pass
-
