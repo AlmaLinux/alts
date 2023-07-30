@@ -39,6 +39,10 @@ class BaseUploader(object):
             typing.Tuple[typing.Dict[str, str], bool]:
         raise NotImplementedError()
 
+    @abstractmethod
+    def upload_single_file(self, *args, **kwargs) -> typing.Any:
+        raise NotImplementedError()
+
 
 class BaseLogsUploader(BaseUploader):
 

@@ -1,6 +1,6 @@
 -r base.txt
-fastapi==0.92.0
+fastapi==0.95.2
 databases[sqlite]==0.7.0
-SQLAlchemy==1.4.46
-uvicorn==0.20.0
+SQLAlchemy==1.4.48
+uvicorn==0.22.0
 python-jose==3.3.0

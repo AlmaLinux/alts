@@ -8,7 +8,7 @@ Group={{ test_system_user }}
 Environment=CELERY_CONFIG_PATH={{ test_system_config_dir }}/celery.yaml
 ExecStart=/bin/sh -c 'source {{ celery_venv_dir }}/bin/activate && cd ~/alts && celery -A alts.worker.app worker \
     --pool={{ celery_pool_type }} --concurrency={{ celery_concurrency }} --loglevel={{ celery_loglevel }} \
-    -Q {{ celery_queues|join(",") }} --pidfile={{ celery_pid_file }} --logfile={{ celery_log_file }}'
+    -Q {{ celery_queues|join(",") }} --logfile={{ celery_log_file }}'
 
 [Install]
 WantedBy=multi-user.target

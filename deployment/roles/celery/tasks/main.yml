@@ -1,18 +1,11 @@
 ---
 
-- name: Install python-pip and python-venv
-  yum:
-    name: ["python3-pip", "python3-virtualenv"]
-    state: present
-
-- name: Install git
-  yum:
-    name: git
-    state: present
-
-- name: Install Ansible
-  yum:
-    name: ansible
+- name: Install needed packages
+  dnf:
+    name: ["python3-pip", "python3-virtualenv", "librabbitmq",
+           "cmake", "libtool", "autoconf", "git", "ansible", "python3-devel",
+           "rust", "cargo", "openssl-devel"
+    ]
     state: present
     enablerepo: epel
 
@@ -72,6 +65,14 @@
     src: alts-celery.service.j2
     dest: /etc/systemd/system/alts-celery.service
     mode: 0644
+
+- name: Create log files directory for Celery service
+  file:
+    path: "{{ celery_log_file_dir }}"
+    mode: 0755
+    owner: "{{ test_system_user }}"
+    group: "{{ test_system_user }}"
+    state: directory
 
 - name: Create PID files directory for Celery service
   file:

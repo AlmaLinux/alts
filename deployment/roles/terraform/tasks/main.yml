@@ -16,6 +16,11 @@
     dest: /usr/local/bin
     remote_src: yes
 
+- name: Delete archive
+  file:
+    path: /tmp/terraform.zip
+    state: absent
+
 - name: Configure Terraform for test system user
   become: yes
   become_user: "{{ test_system_user }}"

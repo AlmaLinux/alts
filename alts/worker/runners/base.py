@@ -108,9 +108,13 @@ class BaseRunner(object):
         self._template_lookup = TemplateLookup(
             directories=[RESOURCES_DIR, self._class_resources_dir])
         if not artifacts_uploader:
-            self._uploader = PulpLogsUploader(
-                CONFIG.pulp_host, CONFIG.pulp_user, CONFIG.pulp_password,
-                concurrency=CONFIG.uploader_concurrency)
+            if not CONFIG.logs_uploader_config.skip_artifacts_upload:
+                self._uploader = PulpLogsUploader(
+                    CONFIG.logs_uploader_config.pulp_host,
+                    CONFIG.logs_uploader_config.pulp_user,
+                    CONFIG.logs_uploader_config.pulp_password,
+                    concurrency=CONFIG.logs_uploader_config.uploader_concurrency
+                )
         else:
             self._uploader = artifacts_uploader
 
@@ -317,6 +321,7 @@ class BaseRunner(object):
                           f'for {self.env_name}...')
         self._logger.debug('Running "terraform init" command')
         lock = None
+        lock_fileno = None
         try:
             lock = open(TF_INIT_LOCK_PATH, 'a+')
             lock_fileno = lock.fileno()
@@ -330,8 +335,9 @@ class BaseRunner(object):
             return local['terraform'].run('init', retcode=None,
                                           cwd=self._work_dir)
         finally:
-            if lock:
+            if lock_fileno:
                 fcntl.flock(lock_fileno, fcntl.LOCK_UN)
+            if lock:
                 lock.close()
 
     # After: initialize_terraform
@@ -455,6 +461,10 @@ class BaseRunner(object):
         # Should upload artifacts from artifacts directory to preferred
         # artifacts storage (S3, Minio, etc.)
 
+        if CONFIG.log_uploader_config.skip_artifacts_upload:
+            self._logger.warning('Skipping artifacts upload due to configuration')
+            return
+
         def replace_host_name(log_string) -> str:
             return re.sub(r'\[local\]', f'[{self._task_id}', log_string)
 
@@ -486,8 +496,10 @@ class BaseRunner(object):
             else:
                 write_to_file(artifact_key, content)
 
-        upload_dir = os.path.join(CONFIG.artifacts_root_directory,
-                                  self._task_id)
+        upload_dir = os.path.join(
+            CONFIG.log_uploader_config.artifacts_root_directory,
+            self._task_id
+        )
         try:
             artifacts = self._uploader.upload(
                 self._artifacts_dir, upload_dir=upload_dir)

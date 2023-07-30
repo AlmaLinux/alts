@@ -1,5 +1,7 @@
 ---
 
+broker_type: rabbitmq
+logs_uploader_type: pulp
 rabbitmq_ssl: true
 rabbitmq_copy_ssl_files: true
 rabbitmq_admin_user: admin

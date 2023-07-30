@@ -26,6 +26,8 @@ class OpennebulaRunner(GenericVMRunner):
         """
         Renders Terraform file for creating a template.
         """
+        # TODO: Do not search for template ID, rather use images and Terraform
+        #  to instantiate VM from that image
         template_id = CONFIG.get_opennebula_template_id(
             self.dist_name, self.dist_version, self.dist_arch)
         vm_group_name = CONFIG.opennebula_vm_group

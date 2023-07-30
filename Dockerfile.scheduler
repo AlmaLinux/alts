@@ -1,6 +1,6 @@
 FROM almalinux:8
 
-RUN mkdir -p /code && yum update -y && yum install python39 python3-virtualenv -y
+RUN mkdir -p /code && dnf update -y && dnf install python39 python3-virtualenv -y && dnf clean all
 COPY requirements/ /tmp/requirements
 RUN cd /code && virtualenv -p python3.9 env && source env/bin/activate \
     && pip3 install -r /tmp/requirements/scheduler.txt && deactivate
