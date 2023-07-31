@@ -2,7 +2,7 @@ import os
 import ssl
 import typing
 
-from pydantic import BaseModel, ValidationError, validator
+from pydantic import BaseModel, ValidationError, field_validator
 
 from alts.shared import constants
 
@@ -51,6 +51,7 @@ class TaskRequestPayload(BaseModel):
     dist_name: str
     dist_version: typing.Union[str, int]
     dist_arch: str
+    package_channel: typing.Optional[str] = None
     repositories: typing.List[Repository] = []
     package_name: str
     package_version: typing.Optional[str] = None
@@ -59,12 +60,25 @@ class TaskRequestPayload(BaseModel):
     module_version: typing.Optional[str] = None
     callback_href: str = None
 
-    @validator('runner_type')
+    @field_validator('runner_type')
+    @classmethod
     def validate_runner_type(cls, value: str) -> str:
         # TODO: Add config or constant to have all possible runner types
         runner_types = constants.DRIVERS + ('any',)
         if value not in runner_types:
             raise ValidationError(f'Unknown runner type: {value}', cls)
+        return value
+
+    @field_validator('package_channel')
+    @classmethod
+    def validate_package_channel(
+            cls, value: typing.Optional[str]
+    ) -> typing.Optional[str]:
+        if value is None:
+            return value
+        if value not in constants.ALLOWED_CHANNELS:
+            raise ValidationError(
+                f'Unknown packages channel name: "{value}"', cls)
         return value
 
 
@@ -246,6 +260,8 @@ class CeleryConfig(BaseModel):
     opennebula_username: typing.Optional[str]
     opennebula_password: typing.Optional[str]
     opennebula_vm_group: typing.Optional[str]
+    opennebula_network: typing.Optional[str]
+    allowed_channel_names: typing.List = ['stable', 'beta']
     # SSH section
     ssh_public_key_path: str = '~/.ssh/id_rsa.pub'
     # Build system settings

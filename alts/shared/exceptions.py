@@ -4,11 +4,14 @@
 
 """AlmaLinux Test System common error classes."""
 
-__all__ = ['ALTSBaseError', 'ConfigNotFoundError', 'DBUpdateError',
-           'InstallPackageError', 'ProvisionError', 'PublishArtifactsError',
-           'StartEnvironmentError', 'StopEnvironmentError',
-           'TerraformInitializationError', 'WorkDirPreparationError',
-           'PackageIntegrityTestsError', 'UninstallPackageError']
+__all__ = [
+    'ALTSBaseError', 'ConfigNotFoundError', 'DBUpdateError',
+    'InstallPackageError', 'ProvisionError', 'PublishArtifactsError',
+    'StartEnvironmentError', 'StopEnvironmentError',
+    'TerraformInitializationError', 'WorkDirPreparationError',
+    'PackageIntegrityTestsError', 'UninstallPackageError',
+    'VMImageNotFound',
+]
 
 
 class ALTSBaseError(Exception):
@@ -89,4 +92,8 @@ class StopEnvironmentError(ALTSBaseError):
 
 
 class PackageIntegrityTestsError(ALTSBaseError):
+    pass
+
+
+class VMImageNotFound(ALTSBaseError):
     pass

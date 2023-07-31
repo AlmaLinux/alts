@@ -5,7 +5,12 @@
 """AlmaLinux Test System opennebula environment runner."""
 
 import os
+import re
+import typing
 
+import pyone
+
+from alts.shared.exceptions import VMImageNotFound
 from alts.worker import CONFIG
 from alts.worker.runners.base import GenericVMRunner
 
@@ -22,20 +27,72 @@ class OpennebulaRunner(GenericVMRunner):
     TF_VARIABLES_FILE = 'opennebula.tfvars'
     TF_MAIN_FILE = 'opennebula.tf'
 
+    def __init__(
+        self, task_id: str, dist_name: str,
+        dist_version: typing.Union[str, int],
+        repositories: typing.List[dict] = None,
+        dist_arch: str = 'x86_64',
+        package_channel: typing.Optional[str] = None
+    ):
+        super().__init__(
+            task_id, dist_name, dist_version, repositories=repositories,
+            dist_arch=dist_arch,
+        )
+        self.package_channel = package_channel
+
+    def find_image(self) -> pyone.bindings.IMAGESub:
+        user = CONFIG.opennebula_username
+        password = CONFIG.opennebula_password
+        platform_name_version = f'{self.dist_name}-{self.dist_version}'
+        nebula = pyone.OneServer(
+            CONFIG.opennebula_rpc_endpoint,
+            session=f'{user}:{password}'
+        )
+        # Get all images visible to the Opennebula user
+        images = nebula.imagepool.info(-1, -1, -1, -1)
+        regex_str = (r'(?P<platform_name>\w+(-\w+)?)-(?P<version>\d+.\d+)'
+                     r'-(?P<arch>\w+).*.test_system')
+        if self.package_channel is not None:
+            channels = '|'.join(CONFIG.allowed_channel_names)
+            regex_str += f'.({channels})'
+        # Filter images to leave only those that are related to the particular
+        # platform
+        filtered_images = []
+        for image in images.IMAGE:
+            conditions = [
+                bool(re.search(regex_str, image.NAME)),
+                image.NAME.startswith(platform_name_version),
+                self.dist_arch in image.NAME,
+            ]
+            if self.package_channel is not None:
+                conditions.append(self.package_channel in image.NAME)
+            if all(conditions):
+                filtered_images.append(image)
+        if not filtered_images:
+            image_params = (
+                f'distribution: {self.dist_name}, '
+                f'dist version: {self.dist_version}, '
+                f'architecture: {self.dist_arch}'
+            )
+            if self.package_channel is not None:
+                image_params += f' channel: {self.package_channel}'
+            raise VMImageNotFound(
+                f'Cannot find the image with the parameters: {image_params}')
+        # Sort images in order to get the latest image as first in the list
+        sorted_images = sorted(filtered_images, key=lambda i: i.NAME,
+                               reverse=True)
+        return sorted_images[0]
+
     def _render_tf_main_file(self):
         """
         Renders Terraform file for creating a template.
         """
-        # TODO: Do not search for template ID, rather use images and Terraform
-        #  to instantiate VM from that image
-        template_id = CONFIG.get_opennebula_template_id(
-            self.dist_name, self.dist_version, self.dist_arch)
         vm_group_name = CONFIG.opennebula_vm_group
         nebula_tf_file = os.path.join(self._work_dir, self.TF_MAIN_FILE)
         self._render_template(
             f'{self.TF_MAIN_FILE}.tmpl', nebula_tf_file,
-            template_id=template_id, vm_name=self.env_name,
-            vm_group_name=vm_group_name, ssh_public_key=self.ssh_public_key
+            vm_name=self.env_name, vm_group_name=vm_group_name,
+            image_id=self.find_image(),
         )
 
     def _render_tf_variables_file(self):
