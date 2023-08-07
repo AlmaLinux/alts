@@ -56,8 +56,10 @@ def command_decorator(exception_class, artifacts_key, error_message, additional_
                 'delta': (finish - start).total_seconds()
             }
             if exit_code != 0:
-                self._logger.error(f'{error_message}, exit code: {exit_code},'
-                                   f' error:\n{stderr}')
+                self._logger.error(
+                    '%s, exit code: %s, error:\n%s',
+                    error_message, exit_code, stderr,
+                )
                 raise exception_class(error_message)
             else:
                 self._logger.info('Operation completed successfully')
@@ -317,8 +319,10 @@ class BaseRunner(object):
     @command_decorator(TerraformInitializationError, 'initialize_terraform',
                        'Cannot initialize terraform')
     def initialize_terraform(self):
-        self._logger.info(f'Initializing Terraform environment '
-                          f'for {self.env_name}...')
+        self._logger.info(
+            'Initializing Terraform environment for %s...',
+            self.env_name,
+        )
         self._logger.debug('Running "terraform init" command')
         lock = None
         lock_fileno = None
@@ -344,7 +348,10 @@ class BaseRunner(object):
     @command_decorator(StartEnvironmentError, 'start_environment',
                        'Cannot start environment')
     def start_env(self):
-        self._logger.info(f'Starting the environment {self.env_name}...')
+        self._logger.info(
+            'Starting the environment %s...',
+            self.env_name,
+        )
         self._logger.debug('Running "terraform apply --auto-approve" command')
         cmd_args = ['apply', '--auto-approve']
         if self.TF_VARIABLES_FILE:
@@ -363,13 +370,13 @@ class BaseRunner(object):
                     'integrity_tests_dir': self._integrity_tests_dir}
         cmd_args = ['-i', self.ANSIBLE_INVENTORY_FILE, self.ANSIBLE_PLAYBOOK,
                     '-e', f'{var_dict}', '-t', 'initial_provision']
-        self._logger.info(f'Command args: {cmd_args}')
+        self._logger.info('Command args: %s', cmd_args)
         if verbose:
             cmd_args.append('-vvvv')
         cmd_args_str = ' '.join(cmd_args)
-        self._logger.info(f'Provisioning the environment {self.env_name}...')
+        self._logger.info('Provisioning the environment %s...', self.env_name)
         self._logger.debug(
-            f'Running "ansible-playbook {cmd_args_str}" command')
+            'Running "ansible-playbook %s" command', cmd_args_str)
         return local['ansible-playbook'].run(
             args=cmd_args, retcode=None, cwd=self._work_dir)
 
@@ -382,7 +389,10 @@ class BaseRunner(object):
         full_pkg_name = self._detect_full_package_name(
             package_name, package_version=package_version)
 
-        self._logger.info(f'Installing {full_pkg_name} on {self.env_name}...')
+        self._logger.info(
+            'Installing %s on %s...',
+            full_pkg_name, self.env_name,
+        )
         cmd_args = ['-i', self.ANSIBLE_INVENTORY_FILE, self.ANSIBLE_PLAYBOOK,
                     '-e', f'pkg_name={full_pkg_name}']
         if module_name and module_stream and module_version:
@@ -407,7 +417,10 @@ class BaseRunner(object):
         full_pkg_name = self._detect_full_package_name(
             package_name, package_version=package_version)
 
-        self._logger.info(f'Uninstalling {full_pkg_name} from {self.env_name}...')
+        self._logger.info(
+            'Uninstalling %s from %s...',
+            full_pkg_name, self.env_name,
+        )
         cmd_args = ['-i', self.ANSIBLE_INVENTORY_FILE, self.ANSIBLE_PLAYBOOK,
                     '-e', f'pkg_name={full_pkg_name}']
         if module_name and module_stream and module_version:
@@ -462,7 +475,9 @@ class BaseRunner(object):
         # artifacts storage (S3, Minio, etc.)
 
         if CONFIG.log_uploader_config.skip_artifacts_upload:
-            self._logger.warning('Skipping artifacts upload due to configuration')
+            self._logger.warning(
+                'Skipping artifacts upload due to configuration',
+            )
             return
 
         def replace_host_name(log_string) -> str:
@@ -512,7 +527,7 @@ class BaseRunner(object):
                        'Cannot destroy environment')
     def stop_env(self):
         if os.path.exists(self._work_dir):
-            self._logger.info(f'Destroying the environment {self.env_name}...')
+            self._logger.info('Destroying the environment %s...', self.env_name)
             self._logger.debug(
                 'Running "terraform destroy --auto-approve" command')
             cmd_args = ['destroy', '--auto-approve']
@@ -527,8 +542,9 @@ class BaseRunner(object):
             try:
                 shutil.rmtree(self._work_dir)
             except Exception as e:
-                self._logger.error(f'Error while erasing working directory:'
-                                   f' {e}')
+                self._logger.error(
+                    'Error while erasing working directory: %s', e,
+                )
             else:
                 self._logger.info('Working directory was successfully removed')
 
@@ -547,8 +563,7 @@ class BaseRunner(object):
         try:
             self.stop_env()
         except Exception as e:
-            self._logger.error(f'Error while stop environment:'
-                               f' {e}')
+            self._logger.error('Error while stop environment: %s', e)
         if publish_artifacts:
             try:
                 self.publish_artifacts_to_storage()
@@ -621,8 +636,10 @@ class GenericVMRunner(BaseRunner):
             else:
                 retries -= 1
                 time.sleep(10)
-        self._logger.error(f'Unable to connect to VM. '
-                           f'Stdout: {stdout}\nStderr: {stderr}')
+        self._logger.error(
+            'Unable to connect to VM. Stdout: %s\nStderr: %s',
+            stdout, stderr,
+        )
         return False
 
     def start_env(self):
@@ -643,4 +660,4 @@ class GenericVMRunner(BaseRunner):
                             f'SSH connection is not working'
             self._logger.error(error_message)
             raise StartEnvironmentError(error_message)
-        self._logger.info(f'Machine is available for SSH connection')
+        self._logger.info('Machine is available for SSH connection')

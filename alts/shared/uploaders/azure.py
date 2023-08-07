@@ -37,8 +37,10 @@ class AzureBaseUploader(BaseUploader):
                 blob_client.upload_blob(f)
             return blob_client.url
         except HttpResponseError as e:
-            self._logger.error(f'Cannot upload artifact {file_path}'
-                               f' to Azure: {e}')
+            self._logger.error(
+                'Cannot upload artifact %s to Azure: %s',
+                file_path, e,
+            )
 
     def upload(self, artifacts_dir: str, **kwargs) -> \
             typing.Tuple[typing.Dict[str, str], bool]:

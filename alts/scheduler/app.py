@@ -68,11 +68,15 @@ def get_celery_task_result(task_id: str, timeout: int = 1) -> dict:
     except TimeoutError:
         pass
     except ALTSBaseError as e:
-        logging.warning(f'Task has failed with error: '
-                        f'{e.__class__.__name__}: {e}')
+        logging.warning(
+            'Task has failed with error: %s: %s',
+            e.__class__.__name__, e,
+        )
     except Exception as e:
-        logging.error(f'Unknown exception while getting resutls from Celery: '
-                      f'{e.__class__.__name__}: {e}')
+        logging.error(
+            'Unknown exception while getting resutls from Celery: %s: %s',
+            e.__class__.__name__, e,
+        )
     result['state'] = task_data.state
     return result
 
