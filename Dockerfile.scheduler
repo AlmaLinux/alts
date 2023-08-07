@@ -1,4 +1,4 @@
-FROM almalinux:8
+FROM almalinux:9
 
 RUN mkdir -p /code && dnf update -y && dnf install python39 python3-virtualenv -y && dnf clean all
 COPY requirements/ /tmp/requirements
