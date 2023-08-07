@@ -1,4 +1,4 @@
-FROM almalinux:8
+FROM almalinux:9
 
 RUN mkdir -p /code ~/.terraform.d/plugin-cache ~/.ssh /srv/celery_results \
     && echo "plugin_cache_dir = \"\$HOME/.terraform.d/plugin-cache\"" > ~/.terraformrc \
