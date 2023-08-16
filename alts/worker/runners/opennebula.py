@@ -31,18 +31,21 @@ class OpennebulaRunner(GenericVMRunner):
         template_id = CONFIG.get_opennebula_template_id(
             self.dist_name, self.dist_version, self.dist_arch)
         vm_group_name = CONFIG.opennebula_vm_group
-        nebula_tf_file = os.path.join(self._work_dir, self.TF_MAIN_FILE)
+        nebula_tf_file = self._work_dir.joinpath(self.TF_MAIN_FILE)
         self._render_template(
-            f'{self.TF_MAIN_FILE}.tmpl', nebula_tf_file,
-            template_id=template_id, vm_name=self.env_name,
-            vm_group_name=vm_group_name, ssh_public_key=self.ssh_public_key
+            template_name=f'{self.TF_MAIN_FILE}.tmpl',
+            result_file_path=nebula_tf_file,
+            template_id=template_id,
+            vm_name=self.env_name,
+            vm_group_name=vm_group_name,
+            ssh_public_key=self.ssh_public_key,
         )
 
     def _render_tf_variables_file(self):
         """
         Renders Terraform file for getting variables used for a template.
         """
-        vars_file = os.path.join(self._work_dir, self.TF_VARIABLES_FILE)
+        vars_file = self._work_dir.joinpath(self.TF_VARIABLES_FILE)
         self._render_template(
             f'{self.TF_VARIABLES_FILE}.tmpl', vars_file,
             opennebula_rpc_endpoint=CONFIG.opennebula_rpc_endpoint,

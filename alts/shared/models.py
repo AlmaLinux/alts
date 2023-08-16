@@ -1,6 +1,7 @@
 import os
 import ssl
 import typing
+from pathlib import Path
 
 from pydantic import BaseModel, ValidationError, validator
 
@@ -51,19 +52,19 @@ class TaskResultResponse(BaseModel):
 
 
 class SslConfig(BaseModel):
-    security_key: str
-    security_certificate: str
+    security_key: Path
+    security_certificate: Path
     security_digest: str = 'sha256'
-    broker_ca_certificates: str
+    broker_ca_certificates: Path
     cert_required: int = ssl.CERT_REQUIRED
 
     @property
-    def security_cert_store(self) -> str:
+    def security_cert_store(self) -> Path:
         # FIXME: Find correct way to search for certs store
-        search_folder = '/etc/ssl/certs/'
-        for file_ in os.listdir(search_folder):
-            if file_.startswith('ca-') and '.trust' not in file_:
-                return os.path.join(search_folder, file_)
+        search_folder = Path('/etc/ssl/certs/')
+        for file_ in search_folder.iterdir():
+            if file_.name.startswith('ca-') and '.trust' not in file_.suffixes:
+                return file_
         raise ValueError('Cannot find SSL certificates file')
 
 
