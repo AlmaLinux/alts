@@ -11,3 +11,4 @@ librabbitmq==2.0.0
 requests>=2.25.1
 filesplit==3.0.2
 pulpcore-client==3.17.3
+asyncssh==2.13.2
