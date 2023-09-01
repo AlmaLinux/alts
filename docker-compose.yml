@@ -35,7 +35,8 @@ services:
       context: .
     environment:
       CELERY_CONFIG_PATH: "/celery_config.yaml"
-    command: "bash -c 'source env/bin/activate && celery
+    command: "bash -c 'source env/bin/activate && pip3 install --upgrade pip && 
+      pip3 install -r celery.txt --no-cache-dir && celery
       -A alts.worker.app worker --pool=threads --concurrency=20
       --loglevel=INFO -Q docker-x86_64-0'"
     restart: on-failure
@@ -44,6 +45,10 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./configs/alts_config.yaml:/celery_config.yaml
       - $your_ssl_folder:/opt/ssl
+      - ./alts:/code/alts
+      - ./resources:/code/resources
+      - ./tests:/code/tests
+      - ./requirements/celery.txt:/code/celery.txt
     depends_on:
       - rabbitmq
 
@@ -55,7 +60,8 @@ services:
     environment:
       CELERY_CONFIG_PATH: "/scheduler_config.yaml"
       SCHEDULER_CONFIG_PATH: "/scheduler_config.yaml"
-    command: "bash -c 'source env/bin/activate && uvicorn --host 0.0.0.0
+    command: "bash -c 'source env/bin/activate && pip3 install --upgrade pip &&
+      pip3 install -r scheduler.txt --no-cache-dir && uvicorn --host 0.0.0.0
       alts.scheduler.app:app --limit-concurrency 100 --backlog 1000'"
     restart: on-failure
     ports:
@@ -63,5 +69,9 @@ services:
     volumes:
       - ./configs/alts_config.yaml:/scheduler_config.yaml
       - $your_ssl_folder:/opt/ssl
+      - ./alts:/code/alts
+      - ./resources:/code/resources
+      - ./tests:/code/tests
+      - ./requirements/scheduler.txt:/code/scheduler.txt
     depends_on:
       - rabbitmq
