@@ -16,6 +16,16 @@ class Repository(BaseModel):
     baseurl: str
 
 
+class AsyncSSHParams(BaseModel):
+    host: str
+    username: typing.Optional[str]
+    password: typing.Optional[str]
+    client_keys_files: typing.Optional[typing.List[str]] = None
+    known_hosts_files: typing.Optional[typing.List[str]] = None
+    env_vars: typing.Optional[typing.Dict[str, typing.Any]] = None
+    disable_known_hosts_check: bool = False
+
+
 class TaskRequestPayload(BaseModel):
     runner_type: str = 'any'
     dist_name: str
@@ -221,15 +231,14 @@ class CeleryConfig(BaseModel):
     def result_backend(self) -> str:
         if isinstance(self.results_backend_config, RedisResultsConfig):
             return self.results_backend_config.broker_url
-        elif isinstance(self.results_backend_config, AzureResultsConfig):
+        if isinstance(self.results_backend_config, AzureResultsConfig):
             con_str = self.results_backend_config.azure_connection_string
             return f'azureblockblob://{con_str}'
-        elif isinstance(self.results_backend_config, S3ResultsConfig):
+        if isinstance(self.results_backend_config, S3ResultsConfig):
             return 's3'
-        elif isinstance(self.results_backend_config, FilesystemResultsConfig):
+        if isinstance(self.results_backend_config, FilesystemResultsConfig):
             return self.results_backend_config.path
-        else:
-            raise ValueError('Cannot figure out the results backend')
+        raise ValueError('Cannot figure out the results backend')
 
     @property
     def broker_url(self) -> str:
