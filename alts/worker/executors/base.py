@@ -1,11 +1,12 @@
 import logging
 from datetime import datetime
 from functools import wraps
-from typing import Any, Dict, List, Optional, Tuple, Union
+from traceback import format_exc
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from plumbum import local
 
-from alts.shared.models import AsyncSSHParams
+from alts.shared.models import AsyncSSHParams, CommandResult
 from alts.shared.utils.asyncssh import AsyncSSHClient
 
 
@@ -34,11 +35,13 @@ def measure_stage(stage: str):
 class BaseExecutor:
     def __init__(
         self,
+        binary_name: str,
         env_vars: Optional[Dict[str, Any]] = None,
-        binary_name: Optional[str] = None,
         ssh_params: Optional[Union[Dict[str, Any], AsyncSSHParams]] = None,
         timeout: Optional[int] = None,
         logger: Optional[logging.Logger] = None,
+        logger_name: str = 'base-executor',
+        logging_level: Literal['DEBUG', 'INFO'] = 'DEBUG',
     ) -> None:
         self.ssh_client = None
         self.env_vars = {}
@@ -56,22 +59,62 @@ class BaseExecutor:
             self.ssh_client = AsyncSSHClient(**ssh_params.dict())
         self.logger = logger
         if not self.logger:
-            self.logger = logging.getLogger('executor')
+            self.logger = self.setup_logger(logger_name, logging_level)
+        self.check_binary_existence()
+
+    def setup_logger(
+        self,
+        logger_name: str,
+        logging_level: str,
+    ) -> logging.Logger:
+        logger = logging.getLogger(logger_name)
+        logger.setLevel(logging_level)
+        handler = logging.StreamHandler()
+        handler.setLevel(logging_level)
+        formatter = logging.Formatter(
+            '%(asctime)s [%(name)s:%(levelname)s] - %(message)s'
+        )
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        return logger
+
+    def check_binary_existence(self):
+        cmd_args = ['--version']
+        func = self.run_local_command
+        if self.ssh_client:
+            func = self.ssh_client.sync_run_command
+            cmd_args = f'{self.binary_name} --version'
+        try:
+            result = func(cmd_args)
+        except Exception as exc:
+            self.logger.exception('Cannot check binary existence:')
+            raise exc
+        if not result.is_successful():
+            raise FileNotFoundError(
+                f'Binary "{self.binary_name}" is not found in PATH on the machine',
+            )
 
     @measure_stage('run_local_command')
-    def run_local_command(self, cmd_args: List[str]) -> Tuple[int, str, str]:
-        if self.binary_name not in local:
-            raise FileNotFoundError(
-                f'Binary {self.binary_name} is not found in PATH on the machine',
-            )
-        with local.env(**self.env_vars):
-            return local[self.binary_name].run(
-                args=cmd_args,
-                timeout=self.timeout,
-            )
+    def run_local_command(self, cmd_args: List[str]) -> CommandResult:
+        try:
+            with local.env(**self.env_vars):
+                exit_code, stdout, stderr = local[self.binary_name].run(
+                    args=cmd_args,
+                    timeout=self.timeout,
+                )
+        except Exception:
+            self.logger.exception('Cannot run local command:')
+            exit_code = 1
+            stdout = ''
+            stderr = format_exc()
+        return CommandResult(
+            exit_code=exit_code,
+            stdout=stdout,
+            stderr=stderr,
+        )
 
     @measure_stage('run_ssh_command')
-    def run_ssh_command(self, cmd: str):
+    def run_ssh_command(self, cmd: str) -> CommandResult:
         if not self.ssh_client:
             raise ValueError('SSH params are missing')
-        return self.ssh_client.sync_run_command(cmd)
+        return self.ssh_client.sync_run_command(f'{self.binary_name} {cmd}')
