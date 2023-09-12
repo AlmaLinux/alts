@@ -41,6 +41,4 @@ DEFAULT_SSH_AUTH_METHODS = [
     'gssapi-with-mic',
     'hostbased',
     'publickey',
-    'keyboard-interactive',
-    'password',
 ]

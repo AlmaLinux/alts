@@ -97,11 +97,14 @@ class BaseExecutor:
     @measure_stage('run_local_command')
     def run_local_command(self, cmd_args: List[str]) -> CommandResult:
         try:
-            with local.env(**self.env_vars):
-                exit_code, stdout, stderr = local[self.binary_name].run(
+            exit_code, stdout, stderr = (
+                local[self.binary_name]
+                .with_env(**self.env_vars)
+                .run(
                     args=cmd_args,
                     timeout=self.timeout,
                 )
+            )
         except Exception:
             self.logger.exception('Cannot run local command:')
             exit_code = 1
