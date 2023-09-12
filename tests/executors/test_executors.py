@@ -2,10 +2,10 @@ from contextlib import nullcontext as does_not_raise
 from typing import Any, Dict, List
 
 import pytest
-from asyncssh.misc import HostKeyNotVerifiable, PermissionDenied
 
 from alts.worker.executors.base import BaseExecutor
 from alts.worker.executors.bats import BatsExecutor
+from alts.worker.executors.shell import ShellExecutor
 
 
 class TestBaseExecutor:
@@ -56,78 +56,92 @@ class TestBaseExecutor:
             assert executor.check_binary_existence() is None
 
     @pytest.mark.parametrize(
-        'binary_name, cmd_args, expected_exit_code',
+        'executor_params, cmd_args, expected_exit_code',
         [
             pytest.param(
-                'bash',
+                {'binary_name': 'bash'},
                 ['--version'],
                 0,
                 id='bash',
             ),
             pytest.param(
-                'man',
-                ['--version'],
-                0,
-                id='man',
+                {'binary_name': 'sleep', 'timeout': 1},
+                [5],
+                1,
+                id='local_timeout',
             ),
         ],
     )
     def test_base_executor_run_local_command(
         self,
-        binary_name: str,
+        executor_params: Dict[str, Any],
         cmd_args: List[str],
         expected_exit_code: int,
     ):
-        executor = BaseExecutor(binary_name=binary_name)
+        executor = BaseExecutor(**executor_params)
         result = executor.run_local_command(cmd_args)
         assert result.is_successful(expected_exit_code=expected_exit_code)
 
     @pytest.mark.parametrize(
-        'binary_name, additional_ssh_params, exception',
+        'executor_params, additional_ssh_params, command, exception, expected_exit_code',
         [
             pytest.param(
-                'bash',
+                {'binary_name': 'bash'},
                 {'disable_known_hosts_check': True},
+                '--version',
                 does_not_raise(),
+                0,
                 id='bash',
             ),
             pytest.param(
-                'bash',
+                {'binary_name': 'bash'},
                 {},
-                pytest.raises(HostKeyNotVerifiable),
+                '--version',
+                pytest.raises(FileNotFoundError),
+                1,
                 id='untrusted_host_key',
             ),
             pytest.param(
-                'bash',
+                {'binary_name': 'bash'},
                 {
                     'password': 'foo_bar',
                     'client_keys_files': [],
                     'preferred_auth': 'password',
                     'disable_known_hosts_check': True,
                 },
-                pytest.raises(PermissionDenied),
+                '--version',
+                pytest.raises(FileNotFoundError),
+                1,
                 id='permission_denied',
+            ),
+            pytest.param(
+                {'binary_name': 'sleep'},
+                {'timeout': 1, 'disable_known_hosts_check': True},
+                '5',
+                does_not_raise(),
+                1,
+                id='ssh_timeout',
             ),
         ],
     )
     def test_run_ssh_command(
         self,
         local_ssh_credentials: Dict[str, str],
-        binary_name: str,
+        executor_params: Dict[str, Any],
         additional_ssh_params: Dict[str, Any],
+        command: str,
+        expected_exit_code: int,
         exception,
     ):
         ssh_params = {
             **local_ssh_credentials,
             **additional_ssh_params,
         }
+        executor_params['ssh_params'] = ssh_params
         with exception:
-            executor = BaseExecutor(
-                binary_name=binary_name,
-                ssh_params=ssh_params,
-            )
-            result = executor.run_ssh_command('--version')
-            assert result.is_successful()
+            executor = BaseExecutor(**executor_params)
+            result = executor.run_ssh_command(command)
+            assert result.is_successful(expected_exit_code=expected_exit_code)
 
 
 class TestBatsExecutor:
@@ -235,3 +249,43 @@ class TestBatsExecutor:
         with exception:
             result = getattr(executor, run_method)(cmd_args)
             assert result.is_successful(expected_exit_code=expected_exit_code)
+
+
+class TestShellExecutor:
+    def test_shell_executor_init(self):
+        assert isinstance(ShellExecutor(), ShellExecutor)
+
+    @pytest.mark.parametrize(
+        'executor_params, additional_ssh_params',
+        [
+            pytest.param(
+                {},
+                {},
+                id='local',
+            ),
+            pytest.param(
+                {},
+                {'disable_known_hosts_check': True},
+                id='on_remote',
+            ),
+        ],
+    )
+    def test_shell_executor_run_command(
+        self,
+        simple_shell_script: str,
+        local_ssh_credentials: Dict[str, Any],
+        executor_params: Dict[str, Any],
+        additional_ssh_params: Dict[str, Any],
+    ):
+        func = 'run_local_command'
+        cmd_args = [simple_shell_script]
+        if additional_ssh_params:
+            executor_params['ssh_params'] = {
+                **local_ssh_credentials,
+                **additional_ssh_params,
+            }
+            func = 'run_ssh_command'
+            cmd_args = simple_shell_script
+        executor = ShellExecutor(**executor_params)
+        result = getattr(executor, func)(cmd_args)
+        assert result.is_successful()

@@ -1,11 +1,11 @@
 import os
+from typing import Any, Dict
 
-import asyncssh
 import pytest
 
 
 @pytest.fixture(scope='session')
-def local_ssh_credentials():
+def local_ssh_credentials() -> Dict[str, Any]:
     credentials = {
         'host': os.getenv('SSH_HOST', 'localhost'),
         'username': os.getenv('SSH_USERNAME', 'root'),
