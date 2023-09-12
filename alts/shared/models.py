@@ -6,9 +6,14 @@ from pydantic import BaseModel, ValidationError, validator
 
 from alts.shared import constants
 
-
-__all__ = ['CeleryConfig', 'Repository', 'SchedulerConfig',
-           'TaskRequestResponse', 'TaskRequestPayload', 'TaskResultResponse']
+__all__ = [
+    'CeleryConfig',
+    'Repository',
+    'SchedulerConfig',
+    'TaskRequestResponse',
+    'TaskRequestPayload',
+    'TaskResultResponse',
+]
 
 
 class Repository(BaseModel):
@@ -20,10 +25,25 @@ class AsyncSSHParams(BaseModel):
     host: str
     username: typing.Optional[str]
     password: typing.Optional[str]
+    timeout: typing.Optional[int]
     client_keys_files: typing.Optional[typing.List[str]] = None
     known_hosts_files: typing.Optional[typing.List[str]] = None
     env_vars: typing.Optional[typing.Dict[str, typing.Any]] = None
     disable_known_hosts_check: bool = False
+    ignore_encrypted_keys: bool = False
+    preferred_auth: typing.Union[
+        str,
+        typing.List[str],
+    ] = constants.DEFAULT_SSH_AUTH_METHODS
+
+
+class CommandResult(BaseModel):
+    exit_code: int
+    stdout: str
+    stderr: str
+
+    def is_successful(self, expected_exit_code: int = 0) -> bool:
+        return self.exit_code == expected_exit_code
 
 
 class TaskRequestPayload(BaseModel):
@@ -111,8 +131,10 @@ class RabbitmqBrokerConfig(BaseBrokerConfig):
         else:
             schema = 'amqp'
             port = self.rabbitmq_port
-        return (f'{schema}://{self.rabbitmq_user}:{self.rabbitmq_password}@'
-                f'{self.rabbitmq_host}:{port}/{self.rabbitmq_vhost}')
+        return (
+            f'{schema}://{self.rabbitmq_user}:{self.rabbitmq_password}@'
+            f'{self.rabbitmq_host}:{port}/{self.rabbitmq_vhost}'
+        )
 
 
 class RedisBrokerConfig(BaseBrokerConfig):
@@ -129,18 +151,20 @@ class RedisBrokerConfig(BaseBrokerConfig):
                 f'redis://{self.redis_user}:{self.redis_password}@'
                 f'{self.redis_host}:{self.redis_port}/{self.redis_db_number}'
             )
-        return (f'redis://{self.redis_host}:{self.redis_port}/'
-                f'{self.redis_db_number}')
+        return (
+            f'redis://{self.redis_host}:{self.redis_port}/'
+            f'{self.redis_db_number}'
+        )
 
 
 class AzureResultsConfig(BaseResultsConfig):
-    azureblockblob_container_name: typing.Optional[str]
+    azureblockblob_container_name: str
     azureblockblob_base_path: str = 'celery_result_backend/'
-    azure_connection_string: typing.Optional[str]
+    azure_connection_string: str
 
 
 class FilesystemResultsConfig(BaseResultsConfig):
-    path: typing.Optional[str]
+    path: str
 
 
 class RedisResultsConfig(BaseResultsConfig, RedisBrokerConfig):
@@ -148,31 +172,35 @@ class RedisResultsConfig(BaseResultsConfig, RedisBrokerConfig):
 
 
 class S3ResultsConfig(BaseResultsConfig):
-    s3_access_key_id: typing.Optional[str]
-    s3_secret_access_key: typing.Optional[str]
-    s3_bucket: typing.Optional[str]
+    s3_access_key_id: str
+    s3_secret_access_key: str
+    s3_bucket: str
     s3_base_path: str = 'celery_result_backend/'
-    s3_region: typing.Optional[str]
-    s3_endpoint_url: typing.Optional[str] = None
+    s3_region: str
+    s3_endpoint_url: str
 
 
 class AzureLogsConfig(BaseLogsConfig, AzureResultsConfig):
-    azure_logs_container: typing.Optional[str]
+    azure_logs_container: str
 
 
 class PulpLogsConfig(BaseLogsConfig):
-    pulp_host: typing.Optional[str]
-    pulp_user: typing.Optional[str]
-    pulp_password: typing.Optional[str]
+    pulp_host: str
+    pulp_user: str
+    pulp_password: str
 
 
 class CeleryConfig(BaseModel):
     def __init__(self, **data):
         super().__init__(**data)
         # Fill attributes from results config
-        for field_name, field in self.results_backend_config.__fields__.items():
-            if (field_name == 'broker_url' or
-                    field_name.startswith(('s3_', 'azure'))):
+        for (
+            field_name,
+            field,
+        ) in self.results_backend_config.__fields__.items():
+            if field_name == 'broker_url' or field_name.startswith(
+                ('s3_', 'azure')
+            ):
                 setattr(self, field_name, field)
 
     # Whether to setup Celery SSL
@@ -180,8 +208,10 @@ class CeleryConfig(BaseModel):
     # Celery configuration variables
     broker_config: typing.Union[RabbitmqBrokerConfig, RedisBrokerConfig]
     results_backend_config: typing.Union[
-        AzureResultsConfig, FilesystemResultsConfig, RedisResultsConfig,
-        S3ResultsConfig
+        AzureResultsConfig,
+        FilesystemResultsConfig,
+        RedisResultsConfig,
+        S3ResultsConfig,
     ]
     result_backend_always_retry: bool = True
     result_backend_max_retries: int = 10
@@ -202,8 +232,12 @@ class CeleryConfig(BaseModel):
     # Task track timeout
     task_tracking_timeout: int = 3600
     # Supported architectures and distributions
-    supported_architectures: typing.List[str] = constants.SUPPORTED_ARCHITECTURES
-    supported_distributions: typing.List[str] = constants.SUPPORTED_DISTRIBUTIONS
+    supported_architectures: typing.List[
+        str
+    ] = constants.SUPPORTED_ARCHITECTURES
+    supported_distributions: typing.List[
+        str
+    ] = constants.SUPPORTED_DISTRIBUTIONS
     rhel_flavors: typing.Tuple[str] = constants.RHEL_FLAVORS
     debian_flavors: typing.Tuple[str] = constants.DEBIAN_FLAVORS
     supported_runners: typing.Union[typing.List[str], str] = 'all'
@@ -244,8 +278,12 @@ class CeleryConfig(BaseModel):
     def broker_url(self) -> str:
         return self.broker_config.broker_url
 
-    def get_opennebula_template_id(self, dist_name: str, dist_version: str,
-                                   dist_arch: str):
+    def get_opennebula_template_id(
+        self,
+        dist_name: str,
+        dist_version: str,
+        dist_arch: str,
+    ):
         # TODO: Remove the method, for now leave the placeholder
         return ''
 

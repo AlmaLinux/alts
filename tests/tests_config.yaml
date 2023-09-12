@@ -1,0 +1,35 @@
+---
+use_ssl: false
+ssl_config:
+  security_cert_store: "/etc/ssl/certs/*.crt"
+  security_key: ""
+  security_certificate: ""
+  broker_ca_certificates: ""
+  security_digest: "sha256"
+broker_config:
+  use_ssl: false
+  rabbitmq_host: "rabbitmq"
+  rabbitmq_port: 5672
+  rabbitmq_ssl_port: 5671
+  rabbitmq_user: "user"
+  rabbitmq_password: "password"
+  rabbitmq_vhost: "test_system"
+results_backend_config:
+  path: "file:///tmp/"
+task_default_queue: "default"
+task_acks_late: true
+task_track_started: true
+artifacts_root_directory: "test_system_artifacts"
+worker_prefetch_multiplier: 1
+jwt_secret: "secret"
+hashing_algorithm: "HS256"
+opennebula_rpc_endpoint:
+opennebula_username:
+opennebula_password:
+opennebula_vm_group:
+bs_host: "http://web_server:8000"
+bs_token: "token"
+logs_uploader_config:
+  pulp_host: "http://pulp"
+  pulp_user: "user"
+  pulp_password: "password"
