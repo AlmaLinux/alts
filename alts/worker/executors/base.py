@@ -91,7 +91,8 @@ class BaseExecutor:
             raise exc
         if not result.is_successful():
             raise FileNotFoundError(
-                f'Binary "{self.binary_name}" is not found in PATH on the machine',
+                f'Binary "{self.binary_name}" is not found in PATH'
+                f'on the machine\n{result.stderr}',
             )
 
     @measure_stage('run_local_command')

@@ -91,7 +91,6 @@ class AsyncSSHClient:
     async def async_run_command(self, command: str) -> CommandResult:
         async with self.get_connection() as conn:
             result = await conn.run(command, timeout=self.timeout)
-            self.print_process_results(result)
             return CommandResult(
                 exit_code=result.exit_status,
                 stdout=result.stdout,
@@ -103,12 +102,18 @@ class AsyncSSHClient:
         command: str,
     ) -> CommandResult:
         try:
-            return asyncio.run(self.async_run_command(command))
-        except Exception as exc:
+            result = asyncio.run(self.async_run_command(command))
+        except Exception:
             self.logger.exception(
-                'Cannot execute asyncssh command: %s', command
+                'Cannot execute asyncssh command: %s',
+                command,
             )
-            raise exc
+            result = CommandResult(
+                exit_code=1,
+                stdout='',
+                stderr=format_exc(),
+            )
+        return result
 
     async def async_run_commands(
         self,
