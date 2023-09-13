@@ -33,18 +33,11 @@ celery_app.conf.task_default_exchange = 'default'
 celery_app.conf.task_default_routing_key = 'default'
 
 if CONFIG.use_ssl:
-    if not CONFIG.ssl_config:
+    if not getattr(CONFIG, 'ssl_config'):
         raise ValueError('Empty SSL configuration section')
 
     # TODO: Figure out message signing with actual SSL certificates from CA
     celery_app.conf.update(
-        # security_key=get_abspath(CONFIG.ssl_config.security_key),
-        # security_certificate=get_abspath(CONFIG.ssl_config.security_certificate),
-        # security_cert_store=CONFIG.ssl_config.security_cert_store,
-        # security_digest=CONFIG.ssl_config.security_digest,
-        # task_serializer='auth',
-        # event_serializer='auth',
-        # accept_content=['auth'],
         broker_use_ssl={
             'keyfile': get_abspath(CONFIG.ssl_config.security_key),
             'certfile': get_abspath(CONFIG.ssl_config.security_certificate),
@@ -52,6 +45,5 @@ if CONFIG.use_ssl:
             'cert_reqs': CONFIG.ssl_config.cert_required
         },
     )
-    # celery_app.setup_security()
 
 celery_app.autodiscover_tasks()

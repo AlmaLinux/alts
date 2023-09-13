@@ -213,6 +213,8 @@ class CeleryConfig(BaseModel):
 
     # Whether to setup Celery SSL
     use_ssl: bool = False
+    # SSL configuration section
+    ssl_config: typing.Optional[SslConfig]
     # Celery configuration variables
     broker_config: typing.Union[RabbitmqBrokerConfig, RedisBrokerConfig]
     results_backend_config: typing.Union[
