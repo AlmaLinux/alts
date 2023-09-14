@@ -28,6 +28,7 @@ jobs:
         run: |
           python -m venv env
           env/bin/python -m pip install -U pip
+          env/bin/python -m pip install -r requirements/scheduler.txt
           env/bin/python -m pip install -r requirements/celery.txt
       - name: Run unit tests (pytest)
         env:

@@ -5,7 +5,7 @@
 """AlmaLinux Test System docker environment runner."""
 
 import os
-from typing import Union, List
+from typing import Union, List, Optional
 
 from plumbum import local
 
@@ -24,9 +24,15 @@ class DockerRunner(BaseRunner):
     TF_MAIN_FILE = 'docker.tf'
     TEMPFILE_PREFIX = 'docker_test_runner_'
 
-    def __init__(self, task_id: str, dist_name: str,
-                 dist_version: Union[str, int],
-                 repositories: List[dict] = None, dist_arch: str = 'x86_64'):
+    def __init__(
+        self,
+        task_id: str,
+        dist_name: str,
+        dist_version: Union[str, int],
+        repositories: List[dict] = None,
+        dist_arch: str = 'x86_64',
+        test_configuration: Optional[dict] = None,
+    ):
         """
         Docker environment class initialization.
 
@@ -43,8 +49,14 @@ class DockerRunner(BaseRunner):
         dist_arch : str
             Distribution architecture.
         """
-        super().__init__(task_id, dist_name, dist_version,
-                         repositories=repositories, dist_arch=dist_arch)
+        super().__init__(
+            task_id,
+            dist_name,
+            dist_version,
+            repositories=repositories,
+            dist_arch=dist_arch,
+            test_configuration=test_configuration
+        )
         self._ansible_connection_type = 'docker'
 
     def _render_tf_main_file(self):

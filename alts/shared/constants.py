@@ -1,6 +1,7 @@
 __all__ = [
     'API_VERSION',
     'ARCHITECTURES',
+    'ALLOWED_CHANNELS',
     'COSTS',
     'DRIVERS',
     'DEFAULT_FILE_CHUNK_SIZE',
@@ -30,6 +31,7 @@ SUPPORTED_ARCHITECTURES = [
 SUPPORTED_DISTRIBUTIONS = ['almalinux', 'centos', 'ubuntu', 'debian']
 RHEL_FLAVORS = ('rhel', 'fedora', 'centos', 'almalinux', 'cloudlinux')
 DEBIAN_FLAVORS = ('debian', 'ubuntu', 'raspbian')
+ALLOWED_CHANNELS = ['stable', 'beta']
 
 
 DEFAULT_FILE_CHUNK_SIZE = 8388608  # 8 megabytes in bytes

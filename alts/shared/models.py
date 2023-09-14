@@ -2,7 +2,7 @@ import os
 import ssl
 import typing
 
-from pydantic import BaseModel, ValidationError, validator
+from pydantic import BaseModel, ValidationError, field_validator
 
 from alts.shared import constants
 
@@ -23,9 +23,9 @@ class Repository(BaseModel):
 
 class AsyncSSHParams(BaseModel):
     host: str
-    username: typing.Optional[str]
-    password: typing.Optional[str]
-    timeout: typing.Optional[int]
+    username: typing.Optional[str] = None
+    password: typing.Optional[str] = None
+    timeout: typing.Optional[int] = None
     client_keys_files: typing.Optional[typing.List[str]] = None
     known_hosts_files: typing.Optional[typing.List[str]] = None
     env_vars: typing.Optional[typing.Dict[str, typing.Any]] = None
@@ -46,20 +46,28 @@ class CommandResult(BaseModel):
         return self.exit_code == expected_exit_code
 
 
+class TestConfiguration(BaseModel):
+    tests: typing.Optional[typing.List[dict]] = None
+    test_env: typing.Optional[dict] = None
+
+
 class TaskRequestPayload(BaseModel):
     runner_type: str = 'any'
     dist_name: str
     dist_version: typing.Union[str, int]
     dist_arch: str
+    package_channel: typing.Optional[typing.Literal["stable", "beta"]] = None
+    test_configuration: typing.Optional[TestConfiguration] = None
     repositories: typing.List[Repository] = []
     package_name: str
     package_version: typing.Optional[str] = None
     module_name: typing.Optional[str] = None
     module_stream: typing.Optional[str] = None
     module_version: typing.Optional[str] = None
-    callback_href: str = None
+    callback_href: typing.Optional[str] = None
 
-    @validator('runner_type')
+    @field_validator('runner_type')
+    @classmethod
     def validate_runner_type(cls, value: str) -> str:
         # TODO: Add config or constant to have all possible runner types
         runner_types = constants.DRIVERS + ('any',)
@@ -77,7 +85,7 @@ class TaskRequestResponse(BaseModel):
 
 class TaskResultResponse(BaseModel):
     state: str
-    result: typing.Optional[dict]
+    result: typing.Optional[dict] = None
 
 
 class SslConfig(BaseModel):
@@ -142,7 +150,7 @@ class RedisBrokerConfig(BaseBrokerConfig):
     redis_port: int = 6379
     redis_db_number: int = 0
     redis_user: str = 'default'
-    redis_password: typing.Optional[str]
+    redis_password: typing.Optional[str] = None
 
     @property
     def broker_url(self) -> str:
@@ -215,15 +223,15 @@ class CeleryConfig(BaseModel):
     ]
     result_backend_always_retry: bool = True
     result_backend_max_retries: int = 10
-    s3_access_key_id: typing.Optional[str]
-    s3_secret_access_key: typing.Optional[str]
-    s3_bucket: typing.Optional[str]
-    s3_base_path: typing.Optional[str]
-    s3_region: typing.Optional[str]
+    s3_access_key_id: typing.Optional[str] = None
+    s3_secret_access_key: typing.Optional[str] = None
+    s3_bucket: typing.Optional[str] = None
+    s3_base_path: typing.Optional[str] = None
+    s3_region: typing.Optional[str] = None
     s3_endpoint_url: typing.Optional[str] = None
-    azureblockblob_container_name: typing.Optional[str]
+    azureblockblob_container_name: typing.Optional[str] = None
     azureblockblob_base_path: str = 'celery_result_backend/'
-    azure_connection_string: typing.Optional[str]
+    azure_connection_string: typing.Optional[str] = None
     task_default_queue: str = 'default'
     task_acks_late: bool = True
     task_track_started: bool = True
@@ -242,19 +250,21 @@ class CeleryConfig(BaseModel):
     debian_flavors: typing.Tuple[str] = constants.DEBIAN_FLAVORS
     supported_runners: typing.Union[typing.List[str], str] = 'all'
     # OpenNebula section
-    opennebula_rpc_endpoint: typing.Optional[str]
-    opennebula_username: typing.Optional[str]
-    opennebula_password: typing.Optional[str]
-    opennebula_vm_group: typing.Optional[str]
+    opennebula_rpc_endpoint: typing.Optional[str] = None
+    opennebula_username: typing.Optional[str] = None
+    opennebula_password: typing.Optional[str] = None
+    opennebula_vm_group: typing.Optional[str] = None
+    opennebula_network: typing.Optional[str] = None
+    allowed_channel_names: typing.List[str] = constants.ALLOWED_CHANNELS
     # SSH section
     ssh_public_key_path: str = '~/.ssh/id_rsa.pub'
     # Build system settings
-    bs_host: typing.Optional[str]
-    bs_token: typing.Optional[str]
+    bs_host: typing.Optional[str] = None
+    bs_token: typing.Optional[str] = None
     # Log uploader settings
     logs_uploader_config: typing.Optional[
         typing.Union[AzureLogsConfig, PulpLogsConfig]
-    ]
+    ] = None
     uninstall_excluded_pkgs: typing.List[str] = [
         'almalinux-release',
         'kernel',
