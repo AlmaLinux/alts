@@ -1,6 +1,7 @@
 __all__ = [
     'API_VERSION',
     'ARCHITECTURES',
+    'ALLOWED_CHANNELS',
     'COSTS',
     'DRIVERS',
     'DEFAULT_FILE_CHUNK_SIZE',

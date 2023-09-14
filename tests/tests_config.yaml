@@ -15,21 +15,42 @@ broker_config:
   rabbitmq_password: "password"
   rabbitmq_vhost: "test_system"
 results_backend_config:
-  path: "file:///tmp/"
+  s3_access_key_id: ""
+  s3_secret_access_key: ""
+  s3_bucket: ""
+  s3_base_path: 'celery_result_backend/'
+  s3_region: ""
+  s3_endpoint_url: ""
+  azureblockblob_container_name: ""
+  azureblockblob_base_path: ""
+  azure_connection_string: "blockblob://"
+s3_access_key_id: ""
+s3_secret_access_key: ""
+s3_bucket: ""
+s3_base_path: 'celery_result_backend/'
+s3_region: ""
+s3_endpoint_url: ""
+azureblockblob_container_name: ""
+azureblockblob_base_path: ""
+azure_connection_string: "blockblob://"
 task_default_queue: "default"
 task_acks_late: true
 task_track_started: true
 artifacts_root_directory: "test_system_artifacts"
 worker_prefetch_multiplier: 1
+testing: true
+working_directory: "/tmp"
 jwt_secret: "secret"
 hashing_algorithm: "HS256"
-opennebula_rpc_endpoint:
-opennebula_username:
-opennebula_password:
-opennebula_vm_group:
+opennebula_rpc_endpoint: ""
+opennebula_username: ""
+opennebula_password: ""
+opennebula_vm_group: ""
+opennebula_network: ""
 bs_host: "http://web_server:8000"
 bs_token: "token"
 logs_uploader_config:
   pulp_host: "http://pulp"
   pulp_user: "user"
   pulp_password: "password"
+  azure_logs_container: "testsys-mqdata"

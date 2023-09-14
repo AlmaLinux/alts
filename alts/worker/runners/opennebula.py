@@ -32,11 +32,16 @@ class OpennebulaRunner(GenericVMRunner):
         dist_version: typing.Union[str, int],
         repositories: typing.List[dict] = None,
         dist_arch: str = 'x86_64',
-        package_channel: typing.Optional[str] = None
+        package_channel: typing.Optional[str] = None,
+        test_configuration: typing.Optional[dict] = None,
     ):
         super().__init__(
-            task_id, dist_name, dist_version, repositories=repositories,
+            task_id,
+            dist_name,
+            dist_version,
+            repositories=repositories,
             dist_arch=dist_arch,
+            test_configuration=test_configuration
         )
         self.package_channel = package_channel
 
