@@ -29,3 +29,19 @@ def simple_shell_script(tmp_path: Path) -> str:
         """
     )
     return str(bats_file)
+
+
+@pytest.fixture
+def simple_ansible_playbook(tmp_path: Path) -> str:
+    bats_file = tmp_path / 'simple.yml'
+    bats_file.write_text(
+        """
+---
+- name: test
+  hosts: all
+  tasks:
+    - debug:
+        msg: 'test'
+        """
+    )
+    return str(bats_file)
