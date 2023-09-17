@@ -3,6 +3,7 @@ from typing import Any, Dict, List
 
 import pytest
 
+from alts.worker.executors.ansible import AnsibleExecutor
 from alts.worker.executors.base import BaseExecutor
 from alts.worker.executors.bats import BatsExecutor
 from alts.worker.executors.shell import ShellExecutor
@@ -287,5 +288,60 @@ class TestShellExecutor:
             func = 'run_ssh_command'
             cmd_args = simple_shell_script
         executor = ShellExecutor(**executor_params)
+        result = getattr(executor, func)(cmd_args)
+        assert result.is_successful()
+
+
+class TestAnsibleExecutor:
+    def test_ansible_executor(self):
+        assert isinstance(AnsibleExecutor(), AnsibleExecutor)
+
+    @pytest.mark.parametrize(
+        'executor_params, additional_ssh_params, extra_cmd_args',
+        [
+            pytest.param(
+                {},
+                {},
+                [],
+                id='local',
+            ),
+            pytest.param(
+                {},
+                {'disable_known_hosts_check': True},
+                [],
+                id='on_remote',
+            ),
+            pytest.param(
+                {},
+                {},
+                ['--list-tasks', '--syntax-check'],
+                id='local_with_extra_params',
+            ),
+            pytest.param(
+                {},
+                {'disable_known_hosts_check': True},
+                ['--list-tasks', '--syntax-check'],
+                id='on_remote_with_extra_params',
+            ),
+        ],
+    )
+    def test_ansible_run_command(
+        self,
+        executor_params: Dict[str, Any],
+        additional_ssh_params: Dict[str, Any],
+        extra_cmd_args: List[str],
+        local_ssh_credentials: Dict[str, Any],
+        simple_ansible_playbook: str,
+    ):
+        cmd_args = [*extra_cmd_args, simple_ansible_playbook]
+        func = 'run_local_command'
+        if additional_ssh_params:
+            executor_params['ssh_params'] = {
+                **local_ssh_credentials,
+                **additional_ssh_params,
+            }
+            func = 'run_ssh_command'
+            cmd_args = ' '.join(cmd_args)
+        executor = AnsibleExecutor(**executor_params)
         result = getattr(executor, func)(cmd_args)
         assert result.is_successful()

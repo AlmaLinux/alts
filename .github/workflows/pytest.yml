@@ -23,7 +23,7 @@ jobs:
           cat - ~/.ssh/id_rsa.pub > ~/.ssh/authorized_keys
       - name: Prepare binary executors
         run: |
-          sudo apt-get install bats
+          sudo apt-get install bats ansible
       - name: Prepare python env
         run: |
           python -m venv env
