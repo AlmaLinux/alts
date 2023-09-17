@@ -12,7 +12,7 @@ def local_ssh_credentials() -> Dict[str, Any]:
         'ignore_encrypted_keys': bool(os.getenv('IGNORE_ENCRYPTED_KEYS')),
     }
     ssh_password = os.getenv('SSH_PASSWORD')
-    ssh_public_key = os.getenv('SSH_PRIVATE_KEY')
+    ssh_public_key = os.getenv('SSH_PUBLIC_KEY')
     if ssh_password:
         credentials['password'] = ssh_password
     if ssh_public_key:
