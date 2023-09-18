@@ -205,7 +205,7 @@ class CeleryConfig(BaseModel):
         for (
             field_name,
             field,
-        ) in self.results_backend_config.__fields__.items():
+        ) in self.results_backend_config.dict().items():
             if field_name == 'broker_url' or field_name.startswith(
                 ('s3_', 'azure')
             ):
@@ -213,6 +213,8 @@ class CeleryConfig(BaseModel):
 
     # Whether to setup Celery SSL
     use_ssl: bool = False
+    # SSL configuration section
+    ssl_config: typing.Optional[SslConfig] = None
     # Celery configuration variables
     broker_config: typing.Union[RabbitmqBrokerConfig, RedisBrokerConfig]
     results_backend_config: typing.Union[
