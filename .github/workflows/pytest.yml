@@ -36,7 +36,7 @@ jobs:
           SSH_USERNAME: runner
           SSH_PUBLIC_KEY: ~/.ssh/id_rsa.pub
           IGNORE_ENCRYPTED_KEYS: true
-        run: env/bin/python -m pytest -v --cov-report term-missing:skip-covered
+        run: set -o pipefail && env/bin/python -m pytest -v --cov-report term-missing:skip-covered
              --cov-report xml:/tmp/coverage.xml --junitxml=/tmp/pytest.xml
              --cov=alts tests/ | tee /tmp/pytest-coverage.txt
       - name: Pytest coverage comment

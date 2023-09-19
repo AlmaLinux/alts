@@ -99,7 +99,7 @@ class TestBaseExecutor:
             pytest.param(
                 {'binary_name': 'bash'},
                 {},
-                '--version',
+                ['--version'],
                 pytest.raises(HostKeyNotVerifiable),
                 1,
                 id='untrusted_host_key',

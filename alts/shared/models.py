@@ -213,7 +213,7 @@ class CeleryConfig(BaseModel):
         for (
             field_name,
             field,
-        ) in self.results_backend_config.model_fields.items():
+        ) in self.results_backend_config.model_dump().items():
             if field_name == 'broker_url' or field_name.startswith(
                 ('s3_', 'azure')
             ):
