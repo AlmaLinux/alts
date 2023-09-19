@@ -10,16 +10,33 @@ provider "opennebula" {
   password      = var.one_password
 }
 
+data "opennebula_virtual_network" "test_system_network" {
+  name = "${opennebula_network}"
+}
+
 resource "opennebula_virtual_machine" "${vm_name}" {
   name = "${vm_name}"
   template_id = ${template_id}
   permissions = "660"
-  group = "${vm_group_name}"
+  group = "${opennebula_vm_group}"
+
+  cpumodel {
+    model = "host-passthrough"
+  }
+  disk {
+    image_id: ${image_id}
+    size: ${disk_size}
+    target: "sda"
+  }
+  nic {
+    network_id = data.opennebula_virtual_network.test_system_network.id
+    model      = "virtio"
+  }
 
   context = {
     NETWORK      = "YES"
     HOSTNAME     = "${vm_name}.test.com"
-    SSH_PUBLIC_KEY = "${ssh_public_key}"
+    SSH_PUBLIC_KEY = "$USER[SSH_PUBLIC_KEY]"
   }
 }
 

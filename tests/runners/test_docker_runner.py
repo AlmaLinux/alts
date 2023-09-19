@@ -1,82 +1,67 @@
-from unittest import TestCase
+from typing import Tuple
 
-from ddt import ddt
-from ddt import data, unpack
-# from pyfakefs.fake_filesystem_unittest import TestCase
+import pytest
 
 from alts.worker.runners import DockerRunner
 
-fedora_runner_params = ('test_id_1', 'fedora', '33')
-centos_8_runner_params = ('test_id_2', 'centos', 8)
-centos_7_runner_params = ('test_id_3', 'centos', 7)
-ubuntu_runner_params = ('test_id_4', 'ubuntu', '20.04')
-debian_runner_params = ('test_id_5', 'debian', '11.0')
-almalinux_runner_params = ('test_id_6', 'almalinux', '8.3')
-
-basics_data = (
-    (
-        centos_8_runner_params,
-        {
-            'ansible_connection_type': 'docker',
-            'repositories': [],
-            'pkg_manager': 'dnf'
-        }
-    ),
-    (
-        centos_7_runner_params,
-        {
-            'ansible_connection_type': 'docker',
-            'repositories': [],
-            'pkg_manager': 'yum'
-        }
-    ),
-    (
-        ubuntu_runner_params,
-        {
-            'ansible_connection_type': 'docker',
-            'repositories': [],
-            'pkg_manager': 'apt-get'
-        }
-    ),
-    (
-        fedora_runner_params,
-        {
-            'ansible_connection_type': 'docker',
-            'repositories': [],
-            'pkg_manager': 'dnf'
-        }
-    ),
-    (
-        debian_runner_params,
-        {
-            'ansible_connection_type': 'docker',
-            'repositories': [],
-            'pkg_manager': 'apt-get'
-        }
-    ),
-    (
-        almalinux_runner_params,
-        {
-            'ansible_connection_type': 'docker',
-            'repositories': [],
-            'pkg_manager': 'dnf'
-        }
-    ),
-)
+# from pyfakefs.fake_filesystem_unittest import TestCase
 
 
-@ddt
-class TestDockerRunner(TestCase):
-
-    @data(*basics_data)
-    @unpack
-    def test_basics(self, inputs: tuple, expected: dict):
+class TestDockerRunner:
+    @pytest.mark.parametrize(
+        'inputs, pkg_manager',
+        [
+            pytest.param(
+                ('test_id_1', 'fedora', '33'),
+                'dnf',
+                id='fedora_33',
+            ),
+            pytest.param(
+                ('test_id_2', 'centos', '7'),
+                'yum',
+                id='centos_8',
+            ),
+            pytest.param(
+                ('test_id_3', 'centos', '8'),
+                'dnf',
+                id='centos_8',
+            ),
+            pytest.param(
+                ('test_id_4', 'ubuntu', '20.04'),
+                'apt-get',
+                id='ubuntu_20.04',
+            ),
+            pytest.param(
+                ('test_id_5', 'debian', '11.0'),
+                'apt-get',
+                id='debian_11.0',
+            ),
+            pytest.param(
+                ('test_id_6', 'almalinux', '8.3'),
+                'dnf',
+                id='almalinux_8.3',
+            ),
+        ],
+    )
+    def test_docker_runner_init(
+        self,
+        inputs: Tuple[str, str, str],
+        pkg_manager: str,
+    ):
+        expected = {
+            'ansible_connection_type': 'docker',
+            'repositories': [],
+            'pkg_manager': pkg_manager,
+        }
         runner = DockerRunner(*inputs)
-        self.assertIsInstance(runner.dist_name, str)
-        self.assertIsInstance(runner.dist_version, str)
-        for attribute in ('ansible_connection_type', 'repositories',
-                          'pkg_manager'):
-            self.assertEqual(getattr(runner, attribute), expected[attribute])
+        assert isinstance(runner.dist_name, str)
+        assert isinstance(runner.dist_version, str)
+        for attribute in (
+            'ansible_connection_type',
+            'repositories',
+            'pkg_manager',
+        ):
+            assert getattr(runner, attribute) == expected[attribute]
 
     # def setUp(self) -> None:
     #     self.patcher = patch('os.stat', MagicMock())

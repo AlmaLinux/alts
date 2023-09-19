@@ -10,7 +10,7 @@ import time
 import typing
 from functools import wraps
 from pathlib import Path
-from typing import List, Union
+from typing import List, Optional, Union
 
 from mako.lookup import TemplateLookup
 from plumbum import local
@@ -92,13 +92,20 @@ class BaseRunner(object):
     TEMPFILE_PREFIX = 'base_test_runner_'
     INTEGRITY_TESTS_DIR = 'package_tests'
 
-    def __init__(self, task_id: str, dist_name: str,
-                 dist_version: Union[str, int],
-                 repositories: List[dict] = None, dist_arch: str = 'x86_64',
-                 artifacts_uploader: BaseLogsUploader = None):
+    def __init__(
+        self,
+        task_id: str,
+        dist_name: str,
+        dist_version: Union[str, int],
+        repositories: List[dict] = None,
+        dist_arch: str = 'x86_64',
+        artifacts_uploader: BaseLogsUploader = None,
+        test_configuration: typing.Optional[dict] = None,
+    ):
         # Environment ID and working directory preparation
         self._task_id = task_id
         self._env_name = f'{self.TYPE}_{task_id}'
+        self._test_configuration = test_configuration
         self._logger = self.init_test_task_logger(task_id, dist_arch)
         self._task_log_file = None
         self._task_log_handler = None
@@ -482,7 +489,7 @@ class BaseRunner(object):
         # Should upload artifacts from artifacts directory to preferred
         # artifacts storage (S3, Minio, etc.)
 
-        if CONFIG.log_uploader_config.skip_artifacts_upload:
+        if CONFIG.logs_uploader_config.skip_artifacts_upload:
             self._logger.warning(
                 'Skipping artifacts upload due to configuration',
             )
@@ -520,7 +527,7 @@ class BaseRunner(object):
                 write_to_file(artifact_key, content)
 
         upload_dir = os.path.join(
-            CONFIG.log_uploader_config.artifacts_root_directory,
+            CONFIG.logs_uploader_config.artifacts_root_directory,
             self._task_id
         )
         try:
@@ -614,11 +621,23 @@ class BaseRunner(object):
 
 class GenericVMRunner(BaseRunner):
 
-    def __init__(self, task_id: str, dist_name: str,
-                 dist_version: Union[str, int],
-                 repositories: List[dict] = None, dist_arch: str = 'x86_64'):
-        super().__init__(task_id, dist_name, dist_version,
-                         repositories=repositories, dist_arch=dist_arch)
+    def __init__(
+        self,
+        task_id: str,
+        dist_name: str,
+        dist_version: Union[str, int],
+        repositories: List[dict] = None,
+        dist_arch: str = 'x86_64',
+        test_configuration: Optional[dict] = None
+    ):
+        super().__init__(
+            task_id,
+            dist_name,
+            dist_version,
+            repositories=repositories,
+            dist_arch=dist_arch,
+            test_configuration=test_configuration,
+        )
         ssh_key_path = os.path.abspath(
             os.path.expanduser(CONFIG.ssh_public_key_path))
         if not os.path.exists(ssh_key_path):

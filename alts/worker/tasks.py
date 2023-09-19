@@ -94,10 +94,14 @@ def run_tests(task_params: dict):
     runner_args = (task_params['task_id'], task_params['dist_name'],
                    task_params['dist_version'])
 
-    runner_kwargs = {'repositories': task_params.get('repositories')
-                     if task_params.get('repositories') else [],
-                     'dist_arch': task_params.get('dist_arch')
-                     if task_params.get('dist_arch') else 'x86_64'}
+    runner_kwargs = {
+        'repositories': task_params.get('repositories')
+                        if task_params.get('repositories') else [],
+        'dist_arch': task_params.get('dist_arch')
+                     if task_params.get('dist_arch') else 'x86_64',
+        'test_configuration': task_params.get('test_configuration')
+                              if task_params.get('test_configuration') else {},
+    }
 
     runner_class = RUNNER_MAPPING[task_params['runner_type']]
     runner = runner_class(*runner_args, **runner_kwargs)  # type: BaseRunner

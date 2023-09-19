@@ -1,8 +1,9 @@
 FROM almalinux:9
 
-RUN mkdir -p /code && dnf update -y && dnf install python39 -y && dnf clean all
+RUN sed -i 's/enabled=0/enabled=1/' /etc/yum.repos.d/almalinux-crb.repo
+RUN mkdir -p /code && dnf update -y && dnf install -y epel-release && dnf install python39 python3-virtualenv -y && dnf clean all
 COPY requirements/ /tmp/requirements
-RUN cd /code && python3.9 -m venv env && source env/bin/activate \
+RUN cd /code && virtualenv -p python3.9 env && source env/bin/activate \
     && pip3 install -r /tmp/requirements/scheduler.txt && deactivate
 COPY . /code
 WORKDIR /code
