@@ -3,7 +3,7 @@ mako==1.2.4
 plumbum==1.8.2
 boto3==1.28.15
 pydantic==2.1.1
-ruamel.yaml==0.17.32
+pyyaml==6.0.1
 cryptography==41.0.2
 azure-storage-blob==12.17.0
 tap.py==3.1

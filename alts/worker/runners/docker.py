@@ -69,7 +69,7 @@ class DockerRunner(BaseRunner):
             Raised if cannot map distribution architecture
             with image architecture.
         """
-        docker_tf_file = os.path.join(self._work_dir, self.TF_MAIN_FILE)
+        docker_tf_file = self._work_dir.joinpath(self.TF_MAIN_FILE)
         image_name = f'{self.dist_name}:{self.dist_version}'
         external_network = os.environ.get('EXTERNAL_NETWORK', None)
 

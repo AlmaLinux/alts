@@ -1,12 +1,10 @@
 import os
 
+from pathlib import Path
+
 
 __all__ = ['get_abspath']
 
 
-def get_abspath(file_path: str) -> str:
-    return os.path.abspath(
-        os.path.expandvars(
-            os.path.expanduser(file_path)
-        )
-    )
+def get_abspath(file_path: Path) -> Path:
+    return Path(os.path.expandvars(file_path.home())).absolute()
