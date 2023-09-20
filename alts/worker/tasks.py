@@ -15,7 +15,7 @@ from alts.shared.exceptions import (
     InstallPackageError,
     UninstallPackageError,
     PackageIntegrityTestsError,
-    StopEnvironmentError,
+    StartEnvironmentError,
 )
 from alts.worker import CONFIG
 from alts.worker.app import celery_app
@@ -96,11 +96,11 @@ def run_tests(task_params: dict):
 
     runner_kwargs = {
         'repositories': task_params.get('repositories')
-                        if task_params.get('repositories') else [],
+        if task_params.get('repositories') else [],
         'dist_arch': task_params.get('dist_arch')
-                     if task_params.get('dist_arch') else 'x86_64',
+        if task_params.get('dist_arch') else 'x86_64',
         'test_configuration': task_params.get('test_configuration')
-                              if task_params.get('test_configuration') else {},
+        if task_params.get('test_configuration') else {},
     }
 
     runner_class = RUNNER_MAPPING[task_params['runner_type']]
@@ -123,7 +123,7 @@ def run_tests(task_params: dict):
             module_name=module_name, module_stream=module_stream,
             module_version=module_version
         )
-    except StopEnvironmentError as exc:
+    except StartEnvironmentError as exc:
         logging.exception('Cannot start environment: %s', exc)
     except InstallPackageError as exc:
         logging.exception('Cannot install package: %s', exc)

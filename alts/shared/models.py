@@ -122,6 +122,15 @@ class BaseResultsConfig(BaseModel):
     pass
 
 
+class OpennebulaConfig(BaseModel):
+    # OpenNebula section
+    rpc_endpoint: typing.Optional[str] = None
+    username: typing.Optional[str] = None
+    password: typing.Optional[str] = None
+    vm_group: typing.Optional[str] = None
+    network: typing.Optional[str] = None
+
+
 class RabbitmqBrokerConfig(BaseBrokerConfig):
     use_ssl: bool = False
     ssl_config: typing.Optional[SslConfig] = None
@@ -218,6 +227,7 @@ class CeleryConfig(BaseModel):
     ssl_config: typing.Optional[SslConfig] = None
     # Celery configuration variables
     broker_config: typing.Union[RabbitmqBrokerConfig, RedisBrokerConfig]
+    opennebula_config: OpennebulaConfig
     results_backend_config: typing.Union[
         AzureResultsConfig,
         FilesystemResultsConfig,
@@ -252,12 +262,6 @@ class CeleryConfig(BaseModel):
     rhel_flavors: typing.Tuple[str] = constants.RHEL_FLAVORS
     debian_flavors: typing.Tuple[str] = constants.DEBIAN_FLAVORS
     supported_runners: typing.Union[typing.List[str], str] = 'all'
-    # OpenNebula section
-    opennebula_rpc_endpoint: typing.Optional[str] = None
-    opennebula_username: typing.Optional[str] = None
-    opennebula_password: typing.Optional[str] = None
-    opennebula_vm_group: typing.Optional[str] = None
-    opennebula_network: typing.Optional[str] = None
     allowed_channel_names: typing.List[str] = constants.ALLOWED_CHANNELS
     # SSH section
     ssh_public_key_path: str = '~/.ssh/id_rsa.pub'
@@ -290,15 +294,6 @@ class CeleryConfig(BaseModel):
     @property
     def broker_url(self) -> str:
         return self.broker_config.broker_url
-
-    def get_opennebula_template_id(
-        self,
-        dist_name: str,
-        dist_version: str,
-        dist_arch: str,
-    ):
-        # TODO: Remove the method, for now leave the placeholder
-        return ''
 
 
 class SchedulerConfig(CeleryConfig):

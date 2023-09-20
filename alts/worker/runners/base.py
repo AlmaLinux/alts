@@ -1,6 +1,7 @@
 import datetime
 import fcntl
 import gzip
+import json
 import logging
 import os
 import re
@@ -261,7 +262,9 @@ class BaseRunner(object):
             self.ANSIBLE_INVENTORY_FILE,
         )
         self._render_template(
-            template_name=self.ANSIBLE_INVENTORY_FILE.with_suffix('.tmpl'),
+            template_name=str(
+                self.ANSIBLE_INVENTORY_FILE.with_suffix('.tmpl')
+            ),
             result_file_path=self._inventory_file_path,
             env_name=self.env_name,
             vm_ip=vm_ip,
@@ -382,9 +385,10 @@ class BaseRunner(object):
         # variables itself as a dictionary thus doing this weird
         # temporary dictionary
         var_dict = {'repositories': self._repositories,
-                    'integrity_tests_dir': self._integrity_tests_dir}
-        cmd_args = ['-i', self.ANSIBLE_INVENTORY_FILE, self.ANSIBLE_PLAYBOOK,
-                    '-e', f'{var_dict}', '-t', 'initial_provision']
+                    'integrity_tests_dir': str(self._integrity_tests_dir)}
+        cmd_args = ['-i', str(self.ANSIBLE_INVENTORY_FILE),
+                    self.ANSIBLE_PLAYBOOK, '-e', f'{var_dict}',
+                    '-t', 'initial_provision', '-vv']
         self._logger.info('Command args: %s', cmd_args)
         if verbose:
             cmd_args.append('-vvvv')
@@ -408,8 +412,9 @@ class BaseRunner(object):
             'Installing %s on %s...',
             full_pkg_name, self.env_name,
         )
-        cmd_args = ['-i', self.ANSIBLE_INVENTORY_FILE, self.ANSIBLE_PLAYBOOK,
-                    '-e', f'pkg_name={full_pkg_name}']
+        cmd_args = ['-i', str(self.ANSIBLE_INVENTORY_FILE),
+                    self.ANSIBLE_PLAYBOOK,
+                    '-e', f'pkg_name={full_pkg_name}', '-vv']
         if module_name and module_stream and module_version:
             cmd_args.extend(['-e', f'module_name={module_name}',
                              '-e', f'module_stream={module_stream}',
@@ -436,8 +441,9 @@ class BaseRunner(object):
             'Uninstalling %s from %s...',
             full_pkg_name, self.env_name,
         )
-        cmd_args = ['-i', self.ANSIBLE_INVENTORY_FILE, self.ANSIBLE_PLAYBOOK,
-                    '-e', f'pkg_name={full_pkg_name}']
+        cmd_args = ['-i', str(self.ANSIBLE_INVENTORY_FILE),
+                    self.ANSIBLE_PLAYBOOK,
+                    '-e', f'pkg_name={full_pkg_name}', '-vv']
         if module_name and module_stream and module_version:
             cmd_args.extend(['-e', f'module_name={module_name}',
                              '-e', f'module_stream={module_stream}',
@@ -570,8 +576,8 @@ class BaseRunner(object):
             f'alts-{self._task_id}-{self._dist_arch}.log',
         )
         self._task_log_handler = self.__init_task_logger(self._task_log_file)
-        self.initialize_terraform()
-        self.start_env()
+        result = self.initialize_terraform()
+        result = self.start_env()
         self.initial_provision()
 
     def teardown(self, publish_artifacts: bool = True):
@@ -618,6 +624,28 @@ class BaseRunner(object):
         logger.addHandler(handler)
         return logger
 
+    def reboot_target(self, reboot_timeout: int = 120) -> bool:
+        ansible = local['ansible']
+        module_args = {
+            'reboot_timeout': reboot_timeout,
+        }
+        cmd_args = (
+            '-i', str(self.ANSIBLE_INVENTORY_FILE),
+            '-m', 'reboot',
+            '-a', f'"{json.dumps(module_args)}"',
+            'all',
+        )
+        exit_code, stdout, stderr = ansible.run(
+            args=cmd_args, retcode=None, cwd=self._work_dir,
+        )
+        if exit_code == 0:
+            return True
+        self._logger.error(
+            'Unable to connect to VM. Stdout: %s\nStderr: %s',
+            stdout, stderr,
+        )
+        return False
+
 
 class GenericVMRunner(BaseRunner):
 
@@ -652,7 +680,8 @@ class GenericVMRunner(BaseRunner):
 
     def _wait_for_ssh(self, retries=60):
         ansible = local['ansible']
-        cmd_args = ('-i', self.ANSIBLE_INVENTORY_FILE, '-m', 'ping', 'all')
+        cmd_args = ('-i', str(self.ANSIBLE_INVENTORY_FILE),
+                    '-m', 'ping', 'all')
         stdout = None
         stderr = None
         while retries > 0:
@@ -680,6 +709,7 @@ class GenericVMRunner(BaseRunner):
             error_message = f'Cannot get VM IP: {stderr}'
             self._logger.error(error_message)
             raise StartEnvironmentError(error_message)
+        self._create_ansible_inventory_file(vm_ip=stdout)
         self._logger.info('Waiting for SSH port to be available')
         is_online = self._wait_for_ssh()
         if not is_online:

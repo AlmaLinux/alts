@@ -15,11 +15,11 @@ from alts.shared.utils.path_utils import get_abspath
 __all__ = ['CONFIG', 'CONFIG_FILE_PATH', 'RESOURCES_DIR']
 
 
-CONFIG_FILE_PATH = get_abspath(
+CONFIG_FILE_PATH = get_abspath(Path(
     os.environ.get(
         'CELERY_CONFIG_PATH',
         '~/.config/alts/celery.yaml',
-    )
+    ))
 )
 CONFIG = get_config_dict_from_yaml(CONFIG_FILE_PATH, CeleryConfig)
 # Point to the project root directory

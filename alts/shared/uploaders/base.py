@@ -2,6 +2,8 @@ import os
 import typing
 from abc import abstractmethod
 
+from pathlib import Path
+
 
 __all__ = ['BaseUploader', 'BaseLogsUploader', 'UploadError']
 
@@ -12,7 +14,7 @@ class UploadError(Exception):
 
 class BaseUploader(object):
 
-    def get_artifacts_list(self, artifacts_dir: str) -> typing.List[str]:
+    def get_artifacts_list(self, artifacts_dir: Path) -> typing.List[Path]:
         """
         Returns the list of the files in artifacts directory
         that need to be uploaded.
@@ -28,14 +30,10 @@ class BaseUploader(object):
             List of files.
 
         """
-        return [
-            os.path.join(artifacts_dir, file)
-            for file in os.listdir(artifacts_dir)
-            if not os.path.isdir(file)
-        ]
+        return [file for file in artifacts_dir.iterdir() if file.is_file()]
 
     @abstractmethod
-    def upload(self, artifacts_dir: str, **kwargs) -> \
+    def upload(self, artifacts_dir: Path, **kwargs) -> \
             typing.Tuple[typing.Dict[str, str], bool]:
         raise NotImplementedError()
 
@@ -46,6 +44,6 @@ class BaseUploader(object):
 
 class BaseLogsUploader(BaseUploader):
 
-    def get_artifacts_list(self, artifacts_dir: str) -> typing.List[str]:
+    def get_artifacts_list(self, artifacts_dir: Path) -> typing.List[Path]:
         all_files = super().get_artifacts_list(artifacts_dir)
-        return [file_ for file_ in all_files if file_.endswith('.log')]
+        return [file_ for file_ in all_files if file_.suffix == '.log']
