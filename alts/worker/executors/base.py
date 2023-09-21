@@ -56,7 +56,7 @@ class BaseExecutor:
             if isinstance(ssh_params, dict):
                 ssh_params['env_vars'] = env_vars if env_vars else None
                 ssh_params = AsyncSSHParams(**ssh_params)
-            self.ssh_client = AsyncSSHClient(**ssh_params.dict())
+            self.ssh_client = AsyncSSHClient(**ssh_params.model_dump())
         self.logger = logger
         if not self.logger:
             self.logger = self.setup_logger(logger_name, logging_level)
@@ -118,7 +118,9 @@ class BaseExecutor:
         )
 
     @measure_stage('run_ssh_command')
-    def run_ssh_command(self, cmd: str) -> CommandResult:
+    def run_ssh_command(self, cmd_args: List[str]) -> CommandResult:
         if not self.ssh_client:
             raise ValueError('SSH params are missing')
-        return self.ssh_client.sync_run_command(f'{self.binary_name} {cmd}')
+        return self.ssh_client.sync_run_command(
+            ' '.join([self.binary_name] + cmd_args)
+        )

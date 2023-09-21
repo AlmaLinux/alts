@@ -1,9 +1,9 @@
-import os
 import ssl
 import typing
+from logging import Logger
 from pathlib import Path
 
-from pydantic import BaseModel, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 
 from alts.shared import constants
 
@@ -23,6 +23,8 @@ class Repository(BaseModel):
 
 
 class AsyncSSHParams(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     host: str
     username: typing.Optional[str] = None
     password: typing.Optional[str] = None
@@ -32,6 +34,11 @@ class AsyncSSHParams(BaseModel):
     env_vars: typing.Optional[typing.Dict[str, typing.Any]] = None
     disable_known_hosts_check: bool = False
     ignore_encrypted_keys: bool = False
+    keepalive_interval: int = 0
+    keepalive_count_max: int = 3
+    logger: typing.Optional[Logger] = None
+    logger_name: str = 'asyncssh-client'
+    logging_level: typing.Literal['DEBUG', 'INFO'] = 'DEBUG'
     preferred_auth: typing.Union[
         str,
         typing.List[str],
@@ -206,7 +213,7 @@ class CeleryConfig(BaseModel):
         for (
             field_name,
             field,
-        ) in self.results_backend_config.dict().items():
+        ) in self.results_backend_config.model_dump().items():
             if field_name == 'broker_url' or field_name.startswith(
                 ('s3_', 'azure')
             ):

@@ -32,5 +32,5 @@ class BatsExecutor(BaseExecutor):
         return super().run_local_command(cmd_args)
 
     @measure_stage('run_ssh_bats')
-    def run_ssh_command(self, cmd: str) -> CommandResult:
-        return super().run_ssh_command(cmd)
+    def run_ssh_command(self, cmd_args: List[str]) -> CommandResult:
+        return super().run_ssh_command(cmd_args)
