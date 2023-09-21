@@ -93,12 +93,10 @@ class OpennebulaRunner(GenericVMRunner):
         Renders Terraform file for creating a template.
         """
         vm_group_name = CONFIG.opennebula_vm_group
-        nebula_tf_file = self._work_dir.joinpath(self.TF_MAIN_FILE)
+        nebula_tf_file = os.path.join(self._work_dir, self.TF_MAIN_FILE)
         self._render_template(
-            template_name=f'{self.TF_MAIN_FILE}.tmpl',
-            result_file_path=nebula_tf_file,
-            vm_name=self.env_name,
-            vm_group_name=vm_group_name,
+            f'{self.TF_MAIN_FILE}.tmpl', nebula_tf_file,
+            vm_name=self.env_name, vm_group_name=vm_group_name,
             image_id=self.find_image(),
         )
 
@@ -106,7 +104,7 @@ class OpennebulaRunner(GenericVMRunner):
         """
         Renders Terraform file for getting variables used for a template.
         """
-        vars_file = self._work_dir.joinpath(self.TF_VARIABLES_FILE)
+        vars_file = os.path.join(self._work_dir, self.TF_VARIABLES_FILE)
         self._render_template(
             f'{self.TF_VARIABLES_FILE}.tmpl', vars_file,
             opennebula_rpc_endpoint=CONFIG.opennebula_rpc_endpoint,

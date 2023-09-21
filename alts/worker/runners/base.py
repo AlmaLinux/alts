@@ -33,9 +33,9 @@ def command_decorator(exception_class, artifacts_key, error_message, additional_
     def method_wrapper(fn):
         @wraps(fn)
         def inner_wrapper(*args, **kwargs):
-            self = args[0]  # type: BaseRunner
+            self = args[0]
             args = args[1:]
-            if self._work_dir is None or not self._work_dir.exists():
+            if not self._work_dir or not os.path.exists(self._work_dir):
                 return
             start = datetime.datetime.utcnow()
             exit_code, stdout, stderr = fn(self, *args, **kwargs)
@@ -88,7 +88,7 @@ class BaseRunner(object):
     TF_VERSIONS_FILE = 'versions.tf'
     ANSIBLE_PLAYBOOK = 'playbook.yml'
     ANSIBLE_CONFIG = 'ansible.cfg'
-    ANSIBLE_INVENTORY_FILE = Path('hosts')
+    ANSIBLE_INVENTORY_FILE = 'hosts'
     TEMPFILE_PREFIX = 'base_test_runner_'
     INTEGRITY_TESTS_DIR = 'package_tests'
 
@@ -109,13 +109,11 @@ class BaseRunner(object):
         self._logger = self.init_test_task_logger(task_id, dist_arch)
         self._task_log_file = None
         self._task_log_handler = None
-        self._work_dir = None  # type: typing.Optional[Path]
+        self._work_dir = None
         self._artifacts_dir = None
-        self._inventory_file_path = None  # type: typing.Optional[Path]
-        self._integrity_tests_dir = None  # type: typing.Optional[Path]
-        self._class_resources_dir = RESOURCES_DIR.joinpath(
-            self.TYPE,
-        )  # type: typing.Optional[Path]
+        self._inventory_file_path = None
+        self._integrity_tests_dir = None
+        self._class_resources_dir = os.path.join(RESOURCES_DIR, self.TYPE)
         self._template_lookup = TemplateLookup(
             directories=[RESOURCES_DIR, self._class_resources_dir])
         if not artifacts_uploader:
@@ -124,7 +122,7 @@ class BaseRunner(object):
                     CONFIG.logs_uploader_config.pulp_host,
                     CONFIG.logs_uploader_config.pulp_user,
                     CONFIG.logs_uploader_config.pulp_password,
-                    CONFIG.logs_uploader_config.uploader_concurrency,
+                    concurrency=CONFIG.logs_uploader_config.uploader_concurrency
                 )
         else:
             self._uploader = artifacts_uploader
@@ -193,14 +191,14 @@ class BaseRunner(object):
     def stats(self):
         return self._stats
 
-    def __init_task_logger(self, log_file: Path):
+    def __init_task_logger(self, log_file):
         """
         Task logger initialization, configures a test task   logger to write
         output to the given log file.
 
         Parameters
         ----------
-        log_file : Path
+        log_file : str
             Task log file path.
 
         Returns
@@ -234,17 +232,18 @@ class BaseRunner(object):
 
     # TODO: Think of better implementation
     def _create_work_dir(self):
-        if self._work_dir is None or not self._work_dir.exists():
-            self._work_dir = Path(
-                tempfile.mkdtemp(prefix=self.TEMPFILE_PREFIX),
-            )
+        if not self._work_dir or not os.path.exists(self._work_dir):
+            self._work_dir = Path(tempfile.mkdtemp(prefix=self.TEMPFILE_PREFIX))
         return self._work_dir
 
     # TODO: Think of better implementation
     def _create_artifacts_dir(self):
-        self._artifacts_dir = self._work_dir.joinpath('artifacts')
-        self._artifacts_dir.mkdir(exist_ok=True)
-        return self._artifacts_dir
+        if not self._work_dir:
+            self._work_dir = self._create_work_dir()
+        path = self._work_dir / 'artifacts'
+        if not os.path.exists(path):
+            os.mkdir(path)
+        return path
 
     def __del__(self):
         self.stop_env()
@@ -257,15 +256,12 @@ class BaseRunner(object):
             f.write(content)
 
     def _create_ansible_inventory_file(self, vm_ip: str = None):
-        self._inventory_file_path = self._work_dir.joinpath(
-            self.ANSIBLE_INVENTORY_FILE,
-        )
+        self._inventory_file_path = os.path.join(
+            self._work_dir, self.ANSIBLE_INVENTORY_FILE)
         self._render_template(
-            template_name=self.ANSIBLE_INVENTORY_FILE.with_suffix('.tmpl'),
-            result_file_path=self._inventory_file_path,
-            env_name=self.env_name,
-            vm_ip=vm_ip,
-            connection_type=self.ansible_connection_type,
+            f'{self.ANSIBLE_INVENTORY_FILE}.tmpl', self._inventory_file_path,
+            env_name=self.env_name, vm_ip=vm_ip,
+            connection_type=self.ansible_connection_type
         )
 
     def _render_tf_main_file(self):
@@ -300,28 +296,24 @@ class BaseRunner(object):
     # First step
     def prepare_work_dir_files(self, create_ansible_inventory=False):
         # In case if you've removed worker folder, recreate one
-        if self._work_dir is None or not self._work_dir.exists():
+        if not self._work_dir or not os.path.exists(self._work_dir):
             self._work_dir = self._create_work_dir()
             self._artifacts_dir = self._create_artifacts_dir()
         try:
             # Write resources that are not templated into working directory
             for ansible_file in (self.ANSIBLE_CONFIG, self.ANSIBLE_PLAYBOOK):
-                shutil.copy(
-                    RESOURCES_DIR.joinpath(ansible_file),
-                    self._work_dir.joinpath(ansible_file),
-                )
+                shutil.copy(os.path.join(RESOURCES_DIR, ansible_file),
+                            os.path.join(self._work_dir, ansible_file))
             shutil.copy(
-                self._class_resources_dir.joinpath(self.TF_VERSIONS_FILE),
-                self._work_dir.joinpath(self.TF_VERSIONS_FILE),
+                os.path.join(self._class_resources_dir, self.TF_VERSIONS_FILE),
+                os.path.join(self._work_dir, self.TF_VERSIONS_FILE)
             )
             # Copy integrity tests into working directory
-            self._integrity_tests_dir = self._work_dir.joinpath(
-                self.INTEGRITY_TESTS_DIR,
-            )
-            shutil.copytree(
-                RESOURCES_DIR.joinpath(self.INTEGRITY_TESTS_DIR),
-                self._integrity_tests_dir,
-            )
+            self._integrity_tests_dir = os.path.join(
+                self._work_dir, self.INTEGRITY_TESTS_DIR)
+            shutil.copytree(os.path.join(RESOURCES_DIR,
+                                         self.INTEGRITY_TESTS_DIR),
+                            self._integrity_tests_dir)
 
             self._create_ansible_inventory_file()
             self._render_tf_main_file()
@@ -496,7 +488,7 @@ class BaseRunner(object):
             return
 
         def replace_host_name(log_string) -> str:
-            return re.sub(r'\[local]', f'[{self._task_id}', log_string)
+            return re.sub(r'\[local\]', f'[{self._task_id}', log_string)
 
         def write_to_file(file_base_name: str, artifacts_section: dict):
             log_file_path = os.path.join(
@@ -541,7 +533,7 @@ class BaseRunner(object):
     @command_decorator(StopEnvironmentError, 'stop_environment',
                        'Cannot destroy environment')
     def stop_env(self):
-        if self._work_dir.exists():
+        if os.path.exists(self._work_dir):
             self._logger.info('Destroying the environment %s...', self.env_name)
             self._logger.debug(
                 'Running "terraform destroy --auto-approve" command')
@@ -552,7 +544,7 @@ class BaseRunner(object):
                                           cwd=self._work_dir)
 
     def erase_work_dir(self):
-        if self._work_dir is not None and self._work_dir.exists():
+        if self._work_dir and os.path.exists(self._work_dir):
             self._logger.info('Erasing working directory...')
             try:
                 shutil.rmtree(self._work_dir)
@@ -566,8 +558,8 @@ class BaseRunner(object):
     def setup(self):
         self._stats['started_at'] = datetime.datetime.utcnow().isoformat()
         self.prepare_work_dir_files()
-        self._task_log_file = self._work_dir.joinpath(
-            f'alts-{self._task_id}-{self._dist_arch}.log',
+        self._task_log_file = os.path.join(
+            self._work_dir, f'alts-{self._task_id}-{self._dist_arch}.log'
         )
         self._task_log_handler = self.__init_task_logger(self._task_log_file)
         self.initialize_terraform()

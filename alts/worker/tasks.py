@@ -20,7 +20,6 @@ from alts.shared.exceptions import (
 from alts.worker import CONFIG
 from alts.worker.app import celery_app
 from alts.worker.mappings import RUNNER_MAPPING
-from alts.worker.runners import BaseRunner
 from alts.worker.runners.base import TESTS_SECTION_NAME
 
 
@@ -104,7 +103,7 @@ def run_tests(task_params: dict):
     }
 
     runner_class = RUNNER_MAPPING[task_params['runner_type']]
-    runner = runner_class(*runner_args, **runner_kwargs)  # type: BaseRunner
+    runner = runner_class(*runner_args, **runner_kwargs)
     module_name = task_params.get('module_name')
     module_stream = task_params.get('module_stream')
     module_version = task_params.get('module_version')
