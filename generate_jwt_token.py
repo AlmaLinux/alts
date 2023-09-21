@@ -8,7 +8,6 @@
 import os
 import sys
 from argparse import ArgumentParser
-from pathlib import Path
 
 from jose import jwt
 from pydantic import BaseModel
@@ -57,7 +56,7 @@ def main():
     """
     parser = ArgumentParser()
     parser.add_argument('-c', '--config', default='',
-                        help='Path to config file', type=Path)
+                        help='Path to config file')
     parser.add_argument('-e', '--email', default='',
                         help='E-mail of a person to generate token for')
     parser.add_argument('-a', '--hash-algorithm', default='HS256',
