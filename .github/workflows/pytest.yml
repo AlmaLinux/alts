@@ -17,7 +17,7 @@ jobs:
           ssh-keygen -t ed25519 -f ~/.ssh/id_rsa -N ''
           cat > ~/.ssh/config <<EOF
             Host localhost
-              User runner
+              User $USER
               HostName 127.0.0.1
           EOF
           cat - ~/.ssh/id_rsa.pub > ~/.ssh/authorized_keys
@@ -34,7 +34,7 @@ jobs:
         env:
           CELERY_CONFIG_PATH: tests/tests_config.yaml
           SSH_USERNAME: runner
-          SSH_PRIVATE_KEY: ~/.ssh/id_rsa.pub
+          SSH_PUBLIC_KEY: ~/.ssh/id_rsa.pub
           IGNORE_ENCRYPTED_KEYS: true
         run: set -o pipefail && env/bin/python -m pytest -v --cov-report term-missing:skip-covered
              --cov-report xml:/tmp/coverage.xml --junitxml=/tmp/pytest.xml

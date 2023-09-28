@@ -1,9 +1,8 @@
-import os
 import ssl
 import typing
-from pathlib import Path
+from logging import Logger
 
-from pydantic import BaseModel, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 
 from alts.shared import constants
 
@@ -23,6 +22,8 @@ class Repository(BaseModel):
 
 
 class AsyncSSHParams(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     host: str
     username: typing.Optional[str] = None
     password: typing.Optional[str] = None
@@ -32,6 +33,11 @@ class AsyncSSHParams(BaseModel):
     env_vars: typing.Optional[typing.Dict[str, typing.Any]] = None
     disable_known_hosts_check: bool = False
     ignore_encrypted_keys: bool = False
+    keepalive_interval: int = 0
+    keepalive_count_max: int = 3
+    logger: typing.Optional[Logger] = None
+    logger_name: str = 'asyncssh-client'
+    logging_level: typing.Literal['DEBUG', 'INFO'] = 'DEBUG'
     preferred_auth: typing.Union[
         str,
         typing.List[str],
@@ -90,19 +96,19 @@ class TaskResultResponse(BaseModel):
 
 
 class SslConfig(BaseModel):
-    security_key: Path
-    security_certificate: Path
+    security_key: str
+    security_certificate: str
     security_digest: str = 'sha256'
-    broker_ca_certificates: Path
+    broker_ca_certificates: str
     cert_required: int = ssl.CERT_REQUIRED
 
     @property
-    def security_cert_store(self) -> Path:
+    def security_cert_store(self) -> str:
         # FIXME: Find correct way to search for certs store
-        search_folder = Path('/etc/ssl/certs/')
-        for file_ in search_folder.iterdir():
-            if file_.name.startswith('ca-') and '.trust' not in file_.suffixes:
-                return file_
+        search_folder = '/etc/ssl/certs/'
+        for file_ in os.listdir(search_folder):
+            if file_.startswith('ca-') and '.trust' not in file_:
+                return os.path.join(search_folder, file_)
         raise ValueError('Cannot find SSL certificates file')
 
 
@@ -215,7 +221,7 @@ class CeleryConfig(BaseModel):
         for (
             field_name,
             field,
-        ) in self.results_backend_config.dict().items():
+        ) in self.results_backend_config.model_dump().items():
             if field_name == 'broker_url' or field_name.startswith(
                 ('s3_', 'azure')
             ):

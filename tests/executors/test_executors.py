@@ -2,10 +2,12 @@ from contextlib import nullcontext as does_not_raise
 from typing import Any, Dict, List
 
 import pytest
+from asyncssh.misc import PermissionDenied, HostKeyNotVerifiable
 
 from alts.worker.executors.ansible import AnsibleExecutor
 from alts.worker.executors.base import BaseExecutor
 from alts.worker.executors.bats import BatsExecutor
+from alts.worker.executors.command import CommandExecutor
 from alts.worker.executors.shell import ShellExecutor
 
 
@@ -89,7 +91,7 @@ class TestBaseExecutor:
             pytest.param(
                 {'binary_name': 'bash'},
                 {'disable_known_hosts_check': True},
-                '--version',
+                ['--version'],
                 does_not_raise(),
                 0,
                 id='bash',
@@ -97,8 +99,8 @@ class TestBaseExecutor:
             pytest.param(
                 {'binary_name': 'bash'},
                 {},
-                '--version',
-                pytest.raises(FileNotFoundError),
+                ['--version'],
+                pytest.raises(HostKeyNotVerifiable),
                 1,
                 id='untrusted_host_key',
             ),
@@ -110,15 +112,15 @@ class TestBaseExecutor:
                     'preferred_auth': 'password',
                     'disable_known_hosts_check': True,
                 },
-                '--version',
-                pytest.raises(FileNotFoundError),
+                ['--version'],
+                pytest.raises(PermissionDenied),
                 1,
                 id='permission_denied',
             ),
             pytest.param(
                 {'binary_name': 'sleep'},
-                {'timeout': 1, 'disable_known_hosts_check': True},
-                '5',
+                {'timeout': 5, 'disable_known_hosts_check': True},
+                ['10', '&&', 'echo "check"'],
                 does_not_raise(),
                 1,
                 id='ssh_timeout',
@@ -130,7 +132,7 @@ class TestBaseExecutor:
         local_ssh_credentials: Dict[str, str],
         executor_params: Dict[str, Any],
         additional_ssh_params: Dict[str, Any],
-        command: str,
+        command: List[str],
         expected_exit_code: int,
         exception,
     ):
@@ -244,7 +246,6 @@ class TestBatsExecutor:
                 **local_ssh_credentials,
                 **ssh_params,
             }
-            cmd_args = bats_file_path or simple_bats_file
             run_method = 'run_ssh_command'
         executor = BatsExecutor(**executor_params)
         with exception:
@@ -286,14 +287,13 @@ class TestShellExecutor:
                 **additional_ssh_params,
             }
             func = 'run_ssh_command'
-            cmd_args = simple_shell_script
         executor = ShellExecutor(**executor_params)
         result = getattr(executor, func)(cmd_args)
         assert result.is_successful()
 
 
 class TestAnsibleExecutor:
-    def test_ansible_executor(self):
+    def test_ansible_executor_init(self):
         assert isinstance(AnsibleExecutor(), AnsibleExecutor)
 
     @pytest.mark.parametrize(
@@ -341,7 +341,44 @@ class TestAnsibleExecutor:
                 **additional_ssh_params,
             }
             func = 'run_ssh_command'
-            cmd_args = ' '.join(cmd_args)
         executor = AnsibleExecutor(**executor_params)
+        result = getattr(executor, func)(cmd_args)
+        assert result.is_successful()
+
+
+class TestCommandExecutor:
+    def test_command_executor_init(self):
+        assert isinstance(CommandExecutor(binary_name='bash'), CommandExecutor)
+
+    @pytest.mark.parametrize(
+        'cmd_args, additional_ssh_params',
+        [
+            pytest.param(
+                ['--version'],
+                {},
+                id='local',
+            ),
+            pytest.param(
+                ['--version'],
+                {'disable_known_hosts_check': True},
+                id='on_remote',
+            ),
+        ],
+    )
+    def test_command_executor_run_command(
+        self,
+        cmd_args: List[str],
+        additional_ssh_params: Dict[str, Any],
+        local_ssh_credentials: Dict[str, Any],
+    ):
+        executor_params = {'binary_name': 'bash'}
+        func = 'run_local_command'
+        if additional_ssh_params:
+            executor_params['ssh_params'] = {
+                **local_ssh_credentials,
+                **additional_ssh_params,
+            }
+            func = 'run_ssh_command'
+        executor = CommandExecutor(**executor_params)
         result = getattr(executor, func)(cmd_args)
         assert result.is_successful()
