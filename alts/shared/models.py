@@ -233,7 +233,7 @@ class CeleryConfig(BaseModel):
     ssl_config: typing.Optional[SslConfig] = None
     # Celery configuration variables
     broker_config: typing.Union[RabbitmqBrokerConfig, RedisBrokerConfig]
-    opennebula_config: OpennebulaConfig
+    opennebula_config: typing.Optional[OpennebulaConfig] = None
     results_backend_config: typing.Union[
         AzureResultsConfig,
         FilesystemResultsConfig,

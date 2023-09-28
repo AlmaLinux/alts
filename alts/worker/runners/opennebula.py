@@ -91,10 +91,9 @@ class OpennebulaRunner(GenericVMRunner):
             key=lambda i: i.NAME,
             reverse=True,
         )
-        if sorted_templates:
-            final_template = sorted_templates[0]
-        else:
+        if not sorted_templates:
             return None, None
+        final_template = sorted_templates[0]
         final_disk = final_template.TEMPLATE.get('DISK', {})
         final_image_name = final_disk.get('IMAGE')
         final_image_id = final_disk.get('IMAGE_ID')
