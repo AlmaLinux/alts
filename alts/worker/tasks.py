@@ -14,17 +14,21 @@ import tap.parser
 from alts.shared.constants import API_VERSION, DEFAULT_REQUEST_TIMEOUT
 from alts.shared.exceptions import (
     InstallPackageError,
-    UninstallPackageError,
     PackageIntegrityTestsError,
     StartEnvironmentError,
     ProvisionError,
     TerraformInitializationError,
     StopEnvironmentError,
+    UninstallPackageError,
 )
 from alts.worker import CONFIG
 from alts.worker.app import celery_app
 from alts.worker.mappings import RUNNER_MAPPING
-from alts.worker.runners.base import TESTS_SECTIONS_NAMES
+from alts.worker.runners.base import (
+    TESTS_SECTION_NAME,
+    THIRD_PARTY_SECTION_NAME,
+    TESTS_SECTIONS_NAMES,
+)
 
 __all__ = ['run_tests']
 
@@ -52,14 +56,9 @@ def are_tap_tests_success(tests_output: str):
     errors = 0
     for test_case in tap_data:
         if test_case.category == 'test':
-            if test_case.todo:
+            if any((test_case.todo, test_case.skip, test_case.ok)):
                 continue
-            elif test_case.skip:
-                continue
-            elif test_case.ok:
-                continue
-            else:
-                errors += 1
+            errors += 1
     return errors == 0
 
 
@@ -100,20 +99,34 @@ def run_tests(task_params: dict):
 
     logging.info('Starting work with the following params: %s', task_params)
 
-    for key in ['task_id', 'runner_type', 'dist_name', 'dist_version',
-                'dist_arch', 'repositories', 'package_name']:
+    for key in [
+        'task_id',
+        'runner_type',
+        'dist_name',
+        'dist_version',
+        'dist_arch',
+        'repositories',
+        'package_name',
+    ]:
         if task_params.get(key) is None:
             logging.error('Parameter %s is not specified', key)
             return
 
-    runner_args = (task_params['task_id'], task_params['dist_name'],
-                   task_params['dist_version'])
+    runner_args = (
+        task_params['task_id'],
+        task_params['dist_name'],
+        task_params['dist_version'],
+    )
 
     runner_kwargs = {
         'repositories': task_params.get('repositories', []),
         'dist_arch': task_params.get('dist_arch', 'x86_64'),
         'test_configuration': task_params.get('test_configuration', {})
     }
+    logging.info(
+        'tests_configuration: %s',
+        runner_kwargs['test_configuration'],
+    )
 
     runner_class = RUNNER_MAPPING[task_params['runner_type']]
     runner = runner_class(*runner_args, **runner_kwargs)
@@ -125,15 +138,20 @@ def run_tests(task_params: dict):
         package_version = task_params.get('package_version')
         runner.setup()
         runner.install_package(
-            package_name, package_version,
-            module_name=module_name, module_stream=module_stream,
-            module_version=module_version
+            package_name,
+            package_version,
+            module_name=module_name,
+            module_stream=module_stream,
+            module_version=module_version,
         )
         runner.run_package_integrity_tests(package_name, package_version)
+        runner.run_third_party_tests()
         runner.uninstall_package(
-            package_name, package_version,
-            module_name=module_name, module_stream=module_stream,
-            module_version=module_version
+            package_name,
+            package_version,
+            module_name=module_name,
+            module_stream=module_stream,
+            module_version=module_version,
         )
     except TerraformInitializationError as exc:
         logging.exception('Cannot initial terraform: %s', exc)
@@ -162,23 +180,31 @@ def run_tests(task_params: dict):
             # FIXME: Temporary solution, needs to be removed when this
             #  test system will be the only running one
             if stage in TESTS_SECTIONS_NAMES:
+                if stage not in summary:
+                    summary[stage] = {}
                 for inner_stage, inner_data in stage_data.items():
                     summary[stage][inner_stage] = {
                         'success': is_success(inner_data),
-                        'output': inner_data['stdout']
+                        'output': inner_data['stdout'],
                     }
             else:
                 summary[stage] = {'success': is_success(stage_data)}
         summary['logs'] = runner.uploaded_logs
         if task_params.get('callback_href'):
-            full_url = urllib.parse.urljoin(CONFIG.bs_host,
-                                            task_params['callback_href'])
-            payload = {'api_version': API_VERSION, 'result': summary,
-                       'stats': runner.stats}
+            full_url = urllib.parse.urljoin(
+                CONFIG.bs_host,
+                task_params['callback_href'],
+            )
+            payload = {
+                'api_version': API_VERSION,
+                'result': summary,
+                'stats': runner.stats,
+            }
             response = requests.post(
-                full_url, json=payload,
+                full_url,
+                json=payload,
                 headers={'Authorization': f'Bearer {CONFIG.bs_token}'},
-                timeout=DEFAULT_REQUEST_TIMEOUT
+                timeout=DEFAULT_REQUEST_TIMEOUT,
             )
             response.raise_for_status()
 

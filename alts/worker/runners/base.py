@@ -8,14 +8,24 @@ import re
 import shutil
 import tempfile
 import time
-import typing
 from functools import wraps
-from typing import List, Optional, Union
+from pathlib import Path
+from typing import Dict, List, Optional, Union
 
 from mako.lookup import TemplateLookup
 from plumbum import local
 
-from alts.shared.exceptions import *
+from alts.shared.exceptions import (
+    InstallPackageError,
+    PackageIntegrityTestsError,
+    ProvisionError,
+    PublishArtifactsError,
+    StartEnvironmentError,
+    StopEnvironmentError,
+    TerraformInitializationError,
+    UninstallPackageError,
+    WorkDirPreparationError,
+)
 from alts.shared.types import ImmutableDict
 from alts.shared.uploaders.base import BaseLogsUploader, UploadError
 from alts.shared.uploaders.pulp import PulpLogsUploader
@@ -32,49 +42,63 @@ __all__ = [
 
 
 TESTS_SECTION_NAME = 'tests'
+THIRD_PARTY_SECTION_NAME = 'third_party'
 TESTS_SECTIONS_NAMES = (
     TESTS_SECTION_NAME,
+    THIRD_PARTY_SECTION_NAME,
 )
 TF_INIT_LOCK_PATH = '/tmp/tf_init_lock'
 
 
-def command_decorator(exception_class, artifacts_key, error_message, additional_section_name=None):
+def command_decorator(
+    exception_class,
+    artifacts_key,
+    error_message,
+    additional_section_name=None,
+):
     def method_wrapper(fn):
         @wraps(fn)
         def inner_wrapper(*args, **kwargs):
-            self = args[0]  # type: BaseRunner
-            args = args[1:]
+            self, *args = args
             if not self._work_dir or not os.path.exists(self._work_dir):
                 return
             start = datetime.datetime.utcnow()
             exit_code, stdout, stderr = fn(self, *args, **kwargs)
             finish = datetime.datetime.utcnow()
             add_to = self._artifacts
-            if additional_section_name:
-                if additional_section_name not in self._artifacts:
-                    self._artifacts[additional_section_name] = {}
-                    add_to = self._artifacts[additional_section_name]
-            add_to[artifacts_key] = {
+            key = kwargs.get('artifacts_key') or artifacts_key
+            section_name = (
+                kwargs.get('additional_section_name')
+                or additional_section_name
+            )
+            if section_name:
+                if section_name not in self._artifacts:
+                    self._artifacts[section_name] = {}
+                add_to = self._artifacts[section_name]
+            add_to[key] = {
                 'exit_code': exit_code,
                 'stderr': stderr,
-                'stdout': stdout
+                'stdout': stdout,
             }
-            self._stats[artifacts_key] = {
+            self._stats[key] = {
                 'start_ts': start.isoformat(),
                 'finish_ts': finish.isoformat(),
-                'delta': (finish - start).total_seconds()
+                'delta': (finish - start).total_seconds(),
             }
             if exit_code != 0:
                 self._logger.error(
                     '%s, exit code: %s, error:\n%s',
-                    error_message, exit_code, stderr,
+                    error_message,
+                    exit_code,
+                    stderr,
                 )
                 raise exception_class(error_message)
-            else:
-                self._logger.info('Operation completed successfully')
+            self._logger.info('Operation completed successfully')
             # Return results of command execution
             return exit_code, stdout, stderr
+
         return inner_wrapper
+
     return method_wrapper
 
 
@@ -84,6 +108,7 @@ class BaseRunner(object):
     like Docker container, virtual machine, etc.
 
     """
+
     TYPE = 'base'
     ARCHITECTURES_MAPPING = ImmutableDict(
         aarch64=['arm64', 'aarch64'],
@@ -106,10 +131,10 @@ class BaseRunner(object):
         task_id: str,
         dist_name: str,
         dist_version: Union[str, int],
-        repositories: List[dict] = None,
+        repositories: Optional[List[dict]] = None,
         dist_arch: str = 'x86_64',
-        artifacts_uploader: BaseLogsUploader = None,
-        test_configuration: typing.Optional[dict] = None,
+        artifacts_uploader: Optional[BaseLogsUploader] = None,
+        test_configuration: Optional[dict] = None,
     ):
         # Environment ID and working directory preparation
         self._task_id = task_id
@@ -124,17 +149,17 @@ class BaseRunner(object):
         self._integrity_tests_dir = None
         self._class_resources_dir = os.path.join(RESOURCES_DIR, self.TYPE)
         self._template_lookup = TemplateLookup(
-            directories=[RESOURCES_DIR, self._class_resources_dir])
+            directories=[RESOURCES_DIR, self._class_resources_dir]
+        )
+        self._uploader = artifacts_uploader
         if not artifacts_uploader:
             if not CONFIG.logs_uploader_config.skip_artifacts_upload:
                 self._uploader = PulpLogsUploader(
                     CONFIG.logs_uploader_config.pulp_host,
                     CONFIG.logs_uploader_config.pulp_user,
                     CONFIG.logs_uploader_config.pulp_password,
-                    concurrency=CONFIG.logs_uploader_config.uploader_concurrency
+                    concurrency=CONFIG.logs_uploader_config.uploader_concurrency,
                 )
-        else:
-            self._uploader = artifacts_uploader
 
         # Basic commands and tools setup
         self._ansible_connection_type = 'ssh'
@@ -156,21 +181,21 @@ class BaseRunner(object):
         return self._artifacts
 
     @property
-    def uploaded_logs(self) -> typing.Dict[str, str]:
+    def uploaded_logs(self) -> Dict[str, str]:
         return self._uploaded_logs
 
     @property
     def pkg_manager(self):
-        if (self._dist_name == 'fedora' or
-                (self._dist_name in CONFIG.rhel_flavors
-                 and self._dist_version.startswith('8'))):
+        if self._dist_name == 'fedora' or (
+            self._dist_name in CONFIG.rhel_flavors
+            and self._dist_version.startswith('8')
+        ):
             return 'dnf'
-        elif self._dist_name in CONFIG.rhel_flavors:
+        if self._dist_name in CONFIG.rhel_flavors:
             return 'yum'
-        elif self._dist_name in CONFIG.debian_flavors:
+        if self._dist_name in CONFIG.debian_flavors:
             return 'apt-get'
-        else:
-            raise ValueError(f'Unknown distribution: {self._dist_name}')
+        raise ValueError(f'Unknown distribution: {self._dist_name}')
 
     @property
     def ansible_connection_type(self):
@@ -219,8 +244,10 @@ class BaseRunner(object):
             gzip.open(log_file, 'wt', encoding='utf-8'),
         )
         handler.setLevel(logging.DEBUG)
-        formatter = logging.Formatter("%(asctime)s %(levelname)-8s]: "
-                                      "%(message)s", "%H:%M:%S %d.%m.%y")
+        formatter = logging.Formatter(
+            "%(asctime)s %(levelname)-8s]: %(message)s",
+            "%H:%M:%S %d.%m.%y",
+        )
         handler.setFormatter(formatter)
         self._logger.addHandler(handler)
         return handler
@@ -242,7 +269,9 @@ class BaseRunner(object):
     # TODO: Think of better implementation
     def _create_work_dir(self):
         if not self._work_dir or not os.path.exists(self._work_dir):
-            self._work_dir = tempfile.mkdtemp(prefix=self.TEMPFILE_PREFIX)
+            self._work_dir = Path(
+                tempfile.mkdtemp(prefix=self.TEMPFILE_PREFIX)
+            )
         return self._work_dir
 
     # TODO: Think of better implementation
@@ -264,13 +293,20 @@ class BaseRunner(object):
             content = template.render(**kwargs)
             f.write(content)
 
-    def _create_ansible_inventory_file(self, vm_ip: str = None):
+    def _create_ansible_inventory_file(
+        self,
+        vm_ip: Optional[str] = None,
+    ):
         self._inventory_file_path = os.path.join(
-            self._work_dir, self.ANSIBLE_INVENTORY_FILE)
+            self._work_dir,
+            self.ANSIBLE_INVENTORY_FILE,
+        )
         self._render_template(
-            f'{self.ANSIBLE_INVENTORY_FILE}.tmpl', self._inventory_file_path,
-            env_name=self.env_name, vm_ip=vm_ip,
-            connection_type=self.ansible_connection_type
+            f'{self.ANSIBLE_INVENTORY_FILE}.tmpl',
+            self._inventory_file_path,
+            env_name=self.env_name,
+            vm_ip=vm_ip,
+            connection_type=self.ansible_connection_type,
         )
 
     def _render_tf_main_file(self):
@@ -292,14 +328,16 @@ class BaseRunner(object):
         raise NotImplementedError
 
     def _detect_full_package_name(
-            self, package_name: str, package_version: str = None) -> str:
+        self,
+        package_name: str,
+        package_version: Optional[str] = None,
+    ) -> str:
+        full_pkg_name = package_name
         if package_version:
+            delimiter = '='
             if self.pkg_manager in ('yum', 'dnf'):
-                full_pkg_name = f'{package_name}-{package_version}'
-            else:
-                full_pkg_name = f'{package_name}={package_version}'
-        else:
-            full_pkg_name = package_name
+                delimiter = '-'
+            full_pkg_name = f'{package_name}{delimiter}{package_version}'
         return full_pkg_name
 
     # First step
@@ -311,29 +349,38 @@ class BaseRunner(object):
         try:
             # Write resources that are not templated into working directory
             for ansible_file in (self.ANSIBLE_CONFIG, self.ANSIBLE_PLAYBOOK):
-                shutil.copy(os.path.join(RESOURCES_DIR, ansible_file),
-                            os.path.join(self._work_dir, ansible_file))
+                shutil.copy(
+                    os.path.join(RESOURCES_DIR, ansible_file),
+                    os.path.join(self._work_dir, ansible_file),
+                )
             shutil.copy(
                 os.path.join(self._class_resources_dir, self.TF_VERSIONS_FILE),
-                os.path.join(self._work_dir, self.TF_VERSIONS_FILE)
+                os.path.join(self._work_dir, self.TF_VERSIONS_FILE),
             )
             # Copy integrity tests into working directory
             self._integrity_tests_dir = os.path.join(
-                self._work_dir, self.INTEGRITY_TESTS_DIR)
-            shutil.copytree(os.path.join(RESOURCES_DIR,
-                                         self.INTEGRITY_TESTS_DIR),
-                            self._integrity_tests_dir)
+                self._work_dir,
+                self.INTEGRITY_TESTS_DIR,
+            )
+            shutil.copytree(
+                os.path.join(RESOURCES_DIR, self.INTEGRITY_TESTS_DIR),
+                self._integrity_tests_dir,
+            )
 
             self._create_ansible_inventory_file()
             self._render_tf_main_file()
             self._render_tf_variables_file()
         except Exception as e:
-            raise WorkDirPreparationError('Cannot create working directory and'
-                                          ' needed files') from e
+            raise WorkDirPreparationError(
+                'Cannot create working directory and needed files'
+            ) from e
 
     # After: prepare_work_dir_files
-    @command_decorator(TerraformInitializationError, 'initialize_terraform',
-                       'Cannot initialize terraform')
+    @command_decorator(
+        TerraformInitializationError,
+        'initialize_terraform',
+        'Cannot initialize terraform',
+    )
     def initialize_terraform(self):
         self._logger.info(
             'Initializing Terraform environment for %s...',
@@ -352,8 +399,11 @@ class BaseRunner(object):
                     time.sleep(1)
                 else:
                     break
-            return local['terraform'].run('init', retcode=None,
-                                          cwd=self._work_dir)
+            return local['terraform'].run(
+                'init',
+                retcode=None,
+                cwd=self._work_dir,
+            )
         finally:
             if lock_fileno:
                 fcntl.flock(lock_fileno, fcntl.LOCK_UN)
@@ -361,8 +411,11 @@ class BaseRunner(object):
                 lock.close()
 
     # After: initialize_terraform
-    @command_decorator(StartEnvironmentError, 'start_environment',
-                       'Cannot start environment')
+    @command_decorator(
+        StartEnvironmentError,
+        'start_environment',
+        'Cannot start environment',
+    )
     def start_env(self):
         self._logger.info(
             'Starting the environment %s...',
@@ -372,89 +425,172 @@ class BaseRunner(object):
         cmd_args = ['apply', '--auto-approve']
         if self.TF_VARIABLES_FILE:
             cmd_args.extend(['--var-file', self.TF_VARIABLES_FILE])
-        return local['terraform'].run(args=cmd_args, retcode=None,
-                                      cwd=self._work_dir)
+        return local['terraform'].run(
+            args=cmd_args,
+            retcode=None,
+            cwd=self._work_dir,
+        )
 
     # After: start_env
-    @command_decorator(ProvisionError, 'initial_provision',
-                       'Cannot run initial provision')
+    @command_decorator(
+        ProvisionError,
+        'initial_provision',
+        'Cannot run initial provision',
+    )
     def initial_provision(self, verbose=False):
         # To pass dictionary into Ansible variables we need to pass
         # variables itself as a dictionary thus doing this weird
         # temporary dictionary
-        var_dict = {'repositories': self._repositories,
-                    'integrity_tests_dir': self._integrity_tests_dir}
-        cmd_args = ['-i', self.ANSIBLE_INVENTORY_FILE, self.ANSIBLE_PLAYBOOK,
-                    '-e', f'{var_dict}', '-t', 'initial_provision', '-vv']
+        var_dict = {
+            'repositories': self._repositories,
+            'integrity_tests_dir': self._integrity_tests_dir,
+        }
+        cmd_args = [
+            '-i',
+            self.ANSIBLE_INVENTORY_FILE,
+            self.ANSIBLE_PLAYBOOK,
+            '-e',
+            f'{var_dict}',
+            '-t',
+            'initial_provision',
+            '-vv',
+        ]
         self._logger.info('Command args: %s', cmd_args)
         if verbose:
             cmd_args.append('-vvvv')
         cmd_args_str = ' '.join(cmd_args)
         self._logger.info('Provisioning the environment %s...', self.env_name)
         self._logger.debug(
-            'Running "ansible-playbook %s" command', cmd_args_str)
+            'Running "ansible-playbook %s" command',
+            cmd_args_str,
+        )
         return local['ansible-playbook'].run(
-            args=cmd_args, retcode=None, cwd=self._work_dir)
+            args=cmd_args,
+            retcode=None,
+            cwd=self._work_dir,
+        )
 
-    @command_decorator(InstallPackageError, 'install_package',
-                       'Cannot install package')
-    def install_package(self, package_name: str, package_version: str = None,
-                        module_name: str = None, module_stream: str = None,
-                        module_version: str = None):
-
+    @command_decorator(
+        InstallPackageError,
+        'install_package',
+        'Cannot install package',
+    )
+    def install_package(
+        self,
+        package_name: str,
+        package_version: Optional[str] = None,
+        module_name: Optional[str] = None,
+        module_stream: Optional[str] = None,
+        module_version: Optional[str] = None,
+    ):
         full_pkg_name = self._detect_full_package_name(
-            package_name, package_version=package_version)
+            package_name,
+            package_version=package_version,
+        )
 
         self._logger.info(
             'Installing %s on %s...',
-            full_pkg_name, self.env_name,
+            full_pkg_name,
+            self.env_name,
         )
-        cmd_args = ['-i', self.ANSIBLE_INVENTORY_FILE, self.ANSIBLE_PLAYBOOK,
-                    '-e', f'pkg_name={full_pkg_name}', '-vv']
+        cmd_args = [
+            '-i',
+            self.ANSIBLE_INVENTORY_FILE,
+            self.ANSIBLE_PLAYBOOK,
+            '-e',
+            f'pkg_name={full_pkg_name}',
+            '-vv',
+        ]
         if module_name and module_stream and module_version:
-            cmd_args.extend(['-e', f'module_name={module_name}',
-                             '-e', f'module_stream={module_stream}',
-                             '-e', f'module_version={module_version}'])
+            cmd_args.extend(
+                [
+                    '-e',
+                    f'module_name={module_name}',
+                    '-e',
+                    f'module_stream={module_stream}',
+                    '-e',
+                    f'module_version={module_version}',
+                ]
+            )
         cmd_args.extend(['-t', 'install_package'])
         cmd_args_str = ' '.join(cmd_args)
         self._logger.debug(
-            f'Running "ansible-playbook {cmd_args_str}" command')
+            'Running "ansible-playbook %s" command',
+            cmd_args_str,
+        )
         return local['ansible-playbook'].run(
-            args=cmd_args, retcode=None, cwd=self._work_dir)
+            args=cmd_args,
+            retcode=None,
+            cwd=self._work_dir,
+        )
 
-    @command_decorator(UninstallPackageError, 'uninstall_package',
-                       'Cannot uninstall package')
-    def uninstall_package(self, package_name: str, package_version: str = None,
-                          module_name: str = None, module_stream: str = None,
-                          module_version: str = None):
+    @command_decorator(
+        UninstallPackageError,
+        'uninstall_package',
+        'Cannot uninstall package',
+    )
+    def uninstall_package(
+        self,
+        package_name: str,
+        package_version: Optional[str] = None,
+        module_name: Optional[str] = None,
+        module_stream: Optional[str] = None,
+        module_version: Optional[str] = None,
+    ):
         if package_name in CONFIG.uninstall_excluded_pkgs:
             return
 
         full_pkg_name = self._detect_full_package_name(
-            package_name, package_version=package_version)
+            package_name, package_version=package_version
+        )
 
         self._logger.info(
             'Uninstalling %s from %s...',
-            full_pkg_name, self.env_name,
+            full_pkg_name,
+            self.env_name,
         )
-        cmd_args = ['-i', self.ANSIBLE_INVENTORY_FILE, self.ANSIBLE_PLAYBOOK,
-                    '-e', f'pkg_name={full_pkg_name}', '-vv']
+        cmd_args = [
+            '-i',
+            self.ANSIBLE_INVENTORY_FILE,
+            self.ANSIBLE_PLAYBOOK,
+            '-e',
+            f'pkg_name={full_pkg_name}',
+            '-vv',
+        ]
         if module_name and module_stream and module_version:
-            cmd_args.extend(['-e', f'module_name={module_name}',
-                             '-e', f'module_stream={module_stream}',
-                             '-e', f'module_version={module_version}'])
+            cmd_args.extend(
+                [
+                    '-e',
+                    f'module_name={module_name}',
+                    '-e',
+                    f'module_stream={module_stream}',
+                    '-e',
+                    f'module_version={module_version}',
+                ]
+            )
         cmd_args.extend(['-t', 'uninstall_package'])
         cmd_args_str = ' '.join(cmd_args)
         self._logger.debug(
-            f'Running "ansible-playbook {cmd_args_str}" command')
+            'Running "ansible-playbook %s" command',
+            cmd_args_str,
+        )
         return local['ansible-playbook'].run(
-            args=cmd_args, retcode=None, cwd=self._work_dir)
+            args=cmd_args,
+            retcode=None,
+            cwd=self._work_dir,
+        )
 
-    @command_decorator(PackageIntegrityTestsError, 'package_integrity_tests',
-                       'Package integrity tests failed',
-                       additional_section_name=TESTS_SECTION_NAME)
-    def run_package_integrity_tests(self, package_name: str,
-                                    package_version: str = None):
+    @command_decorator(
+        PackageIntegrityTestsError,
+        'package_integrity_tests',
+        'Package integrity tests failed',
+        additional_section_name=TESTS_SECTION_NAME,
+    )
+    def run_package_integrity_tests(
+        self,
+        package_name: str,
+        package_version: Optional[str] = None,
+    ):
         """
         Run basic integrity tests for the package
 
@@ -462,7 +598,7 @@ class BaseRunner(object):
         ----------
         package_name:       str
             Package name
-        package_version:    str
+        package_version:    optional, str
             Package version
 
         Returns
@@ -471,20 +607,34 @@ class BaseRunner(object):
             Exit code, stdout and stderr from executed command
 
         """
-        cmd_args = ['--tap-stream', '--tap-files', '--tap-outdir',
-                    self._artifacts_dir, '--hosts', 'ansible://all',
-                    '--ansible-inventory', self._inventory_file_path,
-                    '--package-name', package_name]
+        cmd_args = [
+            '--tap-stream',
+            '--tap-files',
+            '--tap-outdir',
+            self._artifacts_dir,
+            '--hosts',
+            'ansible://all',
+            '--ansible-inventory',
+            self._inventory_file_path,
+            '--package-name',
+            package_name,
+        ]
         if package_version:
             full_pkg_name = f'{package_name}-{package_version}'
             cmd_args.extend(['--package-version', package_version])
         else:
             full_pkg_name = package_name
         cmd_args.append('tests')
-        self._logger.info('Running package integrity tests for '
-                          '%s on %s...', full_pkg_name, self.env_name)
-        return local['py.test'].run(args=cmd_args, retcode=None,
-                                    cwd=self._integrity_tests_dir)
+        self._logger.info(
+            'Running package integrity tests for %s on %s...',
+            full_pkg_name,
+            self.env_name,
+        )
+        return local['py.test'].run(
+            args=cmd_args,
+            retcode=None,
+            cwd=self._integrity_tests_dir,
+        )
 
     def publish_artifacts_to_storage(self):
         # Should upload artifacts from artifacts directory to preferred
@@ -501,11 +651,13 @@ class BaseRunner(object):
 
         def write_to_file(file_base_name: str, artifacts_section: dict):
             log_file_path = os.path.join(
-                self._artifacts_dir, f'{file_base_name}_{self._task_id}.log')
+                self._artifacts_dir,
+                f'{file_base_name}_{self._task_id}.log',
+            )
             with open(log_file_path, 'wb') as fd:
                 stdout = replace_host_name(artifacts_section["stdout"])
                 file_content = (
-                    f'Task ID: {self._task_id}\n'
+                    f'\nTask ID: {self._task_id}\n'
                     f'Time: {datetime.datetime.utcnow().isoformat()}\n'
                     f'Exit code: {artifacts_section["exit_code"]}\n'
                     f'Stdout:\n\n{stdout}'
@@ -516,9 +668,11 @@ class BaseRunner(object):
                 fd.write(gzip.compress(file_content.encode()))
 
         for artifact_key, content in self.artifacts.items():
-            if artifact_key == TESTS_SECTION_NAME:
+            if artifact_key in (TESTS_SECTION_NAME, THIRD_PARTY_SECTION_NAME):
                 for inner_artifact_key, inner_content in content.items():
-                    log_base_name = f'{TESTS_SECTION_NAME}_{inner_artifact_key}'
+                    log_base_name = inner_artifact_key
+                    if artifact_key not in log_base_name:
+                        log_base_name = f'{artifact_key}_{inner_artifact_key}'
                     write_to_file(log_base_name, inner_content)
             elif artifact_key == 'initialize_terraform':
                 stdout = content['stdout']
@@ -529,28 +683,57 @@ class BaseRunner(object):
 
         upload_dir = os.path.join(
             CONFIG.logs_uploader_config.artifacts_root_directory,
-            self._task_id
+            self._task_id,
         )
         try:
             artifacts = self._uploader.upload(
-                self._artifacts_dir, upload_dir=upload_dir)
+                self._artifacts_dir,
+                upload_dir=upload_dir,
+            )
             self._uploaded_logs = artifacts
         except UploadError as e:
             raise PublishArtifactsError from e
 
+    def clone_third_party_repo(
+        self,
+        repo_url: str,
+    ) -> Path:
+        self._logger.debug('Cloning git repo: %s', repo_url)
+        exit_code, _, stderr = local['git'].run(
+            ['clone', repo_url],
+            retcode=None,
+            cwd=self._work_dir,
+        )
+        if exit_code != 0:
+            raise ValueError(f'Cannot clone git repo:\n{stderr}')
+        return Path(
+            self._work_dir,
+            Path(repo_url).name.replace('.git', ''),
+        )
+
     # After: install_package and run_tests
-    @command_decorator(StopEnvironmentError, 'stop_environment',
-                       'Cannot destroy environment')
+    @command_decorator(
+        StopEnvironmentError,
+        'stop_environment',
+        'Cannot destroy environment',
+    )
     def stop_env(self):
         if os.path.exists(self._work_dir):
-            self._logger.info('Destroying the environment %s...', self.env_name)
+            self._logger.info(
+                'Destroying the environment %s...',
+                self.env_name,
+            )
             self._logger.debug(
-                'Running "terraform destroy --auto-approve" command')
+                'Running "terraform destroy --auto-approve" command'
+            )
             cmd_args = ['destroy', '--auto-approve']
             if self.TF_VARIABLES_FILE:
                 cmd_args.extend(['--var-file', self.TF_VARIABLES_FILE])
-            return local['terraform'].run(args=cmd_args, retcode=None,
-                                          cwd=self._work_dir)
+            return local['terraform'].run(
+                args=cmd_args,
+                retcode=None,
+                cwd=self._work_dir,
+            )
 
     def erase_work_dir(self):
         if self._work_dir and os.path.exists(self._work_dir):
@@ -559,7 +742,8 @@ class BaseRunner(object):
                 shutil.rmtree(self._work_dir)
             except Exception as e:
                 self._logger.error(
-                    'Error while erasing working directory: %s', e,
+                    'Error while erasing working directory: %s',
+                    e,
                 )
             else:
                 self._logger.info('Working directory was successfully removed')
@@ -568,7 +752,8 @@ class BaseRunner(object):
         self._stats['started_at'] = datetime.datetime.utcnow().isoformat()
         self.prepare_work_dir_files()
         self._task_log_file = os.path.join(
-            self._work_dir, f'alts-{self._task_id}-{self._dist_arch}.log'
+            self._work_dir,
+            f'alts-{self._task_id}-{self._dist_arch}.log',
         )
         self._task_log_handler = self.__init_task_logger(self._task_log_file)
         self.initialize_terraform()
@@ -584,8 +769,10 @@ class BaseRunner(object):
             try:
                 self.publish_artifacts_to_storage()
             except Exception as e:
-                self._logger.exception('Exception while publishing artifacts: '
-                                       '%s', str(e))
+                self._logger.exception(
+                    'Exception while publishing artifacts: %s',
+                    str(e),
+                )
             finally:
                 if not self._uploaded_logs:
                     self._uploaded_logs = []
@@ -610,9 +797,10 @@ class BaseRunner(object):
         logger = logging.getLogger(f'test_task-{task_id}-{arch}-logger')
         logger.handlers = []
         logger.setLevel(logging.DEBUG)
-        formatter = logging.Formatter("%(asctime)s %(levelname)-8s: "
-                                      "%(message)s",
-                                      "%H:%M:%S %d.%m.%y")
+        formatter = logging.Formatter(
+            "%(asctime)s %(levelname)-8s: %(message)s",
+            "%H:%M:%S %d.%m.%y",
+        )
         handler = logging.StreamHandler()
         handler.setLevel(logging.DEBUG)
         handler.setFormatter(formatter)
@@ -643,15 +831,14 @@ class BaseRunner(object):
 
 
 class GenericVMRunner(BaseRunner):
-
     def __init__(
         self,
         task_id: str,
         dist_name: str,
         dist_version: Union[str, int],
-        repositories: List[dict] = None,
+        repositories: Optional[List[dict]] = None,
         dist_arch: str = 'x86_64',
-        test_configuration: Optional[dict] = None
+        test_configuration: Optional[dict] = None,
     ):
         super().__init__(
             task_id,
@@ -662,7 +849,8 @@ class GenericVMRunner(BaseRunner):
             test_configuration=test_configuration,
         )
         ssh_key_path = os.path.abspath(
-            os.path.expanduser(CONFIG.ssh_public_key_path))
+            os.path.expanduser(CONFIG.ssh_public_key_path)
+        )
         if not os.path.exists(ssh_key_path):
             self._logger.error('SSH key is missing')
         else:
@@ -681,15 +869,18 @@ class GenericVMRunner(BaseRunner):
         exit_code = 0
         while retries > 0:
             exit_code, stdout, stderr = ansible.run(
-                args=cmd_args, retcode=None, cwd=self._work_dir)
+                args=cmd_args,
+                retcode=None,
+                cwd=self._work_dir,
+            )
             if exit_code == 0:
                 return exit_code, stdout, stderr
-            else:
-                retries -= 1
-                time.sleep(10)
+            retries -= 1
+            time.sleep(10)
         self._logger.error(
             'Unable to connect to VM. Stdout: %s\nStderr: %s',
-            stdout, stderr,
+            stdout,
+            stderr,
         )
         return exit_code, stdout, stderr
 
@@ -701,7 +892,10 @@ class GenericVMRunner(BaseRunner):
         # To extract it, the `vm_ip` output should be defined
         # in Terraform main file.
         exit_code, stdout, stderr = local['terraform'].run(
-            args=('output', '-raw', 'vm_ip'), retcode=None, cwd=self._work_dir)
+            args=('output', '-raw', 'vm_ip'),
+            retcode=None,
+            cwd=self._work_dir,
+        )
         if exit_code != 0:
             error_message = f'Cannot get VM IP: {stderr}'
             self._logger.error(error_message)

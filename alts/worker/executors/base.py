@@ -42,6 +42,8 @@ class BaseExecutor:
         logger: Optional[logging.Logger] = None,
         logger_name: str = 'base-executor',
         logging_level: Literal['DEBUG', 'INFO'] = 'DEBUG',
+        connection_type: Literal['local', 'ssh', 'docker'] = 'local',
+        container_name: str = '',
     ) -> None:
         self.ssh_client = None
         self.env_vars = {}
@@ -57,6 +59,8 @@ class BaseExecutor:
                 ssh_params['env_vars'] = env_vars if env_vars else None
                 ssh_params = AsyncSSHParams(**ssh_params)
             self.ssh_client = AsyncSSHClient(**ssh_params.model_dump())
+        self.connection_type = connection_type
+        self.container_name = container_name
         self.logger = logger
         if not self.logger:
             self.logger = self.setup_logger(logger_name, logging_level)
@@ -79,19 +83,19 @@ class BaseExecutor:
         return logger
 
     def check_binary_existence(self):
-        cmd_args = ['--version']
         func = self.run_local_command
         if self.ssh_client:
-            func = self.ssh_client.sync_run_command
-            cmd_args = f'{self.binary_name} --version'
+            func = self.run_ssh_command
+        if self.connection_type == 'docker':
+            func = self.run_docker_command
         try:
-            result = func(cmd_args)
+            result = func(['--version'])
         except Exception as exc:
             self.logger.exception('Cannot check binary existence:')
             raise exc
         if not result.is_successful():
             raise FileNotFoundError(
-                f'Binary "{self.binary_name}" is not found in PATH'
+                f'Binary "{self.binary_name}" is not found in PATH '
                 f'on the machine\n{result.stderr}',
             )
 
@@ -108,9 +112,7 @@ class BaseExecutor:
             )
         except Exception:
             self.logger.exception('Cannot run local command:')
-            exit_code = 1
-            stdout = ''
-            stderr = format_exc()
+            exit_code, stdout, stderr = 1, '', format_exc()
         return CommandResult(
             exit_code=exit_code,
             stdout=stdout,
@@ -122,5 +124,37 @@ class BaseExecutor:
         if not self.ssh_client:
             raise ValueError('SSH params are missing')
         return self.ssh_client.sync_run_command(
-            ' '.join([self.binary_name] + cmd_args)
+            ' '.join([self.binary_name, *cmd_args])
+        )
+
+    @measure_stage('run_docker_command')
+    def run_docker_command(
+        self,
+        cmd_args: List[str],
+        docker_args: Optional[List[str]] = None,
+    ) -> CommandResult:
+        docker_args = docker_args if docker_args else []
+        try:
+            exit_code, stdout, stderr = (
+                local['docker']
+                .with_env(**self.env_vars)
+                .run(
+                    args=[
+                        'exec',
+                        *docker_args,
+                        self.container_name,
+                        self.binary_name,
+                        *cmd_args,
+                    ],
+                    timeout=self.timeout,
+                    retcode=None,
+                )
+            )
+        except Exception:
+            self.logger.exception('Cannot run docker command:')
+            exit_code, stdout, stderr = 1, '', format_exc()
+        return CommandResult(
+            exit_code=exit_code,
+            stdout=stdout,
+            stderr=stderr,
         )
