@@ -134,6 +134,7 @@ class OpennebulaConfig(BaseModel):
     username: typing.Optional[str] = None
     password: typing.Optional[str] = None
     vm_group: typing.Optional[str] = None
+    vm_size: typing.Optional[int] = 15000
     network: typing.Optional[str] = None
 
 

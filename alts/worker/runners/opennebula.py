@@ -123,16 +123,16 @@ class OpennebulaRunner(GenericVMRunner):
         """
         Renders Terraform file for creating a template.
         """
-        vm_group_name = CONFIG.opennebula_config.vm_group
         nebula_tf_file = os.path.join(self._work_dir, self.TF_MAIN_FILE)
         template_id, image_id = self.find_template_and_image_ids()
         self._render_template(
             template_name=f'{self.TF_MAIN_FILE}.tmpl',
             result_file_path=nebula_tf_file,
             vm_name=self.env_name,
-            opennebula_vm_group=vm_group_name,
+            opennebula_vm_group=CONFIG.opennebula_config.vm_group,
             image_id=image_id,
             template_id=template_id,
+            vm_size=CONFIG.opennebula_config.vm_size,
             opennebula_network=CONFIG.opennebula_config.network,
         )
 

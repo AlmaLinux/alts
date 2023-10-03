@@ -25,6 +25,7 @@ resource "opennebula_virtual_machine" "${vm_name}" {
   }
   disk {
     image_id = ${image_id}
+    size = ${vm_size}
     target = "sda"
   }
   nic {

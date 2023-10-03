@@ -38,6 +38,8 @@ opennebula_config:
   username:
   password:
   vm_group:
+  # in MB
+  vm_size:
   network:
 
 bs_host:

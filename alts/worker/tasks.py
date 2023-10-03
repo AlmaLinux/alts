@@ -6,6 +6,7 @@
 
 import logging
 import urllib.parse
+from collections import defaultdict
 
 import requests
 import tap.parser
@@ -16,12 +17,14 @@ from alts.shared.exceptions import (
     UninstallPackageError,
     PackageIntegrityTestsError,
     StartEnvironmentError,
+    ProvisionError,
+    TerraformInitializationError,
+    StopEnvironmentError,
 )
 from alts.worker import CONFIG
 from alts.worker.app import celery_app
 from alts.worker.mappings import RUNNER_MAPPING
-from alts.worker.runners.base import TESTS_SECTION_NAME
-
+from alts.worker.runners.base import TESTS_SECTIONS_NAMES
 
 __all__ = ['run_tests']
 
@@ -82,6 +85,19 @@ def run_tests(task_params: dict):
             return tap_result
         return stage_data_['exit_code'] == 0
 
+    def set_artifacts_when_stage_has_unexpected_exception(
+            _artifacts: dict,
+            error_message: str,
+            section_name: str,
+    ):
+        if section_name not in _artifacts:
+            _artifacts[section_name] = {}
+        _artifacts_section = _artifacts[section_name]
+        _artifacts_section = {
+            'exit_code': 1,
+            'stdout': error_message,
+        }
+
     logging.info('Starting work with the following params: %s', task_params)
 
     for key in ['task_id', 'runner_type', 'dist_name', 'dist_version',
@@ -94,15 +110,13 @@ def run_tests(task_params: dict):
                    task_params['dist_version'])
 
     runner_kwargs = {
-        'repositories': task_params.get('repositories')
-        if task_params.get('repositories') else [],
-        'dist_arch': task_params.get('dist_arch')
-        if task_params.get('dist_arch') else 'x86_64',
-        'test_configuration': task_params.get('test_configuration')
-        if task_params.get('test_configuration') else {},
+        'repositories': task_params.get('repositories', []),
+        'dist_arch': task_params.get('dist_arch', 'x86_64'),
+        'test_configuration': task_params.get('test_configuration', {})
     }
 
-    runner_class = RUNNER_MAPPING[task_params['runner_type']]
+    # runner_class = RUNNER_MAPPING[task_params['runner_type']]
+    runner_class = RUNNER_MAPPING['opennebula']
     runner = runner_class(*runner_args, **runner_kwargs)
     module_name = task_params.get('module_name')
     module_stream = task_params.get('module_stream')
@@ -122,25 +136,35 @@ def run_tests(task_params: dict):
             module_name=module_name, module_stream=module_stream,
             module_version=module_version
         )
+    except TerraformInitializationError as exc:
+        logging.exception('Cannot initial terraform: %s', exc)
     except StartEnvironmentError as exc:
         logging.exception('Cannot start environment: %s', exc)
+    except ProvisionError as exc:
+        logging.exception('Cannot initial provision: %s', exc)
     except InstallPackageError as exc:
         logging.exception('Cannot install package: %s', exc)
     except PackageIntegrityTestsError as exc:
         logging.exception('Package integrity tests failed: %s', exc)
     except UninstallPackageError as exc:
         logging.exception('Cannot uninstall package: %s', exc)
+    except StopEnvironmentError as exc:
+        logging.exception('Cannot stop environment: %s', exc)
+    except Exception as exc:
+        logging.exception('Unexpected exception: %s', exc)
+        set_artifacts_when_stage_has_unexpected_exception(
+            _artifacts=runner.artifacts,
+            error_message=f'Unexpected exception: {exc}',
+            section_name='Unexpected errors during tests')
     finally:
         runner.teardown()
-        summary = {}
+        summary = defaultdict(dict)
         for stage, stage_data in runner.artifacts.items():
             # FIXME: Temporary solution, needs to be removed when this
             #  test system will be the only running one
-            if stage == TESTS_SECTION_NAME:
-                if TESTS_SECTION_NAME not in summary:
-                    summary[TESTS_SECTION_NAME] = {}
+            if stage in TESTS_SECTIONS_NAMES:
                 for inner_stage, inner_data in stage_data.items():
-                    summary[TESTS_SECTION_NAME][inner_stage] = {
+                    summary[stage][inner_stage] = {
                         'success': is_success(inner_data),
                         'output': inner_data['stdout']
                     }

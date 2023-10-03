@@ -1,5 +1,4 @@
 import hashlib
-from pathlib import Path
 
 
 def get_hasher(checksum_type):
@@ -26,7 +25,7 @@ def hash_file(file_path, hasher=None, hash_type=None, buff_size=1048576):
 
     Parameters
     ----------
-    file_path : Path or file-like
+    file_path : str or file-like
         File to hash. It could be either a path or a file descriptor.
     hasher : _hashlib.HASH
         Any hash algorithm from hashlib.
@@ -50,8 +49,8 @@ def hash_file(file_path, hasher=None, hash_type=None, buff_size=1048576):
                 buff = buff.encode('utf')
             hasher.update(buff)
             buff = _fd.read(buff_size)
-    if isinstance(file_path, Path):
-        with file_path.open(mode='rb') as fd:
+    if isinstance(file_path, str):
+        with open(file_path, mode='rb') as fd:
             feed_hasher(fd)
     else:
         file_path.seek(0)

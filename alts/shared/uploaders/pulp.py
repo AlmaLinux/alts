@@ -113,7 +113,7 @@ class PulpBaseUploader(BaseUploader):
                                   f'details: {result}')
         return result
 
-    def _create_upload(self, file_path: Path) -> (str, int):
+    def _create_upload(self, file_path: str) -> (str, int):
         """
 
         Parameters
@@ -127,14 +127,14 @@ class PulpBaseUploader(BaseUploader):
             Upload reference and file size.
 
         """
-        file_size = file_path.stat().st_size
+        file_size = Path(file_path).stat().st_size
         response = self._uploads_client.create(
             {'size': file_size},
             _request_timeout=self._requests_timeout,
         )
         return response.pulp_href, file_size
 
-    def _commit_upload(self, file_path: Path, reference: str) -> str:
+    def _commit_upload(self, file_path: str, reference: str) -> str:
         """
         Commits upload and waits until upload will be transformed to artifact.
         Returns artifact reference upon completion.
@@ -159,13 +159,13 @@ class PulpBaseUploader(BaseUploader):
         task_result = self._wait_for_task_completion(response.task)
         return task_result.created_resources[0]
 
-    def _put_large_file(self, file_path: Path, reference: str):
+    def _put_large_file(self, file_path: str, reference: str):
         temp_dir = tempfile.mkdtemp(prefix='pulp_uploader_')
         try:
             lower_bytes_limit = 0
             total_size = os.path.getsize(file_path)
             self._file_splitter.split(
-                str(file_path), self._chunk_size, output_dir=temp_dir)
+                file_path, self._chunk_size, output_dir=temp_dir)
             manifest_path = os.path.join(temp_dir, 'fs_manifest.csv')
             with open(manifest_path, 'r') as f:
                 for meta in csv.DictReader(f):
@@ -182,7 +182,7 @@ class PulpBaseUploader(BaseUploader):
             if temp_dir and os.path.exists(temp_dir):
                 shutil.rmtree(temp_dir)
 
-    def _send_file(self, file_path: Path):
+    def _send_file(self, file_path: str):
         reference, file_size = self._create_upload(file_path)
         if file_size > self._chunk_size:
             self._logger.debug('File size exceeded %d, sending file in parts',
@@ -192,7 +192,7 @@ class PulpBaseUploader(BaseUploader):
             self._uploads_client.update(
                 f'bytes 0-{file_size - 1}/{file_size}',
                 reference,
-                str(file_path),
+                file_path,
                 _request_timeout=self._requests_timeout
             )
         artifact_href = self._commit_upload(file_path, reference)
@@ -204,7 +204,7 @@ class PulpBaseUploader(BaseUploader):
         if response.results:
             return response.results[0].pulp_href
 
-    def upload(self, artifacts_dir: Path, **kwargs) -> List[dict]:
+    def upload(self, artifacts_dir: str, **kwargs) -> List[dict]:
         """
 
         Parameters
@@ -245,13 +245,13 @@ class PulpBaseUploader(BaseUploader):
             raise UploadError(f'Unable to upload files: {errored_uploads}')
         return success_uploads
 
-    def upload_single_file(self, filename: Path,
+    def upload_single_file(self, filename: str,
                            type_: str = 'test_log') -> dict:
         """
 
         Parameters
         ----------
-        filename : Path
+        filename : str
             Path to file that need to be uploaded.
         type_ : str
             Type of the artifact
@@ -262,16 +262,17 @@ class PulpBaseUploader(BaseUploader):
             Information about uploaded file
 
         """
+        base_filename = Path(filename).name
         file_sha256 = hash_file(filename, hash_type='sha256')
         reference = self.check_if_artifact_exists(file_sha256)
         if reference:
             raise UploadError(
-                f"File {filename.name} with reference: "
+                f"File {base_filename} with reference: "
                 f"{reference} Already exists",
             )
 
         return dict(
-            name=os.path.basename(filename.name),
+            name=base_filename,
             href=self._send_file(filename),
             type=type_
         )

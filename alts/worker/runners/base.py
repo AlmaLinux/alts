@@ -10,7 +10,6 @@ import tempfile
 import time
 import typing
 from functools import wraps
-from pathlib import Path
 from typing import List, Optional, Union
 
 from mako.lookup import TemplateLookup
@@ -23,10 +22,19 @@ from alts.shared.uploaders.pulp import PulpLogsUploader
 from alts.worker import CONFIG, RESOURCES_DIR
 
 
-__all__ = ['BaseRunner', 'GenericVMRunner', 'command_decorator', 'TESTS_SECTION_NAME']
+__all__ = [
+    'BaseRunner',
+    'GenericVMRunner',
+    'command_decorator',
+    'TESTS_SECTION_NAME',
+    'TESTS_SECTIONS_NAMES',
+]
 
 
 TESTS_SECTION_NAME = 'tests'
+TESTS_SECTIONS_NAMES = (
+    TESTS_SECTION_NAME,
+)
 TF_INIT_LOCK_PATH = '/tmp/tf_init_lock'
 
 
@@ -110,7 +118,7 @@ class BaseRunner(object):
         self._logger = self.init_test_task_logger(task_id, dist_arch)
         self._task_log_file = None
         self._task_log_handler = None
-        self._work_dir = None  # type: typing.Optional[Path]
+        self._work_dir = None
         self._artifacts_dir = None
         self._inventory_file_path = None
         self._integrity_tests_dir = None
@@ -234,14 +242,14 @@ class BaseRunner(object):
     # TODO: Think of better implementation
     def _create_work_dir(self):
         if not self._work_dir or not os.path.exists(self._work_dir):
-            self._work_dir = Path(tempfile.mkdtemp(prefix=self.TEMPFILE_PREFIX))
+            self._work_dir = tempfile.mkdtemp(prefix=self.TEMPFILE_PREFIX)
         return self._work_dir
 
     # TODO: Think of better implementation
     def _create_artifacts_dir(self):
         if not self._work_dir:
             self._work_dir = self._create_work_dir()
-        path = self._work_dir / 'artifacts'
+        path = os.path.join(self._work_dir, 'artifacts')
         if not os.path.exists(path):
             os.mkdir(path)
         return path
@@ -504,7 +512,7 @@ class BaseRunner(object):
                 )
                 if artifacts_section.get('stderr'):
                     stderr = replace_host_name(artifacts_section["stderr"])
-                    file_content += f'Stderr:\n\n{stderr}'
+                    file_content += f'\n\nStderr:\n\n{stderr}'
                 fd.write(gzip.compress(file_content.encode()))
 
         for artifact_key, content in self.artifacts.items():
@@ -670,11 +678,12 @@ class GenericVMRunner(BaseRunner):
         cmd_args = ('-i', self.ANSIBLE_INVENTORY_FILE, '-m', 'ping', 'all')
         stdout = None
         stderr = None
+        exit_code = 0
         while retries > 0:
             exit_code, stdout, stderr = ansible.run(
                 args=cmd_args, retcode=None, cwd=self._work_dir)
             if exit_code == 0:
-                return True
+                return exit_code, stdout, stderr
             else:
                 retries -= 1
                 time.sleep(10)
@@ -682,8 +691,10 @@ class GenericVMRunner(BaseRunner):
             'Unable to connect to VM. Stdout: %s\nStderr: %s',
             stdout, stderr,
         )
-        return False
+        return exit_code, stdout, stderr
 
+    @command_decorator(StartEnvironmentError, 'start_environment',
+                       'Cannot start environment')
     def start_env(self):
         super().start_env()
         # VM gets its IP address only after deploy.
@@ -694,15 +705,17 @@ class GenericVMRunner(BaseRunner):
         if exit_code != 0:
             error_message = f'Cannot get VM IP: {stderr}'
             self._logger.error(error_message)
-            raise StartEnvironmentError(error_message)
+            return exit_code, stdout, stderr
         # Because we don't know about a VM's IP before its creating
         # And get an IP after launch of terraform script
         self._create_ansible_inventory_file(vm_ip=stdout)
         self._logger.info('Waiting for SSH port to be available')
-        is_online = self._wait_for_ssh()
-        if not is_online:
-            error_message = f'Machine {self.env_name} is started, but ' \
-                            f'SSH connection is not working'
-            self._logger.error(error_message)
-            raise StartEnvironmentError(error_message)
-        self._logger.info('Machine is available for SSH connection')
+        exit_code, stdout, stderr = self._wait_for_ssh()
+        if exit_code:
+            self._logger.error(
+                'Machine %s is started, but SSH connection is not working',
+                self.env_name,
+            )
+        else:
+            self._logger.info('Machine is available for SSH connection')
+        return exit_code, stdout, stderr

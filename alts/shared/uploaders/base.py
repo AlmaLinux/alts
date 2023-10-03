@@ -14,7 +14,7 @@ class UploadError(Exception):
 
 class BaseUploader(object):
 
-    def get_artifacts_list(self, artifacts_dir: Path) -> typing.List[Path]:
+    def get_artifacts_list(self, artifacts_dir: str) -> typing.List[str]:
         """
         Returns the list of the files in artifacts directory
         that need to be uploaded.
@@ -30,10 +30,13 @@ class BaseUploader(object):
             List of files.
 
         """
-        return [file for file in artifacts_dir.iterdir() if file.is_file()]
+        return [
+            str(file) for file in Path(artifacts_dir).iterdir()
+            if file.is_file()
+        ]
 
     @abstractmethod
-    def upload(self, artifacts_dir: Path, **kwargs) -> \
+    def upload(self, artifacts_dir: str, **kwargs) -> \
             typing.Tuple[typing.Dict[str, str], bool]:
         raise NotImplementedError()
 
@@ -44,6 +47,6 @@ class BaseUploader(object):
 
 class BaseLogsUploader(BaseUploader):
 
-    def get_artifacts_list(self, artifacts_dir: Path) -> typing.List[Path]:
+    def get_artifacts_list(self, artifacts_dir: str) -> typing.List[str]:
         all_files = super().get_artifacts_list(artifacts_dir)
-        return [file_ for file_ in all_files if file_.suffix == '.log']
+        return [file_ for file_ in all_files if file_.endswith('.log')]

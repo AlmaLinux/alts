@@ -1,7 +1,6 @@
 import logging
 import os
 import typing
-from pathlib import Path
 
 from azure.core.exceptions import HttpResponseError
 from azure.storage.blob import BlobServiceClient
@@ -30,14 +29,14 @@ class AzureBaseUploader(BaseUploader):
 
     def upload_single_file(
             self,
-            file_path: Path,
-            azure_upload_dir: Path,
+            file_path: str,
+            azure_upload_dir: str,
     ) -> str:
-        blob_name = azure_upload_dir.joinpath(file_path.name)
+        blob_name = os.path.join(azure_upload_dir, file_path)
         blob_client = self._blob_client.get_blob_client(
-            container=self._container_name, blob=str(blob_name))
+            container=self._container_name, blob=blob_name)
         try:
-            with file_path.open(mode='rb') as fd:
+            with open(file_path, mode='rb') as fd:
                 blob_client.upload_blob(fd)
             return blob_client.url
         except HttpResponseError as e:
@@ -46,14 +45,14 @@ class AzureBaseUploader(BaseUploader):
                 file_path, e,
             )
 
-    def upload(self, artifacts_dir: Path, **kwargs) -> \
+    def upload(self, artifacts_dir: str, **kwargs) -> \
             typing.Tuple[typing.Dict[str, str], bool]:
         """
         Uploads files from provided directory into Azure Blob storage.
 
         Parameters
         ----------
-        artifacts_dir : Path
+        artifacts_dir : str
             Directory where local files are stored
         kwargs
 
