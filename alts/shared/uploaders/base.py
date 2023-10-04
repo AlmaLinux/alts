@@ -36,8 +36,12 @@ class BaseUploader(object):
         ]
 
     @abstractmethod
-    def upload(self, artifacts_dir: str, **kwargs) -> \
-            typing.Tuple[typing.Dict[str, str], bool]:
+    def upload(
+            self,
+            artifacts_dir: str,
+            upload_dir: str,
+            **kwargs,
+    ) -> typing.Tuple[typing.Dict[str, str], bool]:
         raise NotImplementedError()
 
     @abstractmethod

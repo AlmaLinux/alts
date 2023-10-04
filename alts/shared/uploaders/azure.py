@@ -45,8 +45,12 @@ class AzureBaseUploader(BaseUploader):
                 file_path, e,
             )
 
-    def upload(self, artifacts_dir: str, **kwargs) -> \
-            typing.Tuple[typing.Dict[str, str], bool]:
+    def upload(
+            self,
+            artifacts_dir: str,
+            upload_dir: str,
+            **kwargs,
+    ) -> typing.Tuple[typing.Dict[str, str], bool]:
         """
         Uploads files from provided directory into Azure Blob storage.
 
@@ -54,6 +58,8 @@ class AzureBaseUploader(BaseUploader):
         ----------
         artifacts_dir : str
             Directory where local files are stored
+        upload_dir: str
+            Path to upload directory
         kwargs
 
         Returns
@@ -70,11 +76,10 @@ class AzureBaseUploader(BaseUploader):
         if not kwargs.get('upload_dir'):
             self._logger.error(self.argument_required_message)
             raise UploadError(self.argument_required_message)
-        azure_upload_dir = kwargs.get('upload_dir')  # type: Path
         for file_ in self.get_artifacts_list(artifacts_dir):
-            reference = self.upload_single_file(file_, azure_upload_dir)
+            reference = self.upload_single_file(file_, upload_dir)
             if reference:
-                artifacts[file_.name] = reference
+                artifacts[os.path.basename(file_)] = reference
             else:
                 success = False
         return artifacts, success

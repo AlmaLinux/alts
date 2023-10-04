@@ -204,14 +204,20 @@ class PulpBaseUploader(BaseUploader):
         if response.results:
             return response.results[0].pulp_href
 
-    def upload(self, artifacts_dir: str, **kwargs) -> List[dict]:
+    def upload(
+            self,
+            artifacts_dir: str,
+            upload_dir: str,
+            **kwargs,
+    ) -> List[dict]:
         """
 
         Parameters
         ----------
         artifacts_dir : str
             Path to files that need to be uploaded.
-
+        upload_dir: str
+            Path to upload directory
         Returns
         -------
         list

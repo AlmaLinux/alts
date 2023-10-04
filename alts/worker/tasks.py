@@ -115,8 +115,7 @@ def run_tests(task_params: dict):
         'test_configuration': task_params.get('test_configuration', {})
     }
 
-    # runner_class = RUNNER_MAPPING[task_params['runner_type']]
-    runner_class = RUNNER_MAPPING['opennebula']
+    runner_class = RUNNER_MAPPING[task_params['runner_type']]
     runner = runner_class(*runner_args, **runner_kwargs)
     module_name = task_params.get('module_name')
     module_stream = task_params.get('module_stream')
