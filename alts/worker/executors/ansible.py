@@ -35,8 +35,12 @@ class AnsibleExecutor(BaseExecutor):
         return super().run_local_command(cmd_args)
 
     @measure_stage('run_remote_ansible')
-    def run_ssh_command(self, cmd_args: List[str]) -> CommandResult:
-        return super().run_ssh_command(cmd_args)
+    def run_ssh_command(
+        self,
+        cmd_args: List[str],
+        workdir: str = '',
+    ) -> CommandResult:
+        return super().run_ssh_command(cmd_args, workdir=workdir)
 
     @measure_stage('run_docker_ansible')
     def run_docker_command(

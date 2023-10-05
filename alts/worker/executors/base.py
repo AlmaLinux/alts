@@ -120,11 +120,16 @@ class BaseExecutor:
         )
 
     @measure_stage('run_ssh_command')
-    def run_ssh_command(self, cmd_args: List[str]) -> CommandResult:
+    def run_ssh_command(
+        self,
+        cmd_args: List[str],
+        workdir: str = '',
+    ) -> CommandResult:
         if not self.ssh_client:
             raise ValueError('SSH params are missing')
+        direcrtory = f'cd {workdir} && ' if workdir else ''
         return self.ssh_client.sync_run_command(
-            ' '.join([self.binary_name, *cmd_args])
+            direcrtory + ' '.join([self.binary_name, *cmd_args])
         )
 
     @measure_stage('run_docker_command')

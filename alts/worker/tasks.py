@@ -7,6 +7,7 @@
 import logging
 import urllib.parse
 from collections import defaultdict
+from typing import Union
 
 import requests
 import tap.parser
@@ -15,20 +16,18 @@ from alts.shared.constants import API_VERSION, DEFAULT_REQUEST_TIMEOUT
 from alts.shared.exceptions import (
     InstallPackageError,
     PackageIntegrityTestsError,
-    StartEnvironmentError,
     ProvisionError,
-    TerraformInitializationError,
+    StartEnvironmentError,
     StopEnvironmentError,
+    TerraformInitializationError,
     UninstallPackageError,
 )
 from alts.worker import CONFIG
 from alts.worker.app import celery_app
 from alts.worker.mappings import RUNNER_MAPPING
-from alts.worker.runners.base import (
-    TESTS_SECTION_NAME,
-    THIRD_PARTY_SECTION_NAME,
-    TESTS_SECTIONS_NAMES,
-)
+from alts.worker.runners.base import TESTS_SECTIONS_NAMES
+from alts.worker.runners.docker import DockerRunner
+from alts.worker.runners.opennebula import OpennebulaRunner
 
 __all__ = ['run_tests']
 
@@ -85,9 +84,9 @@ def run_tests(task_params: dict):
         return stage_data_['exit_code'] == 0
 
     def set_artifacts_when_stage_has_unexpected_exception(
-            _artifacts: dict,
-            error_message: str,
-            section_name: str,
+        _artifacts: dict,
+        error_message: str,
+        section_name: str,
     ):
         if section_name not in _artifacts:
             _artifacts[section_name] = {}
@@ -121,15 +120,14 @@ def run_tests(task_params: dict):
     runner_kwargs = {
         'repositories': task_params.get('repositories', []),
         'dist_arch': task_params.get('dist_arch', 'x86_64'),
-        'test_configuration': task_params.get('test_configuration', {})
+        'test_configuration': task_params.get('test_configuration', {}),
     }
-    logging.info(
-        'tests_configuration: %s',
-        runner_kwargs['test_configuration'],
-    )
 
     runner_class = RUNNER_MAPPING[task_params['runner_type']]
-    runner = runner_class(*runner_args, **runner_kwargs)
+    runner: Union[DockerRunner, OpennebulaRunner] = runner_class(
+        *runner_args,
+        **runner_kwargs,
+    )
     module_name = task_params.get('module_name')
     module_stream = task_params.get('module_stream')
     module_version = task_params.get('module_version')
@@ -172,7 +170,8 @@ def run_tests(task_params: dict):
         set_artifacts_when_stage_has_unexpected_exception(
             _artifacts=runner.artifacts,
             error_message=f'Unexpected exception: {exc}',
-            section_name='Unexpected errors during tests')
+            section_name='Unexpected errors during tests',
+        )
     finally:
         runner.teardown()
         summary = defaultdict(dict)

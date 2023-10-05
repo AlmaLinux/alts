@@ -76,7 +76,7 @@
     - name: Install ansible
       yum:
         name:
-          - ansible
+          - ansible-core
         state: latest
       when: ansible_distribution_file_variety == 'RedHat'
       ignore_errors: true

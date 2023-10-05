@@ -5,6 +5,7 @@
 """AlmaLinux Test System docker environment runner."""
 
 import os
+from pathlib import Path
 from typing import List, Optional, Union
 
 from plumbum import local
@@ -20,7 +21,6 @@ from alts.worker.executors.bats import BatsExecutor
 from alts.worker.executors.shell import ShellExecutor
 from alts.worker.runners.base import (
     TESTS_SECTION_NAME,
-    THIRD_PARTY_SECTION_NAME,
     BaseRunner,
     command_decorator,
 )
@@ -130,10 +130,10 @@ class DockerRunner(BaseRunner):
             cwd=self._work_dir,
         )
 
-    def _copy(
-        self,
-        copy_args: List[str],
-    ):
+    def _copy(self, copy_args: List[str]):
+        """
+        Copies file/dir into docker container.
+        """
         local['docker'].run(
             ['cp', *copy_args],
             retcode=None,
@@ -223,7 +223,8 @@ class DockerRunner(BaseRunner):
         self,
         executor: Union[AnsibleExecutor, BatsExecutor, ShellExecutor],
         cmd_args: List[str],
-        docker_args: List[str],
+        docker_args: Optional[List[str]] = None,
+        workdir: str = '',
         artifacts_key: str = '',
         additional_section_name: str = '',
     ):
@@ -236,51 +237,12 @@ class DockerRunner(BaseRunner):
             .values()
         )
 
-    def run_third_party_tests(self):
-        if not self._test_configuration:
-            return
-        executors_mapping = {
-            '.bats': BatsExecutor,
-            '.sh': ShellExecutor,
-            '.yml': AnsibleExecutor,
-            '.yaml': AnsibleExecutor,
-        }
-        executor_params = {
-            'connection_type': 'docker',
-            'container_name': str(self.env_name),
-            'logger': self._logger,
-        }
-        for test in self._test_configuration['tests']:
-            test_repo_path = self.clone_third_party_repo(test['url'])
-            docker_repo_path = f'/tests/{test_repo_path.name}'
-            self._copy(
-                [str(test_repo_path), f'{self.env_name}:{docker_repo_path}']
-            )
-            for file in test_repo_path.iterdir():
-                executor_class = executors_mapping.get(file.suffix)
-                if not executor_class:
-                    continue
-                executor: Union[
-                    AnsibleExecutor,
-                    BatsExecutor,
-                    ShellExecutor,
-                ] = executor_class(**executor_params)
-                self._logger.debug(
-                    'Running repo test %s on %s...',
-                    file.name,
-                    self.env_name,
-                )
-                try:
-                    self.run_third_party_test(
-                        executor=executor,
-                        cmd_args=[file.name],
-                        docker_args=['--workdir', docker_repo_path],
-                        artifacts_key=f'third_party_test_{file.name}',
-                        additional_section_name=(
-                            TESTS_SECTION_NAME
-                            if isinstance(executor, BatsExecutor)
-                            else THIRD_PARTY_SECTION_NAME
-                        ),
-                    )
-                except ThirdPartyTestError:
-                    continue
+    def clone_third_party_repo(self, repo_url: str) -> Path:
+        test_repo_path = super().clone_third_party_repo(repo_url)
+        self._copy(
+            [
+                str(test_repo_path),
+                f'{self.env_name}:/tests/{test_repo_path.name}',
+            ]
+        )
+        return test_repo_path

@@ -35,8 +35,12 @@ class BatsExecutor(BaseExecutor):
         return super().run_local_command(['--tap', *cmd_args])
 
     @measure_stage('run_ssh_bats')
-    def run_ssh_command(self, cmd_args: List[str]) -> CommandResult:
-        return super().run_ssh_command(['--tap', *cmd_args])
+    def run_ssh_command(
+        self,
+        cmd_args: List[str],
+        workdir: str = '',
+    ) -> CommandResult:
+        return super().run_ssh_command(['--tap', *cmd_args], workdir=workdir)
 
     @measure_stage('run_docker_bats')
     def run_docker_command(

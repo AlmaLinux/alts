@@ -10,7 +10,7 @@ import tempfile
 import time
 from functools import wraps
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 from mako.lookup import TemplateLookup
 from plumbum import local
@@ -23,6 +23,7 @@ from alts.shared.exceptions import (
     StartEnvironmentError,
     StopEnvironmentError,
     TerraformInitializationError,
+    ThirdPartyTestError,
     UninstallPackageError,
     WorkDirPreparationError,
 )
@@ -30,7 +31,9 @@ from alts.shared.types import ImmutableDict
 from alts.shared.uploaders.base import BaseLogsUploader, UploadError
 from alts.shared.uploaders.pulp import PulpLogsUploader
 from alts.worker import CONFIG, RESOURCES_DIR
-
+from alts.worker.executors.ansible import AnsibleExecutor
+from alts.worker.executors.bats import BatsExecutor
+from alts.worker.executors.shell import ShellExecutor
 
 __all__ = [
     'BaseRunner',
@@ -138,7 +141,7 @@ class BaseRunner(object):
     ):
         # Environment ID and working directory preparation
         self._task_id = task_id
-        self._env_name = f'{self.TYPE}_{task_id}'
+        self._vm_ip = None
         self._test_configuration = test_configuration
         self._logger = self.init_test_task_logger(task_id, dist_arch)
         self._task_log_file = None
@@ -168,6 +171,10 @@ class BaseRunner(object):
         self._dist_name = dist_name.lower()
         self._dist_version = str(dist_version).lower()
         self._dist_arch = dist_arch.lower()
+        self._env_name = (
+            f'alts_{self.TYPE}_{self.dist_name}_'
+            f'{self.dist_version}_{self.dist_arch}_{task_id}'
+        )
 
         # Package installation and test stuff
         self._repositories = repositories or []
@@ -224,6 +231,20 @@ class BaseRunner(object):
     @property
     def stats(self):
         return self._stats
+
+    @property
+    def vm_ip(self):
+        return self._vm_ip
+
+    @property
+    def default_ssh_params(self) -> Dict[str, Any]:
+        return {
+            'host': self.vm_ip or '',
+            'username': 'root',
+            'client_keys_files': ['~/.ssh/id_rsa.pub'],
+            'disable_known_hosts_check': True,
+            'ignore_encrypted_keys': True,
+        }
 
     def __init_task_logger(self, log_file):
         """
@@ -293,10 +314,7 @@ class BaseRunner(object):
             content = template.render(**kwargs)
             f.write(content)
 
-    def _create_ansible_inventory_file(
-        self,
-        vm_ip: Optional[str] = None,
-    ):
+    def _create_ansible_inventory_file(self):
         self._inventory_file_path = os.path.join(
             self._work_dir,
             self.ANSIBLE_INVENTORY_FILE,
@@ -305,7 +323,7 @@ class BaseRunner(object):
             f'{self.ANSIBLE_INVENTORY_FILE}.tmpl',
             self._inventory_file_path,
             env_name=self.env_name,
-            vm_ip=vm_ip,
+            vm_ip=self.vm_ip,
             connection_type=self.ansible_connection_type,
         )
 
@@ -374,6 +392,65 @@ class BaseRunner(object):
             raise WorkDirPreparationError(
                 'Cannot create working directory and needed files'
             ) from e
+
+    def run_third_party_test(
+        self,
+        executor: Union[AnsibleExecutor, BatsExecutor, ShellExecutor],
+        cmd_args: List[str],
+        docker_args: Optional[List[str]] = None,
+        workdir: str = '',
+        artifacts_key: str = '',
+        additional_section_name: str = '',
+    ):
+        raise NotImplementedError
+
+    def run_third_party_tests(self):
+        if not self._test_configuration:
+            return
+        executors_mapping = {
+            '.bats': BatsExecutor,
+            '.sh': ShellExecutor,
+            '.yml': AnsibleExecutor,
+            '.yaml': AnsibleExecutor,
+        }
+        executor_params = {
+            'connection_type': self.ansible_connection_type,
+            'container_name': str(self.env_name),
+            'logger': self._logger,
+            'ssh_params': self.default_ssh_params,
+        }
+        for test in self._test_configuration['tests']:
+            test_repo_path = self.clone_third_party_repo(test['url'])
+            workdir = f'/tests/{test_repo_path.name}'
+            for file in test_repo_path.iterdir():
+                executor_class = executors_mapping.get(file.suffix)
+                if not executor_class:
+                    continue
+                executor: Union[
+                    AnsibleExecutor,
+                    BatsExecutor,
+                    ShellExecutor,
+                ] = executor_class(**executor_params)
+                self._logger.debug(
+                    'Running repo test %s on %s...',
+                    file.name,
+                    self.env_name,
+                )
+                try:
+                    self.run_third_party_test(
+                        executor=executor,
+                        cmd_args=[file.name],
+                        docker_args=['--workdir', workdir],
+                        workdir=workdir,
+                        artifacts_key=f'third_party_test_{file.name}',
+                        additional_section_name=(
+                            TESTS_SECTION_NAME
+                            if isinstance(executor, BatsExecutor)
+                            else THIRD_PARTY_SECTION_NAME
+                        ),
+                    )
+                except ThirdPartyTestError:
+                    continue
 
     # After: prepare_work_dir_files
     @command_decorator(
@@ -619,11 +696,12 @@ class BaseRunner(object):
             '--package-name',
             package_name,
         ]
+        if self.ansible_connection_type == 'ssh':
+            cmd_args.append('--force-ansible')
+        full_pkg_name = package_name
         if package_version:
             full_pkg_name = f'{package_name}-{package_version}'
             cmd_args.extend(['--package-version', package_version])
-        else:
-            full_pkg_name = package_name
         cmd_args.append('tests')
         self._logger.info(
             'Running package integrity tests for %s on %s...',
@@ -668,10 +746,10 @@ class BaseRunner(object):
                 fd.write(gzip.compress(file_content.encode()))
 
         for artifact_key, content in self.artifacts.items():
-            if artifact_key in (TESTS_SECTION_NAME, THIRD_PARTY_SECTION_NAME):
+            if artifact_key in TESTS_SECTIONS_NAMES:
                 for inner_artifact_key, inner_content in content.items():
                     log_base_name = inner_artifact_key
-                    if artifact_key not in log_base_name:
+                    if not log_base_name.startswith(artifact_key):
                         log_base_name = f'{artifact_key}_{inner_artifact_key}'
                     write_to_file(log_base_name, inner_content)
             elif artifact_key == 'initialize_terraform':
@@ -813,19 +891,25 @@ class BaseRunner(object):
             'reboot_timeout': reboot_timeout,
         }
         cmd_args = (
-            '-i', str(self.ANSIBLE_INVENTORY_FILE),
-            '-m', 'reboot',
-            '-a', f'"{json.dumps(module_args)}"',
+            '-i',
+            str(self.ANSIBLE_INVENTORY_FILE),
+            '-m',
+            'reboot',
+            '-a',
+            f'"{json.dumps(module_args)}"',
             'all',
         )
         exit_code, stdout, stderr = ansible.run(
-            args=cmd_args, retcode=None, cwd=self._work_dir,
+            args=cmd_args,
+            retcode=None,
+            cwd=self._work_dir,
         )
         if exit_code == 0:
             return True
         self._logger.error(
             'Unable to connect to VM. Stdout: %s\nStderr: %s',
-            stdout, stderr,
+            stdout,
+            stderr,
         )
         return False
 
@@ -884,8 +968,11 @@ class GenericVMRunner(BaseRunner):
         )
         return exit_code, stdout, stderr
 
-    @command_decorator(StartEnvironmentError, 'start_environment',
-                       'Cannot start environment')
+    @command_decorator(
+        StartEnvironmentError,
+        'start_environment',
+        'Cannot start environment',
+    )
     def start_env(self):
         super().start_env()
         # VM gets its IP address only after deploy.
@@ -900,9 +987,10 @@ class GenericVMRunner(BaseRunner):
             error_message = f'Cannot get VM IP: {stderr}'
             self._logger.error(error_message)
             return exit_code, stdout, stderr
+        self._vm_ip = stdout
         # Because we don't know about a VM's IP before its creating
         # And get an IP after launch of terraform script
-        self._create_ansible_inventory_file(vm_ip=stdout)
+        self._create_ansible_inventory_file()
         self._logger.info('Waiting for SSH port to be available')
         exit_code, stdout, stderr = self._wait_for_ssh()
         if exit_code:
