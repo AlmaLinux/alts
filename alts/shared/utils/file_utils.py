@@ -50,7 +50,7 @@ def hash_file(file_path, hasher=None, hash_type=None, buff_size=1048576):
             hasher.update(buff)
             buff = _fd.read(buff_size)
     if isinstance(file_path, str):
-        with open(file_path, "rb") as fd:
+        with open(file_path, mode='rb') as fd:
             feed_hasher(fd)
     else:
         file_path.seek(0)

@@ -2,6 +2,8 @@ import os
 import typing
 from abc import abstractmethod
 
+from pathlib import Path
+
 
 __all__ = ['BaseUploader', 'BaseLogsUploader', 'UploadError']
 
@@ -29,14 +31,17 @@ class BaseUploader(object):
 
         """
         return [
-            os.path.join(artifacts_dir, file)
-            for file in os.listdir(artifacts_dir)
-            if not os.path.isdir(file)
+            str(file) for file in Path(artifacts_dir).iterdir()
+            if file.is_file()
         ]
 
     @abstractmethod
-    def upload(self, artifacts_dir: str, **kwargs) -> \
-            typing.Tuple[typing.Dict[str, str], bool]:
+    def upload(
+            self,
+            artifacts_dir: str,
+            upload_dir: str,
+            **kwargs,
+    ) -> typing.Tuple[typing.Dict[str, str], bool]:
         raise NotImplementedError()
 
     @abstractmethod

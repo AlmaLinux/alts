@@ -24,9 +24,9 @@ resource "opennebula_virtual_machine" "${vm_name}" {
     model = "host-passthrough"
   }
   disk {
-    image_id: ${image_id}
-    size: ${disk_size}
-    target: "sda"
+    image_id = ${image_id}
+    size = ${vm_size}
+    target = "sda"
   }
   nic {
     network_id = data.opennebula_virtual_network.test_system_network.id

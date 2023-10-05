@@ -95,5 +95,5 @@ class PackageIntegrityTestsError(ALTSBaseError):
     pass
 
 
-class VMImageNotFound(ALTSBaseError):
+class VMImageNotFound(StartEnvironmentError):
     pass

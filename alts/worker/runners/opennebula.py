@@ -11,7 +11,8 @@ import typing
 import pyone
 
 from alts.shared.exceptions import VMImageNotFound
-from alts.worker import CONFIG
+from alts.shared.models import CeleryConfig
+from alts.worker import CONFIG  # type: CeleryConfig
 from alts.worker.runners.base import GenericVMRunner
 
 
@@ -44,17 +45,16 @@ class OpennebulaRunner(GenericVMRunner):
             test_configuration=test_configuration
         )
         self.package_channel = package_channel
-
-    def find_image(self) -> pyone.bindings.IMAGESub:
-        user = CONFIG.opennebula_username
-        password = CONFIG.opennebula_password
-        platform_name_version = f'{self.dist_name}-{self.dist_version}'
-        nebula = pyone.OneServer(
-            CONFIG.opennebula_rpc_endpoint,
-            session=f'{user}:{password}'
+        user = CONFIG.opennebula_config.username
+        password = CONFIG.opennebula_config.password
+        self.opennebula_client = pyone.OneServer(
+            uri=CONFIG.opennebula_config.rpc_endpoint,
+            session=f'{user}:{password}',
         )
-        # Get all images visible to the Opennebula user
-        images = nebula.imagepool.info(-1, -1, -1, -1)
+
+    def find_template_and_image_ids(self) -> tuple[typing.Optional[int], typing.Optional[int]]:
+        platform_name_version = f'{self.dist_name}-{self.dist_version}'
+        templates = self.opennebula_client.templatepool.info(-1, -1, -1, -1)
         regex_str = (r'(?P<platform_name>\w+(-\w+)?)-(?P<version>\d+.\d+)'
                      r'-(?P<arch>\w+).*.test_system')
         if self.package_channel is not None:
@@ -62,42 +62,78 @@ class OpennebulaRunner(GenericVMRunner):
             regex_str += f'.({channels})'
         # Filter images to leave only those that are related to the particular
         # platform
-        filtered_images = []
-        for image in images.IMAGE:
+        filtered_templates = []
+        for template in templates.VMTEMPLATE:
             conditions = [
-                bool(re.search(regex_str, image.NAME)),
-                image.NAME.startswith(platform_name_version),
-                self.dist_arch in image.NAME,
+                bool(re.search(regex_str, template.NAME)),
+                template.NAME.startswith(platform_name_version),
+                self.dist_arch in template.NAME,
             ]
             if self.package_channel is not None:
-                conditions.append(self.package_channel in image.NAME)
+                conditions.append(self.package_channel in template.NAME)
             if all(conditions):
-                filtered_images.append(image)
-        if not filtered_images:
-            image_params = (
-                f'distribution: {self.dist_name}, '
-                f'dist version: {self.dist_version}, '
-                f'architecture: {self.dist_arch}'
-            )
+                filtered_templates.append(template)
+        template_params = (
+            f'distribution: {self.dist_name}, '
+            f'dist version: {self.dist_version}, '
+            f'architecture: {self.dist_arch}'
+        )
+        if not filtered_templates:
             if self.package_channel is not None:
-                image_params += f' channel: {self.package_channel}'
+                template_params += f' channel: {self.package_channel}'
             raise VMImageNotFound(
-                f'Cannot find the image with the parameters: {image_params}')
-        # Sort images in order to get the latest image as first in the list
-        sorted_images = sorted(filtered_images, key=lambda i: i.NAME,
-                               reverse=True)
-        return sorted_images[0]
+                'Cannot find a template '
+                f'with the parameters: {template_params}'
+            )
+        # Sort templates in order to get the latest image as first in the list
+        sorted_templates = sorted(
+            filtered_templates,
+            key=lambda i: i.NAME,
+            reverse=True,
+        )
+        if not sorted_templates:
+            return None, None
+        final_template = sorted_templates[0]
+        final_disk = final_template.TEMPLATE.get('DISK', {})
+        final_image_name = final_disk.get('IMAGE')
+        final_image_id = final_disk.get('IMAGE_ID')
+        final_template_id = final_template.ID
+        final_template_name = final_template.NAME
+        if final_image_id:
+            return final_template.ID, int(final_image_id)
+        images_pool = self.opennebula_client.imagepool.info(-2, -1, -1, -1)
+        images = [
+            image for image in images_pool.IMAGE
+            if image.NAME == final_image_name
+        ]
+        if images:
+            final_image_id = images[0].ID
+        self._logger.info(
+            'We found template "%s" with ID "%s" '
+            'and image "%s" with ID "%s" for params: "%s"',
+            final_template_name,
+            final_template_id,
+            final_image_name,
+            final_image_id,
+            template_params,
+        )
+        return final_template_id, final_image_id
 
     def _render_tf_main_file(self):
         """
         Renders Terraform file for creating a template.
         """
-        vm_group_name = CONFIG.opennebula_vm_group
         nebula_tf_file = os.path.join(self._work_dir, self.TF_MAIN_FILE)
+        template_id, image_id = self.find_template_and_image_ids()
         self._render_template(
-            f'{self.TF_MAIN_FILE}.tmpl', nebula_tf_file,
-            vm_name=self.env_name, vm_group_name=vm_group_name,
-            image_id=self.find_image(),
+            template_name=f'{self.TF_MAIN_FILE}.tmpl',
+            result_file_path=nebula_tf_file,
+            vm_name=self.env_name,
+            opennebula_vm_group=CONFIG.opennebula_config.vm_group,
+            image_id=image_id,
+            template_id=template_id,
+            vm_size=CONFIG.opennebula_config.vm_size,
+            opennebula_network=CONFIG.opennebula_config.network,
         )
 
     def _render_tf_variables_file(self):
@@ -107,7 +143,7 @@ class OpennebulaRunner(GenericVMRunner):
         vars_file = os.path.join(self._work_dir, self.TF_VARIABLES_FILE)
         self._render_template(
             f'{self.TF_VARIABLES_FILE}.tmpl', vars_file,
-            opennebula_rpc_endpoint=CONFIG.opennebula_rpc_endpoint,
-            opennebula_username=CONFIG.opennebula_username,
-            opennebula_password=CONFIG.opennebula_password
+            opennebula_rpc_endpoint=CONFIG.opennebula_config.rpc_endpoint,
+            opennebula_username=CONFIG.opennebula_config.username,
+            opennebula_password=CONFIG.opennebula_config.password
         )

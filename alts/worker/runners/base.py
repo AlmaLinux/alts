@@ -1,6 +1,7 @@
 import datetime
 import fcntl
 import gzip
+import json
 import logging
 import os
 import re
@@ -9,7 +10,6 @@ import tempfile
 import time
 import typing
 from functools import wraps
-from pathlib import Path
 from typing import List, Optional, Union
 
 from mako.lookup import TemplateLookup
@@ -22,10 +22,19 @@ from alts.shared.uploaders.pulp import PulpLogsUploader
 from alts.worker import CONFIG, RESOURCES_DIR
 
 
-__all__ = ['BaseRunner', 'GenericVMRunner', 'command_decorator', 'TESTS_SECTION_NAME']
+__all__ = [
+    'BaseRunner',
+    'GenericVMRunner',
+    'command_decorator',
+    'TESTS_SECTION_NAME',
+    'TESTS_SECTIONS_NAMES',
+]
 
 
 TESTS_SECTION_NAME = 'tests'
+TESTS_SECTIONS_NAMES = (
+    TESTS_SECTION_NAME,
+)
 TF_INIT_LOCK_PATH = '/tmp/tf_init_lock'
 
 
@@ -33,7 +42,7 @@ def command_decorator(exception_class, artifacts_key, error_message, additional_
     def method_wrapper(fn):
         @wraps(fn)
         def inner_wrapper(*args, **kwargs):
-            self = args[0]
+            self = args[0]  # type: BaseRunner
             args = args[1:]
             if not self._work_dir or not os.path.exists(self._work_dir):
                 return
@@ -233,14 +242,14 @@ class BaseRunner(object):
     # TODO: Think of better implementation
     def _create_work_dir(self):
         if not self._work_dir or not os.path.exists(self._work_dir):
-            self._work_dir = Path(tempfile.mkdtemp(prefix=self.TEMPFILE_PREFIX))
+            self._work_dir = tempfile.mkdtemp(prefix=self.TEMPFILE_PREFIX)
         return self._work_dir
 
     # TODO: Think of better implementation
     def _create_artifacts_dir(self):
         if not self._work_dir:
             self._work_dir = self._create_work_dir()
-        path = self._work_dir / 'artifacts'
+        path = os.path.join(self._work_dir, 'artifacts')
         if not os.path.exists(path):
             os.mkdir(path)
         return path
@@ -376,7 +385,7 @@ class BaseRunner(object):
         var_dict = {'repositories': self._repositories,
                     'integrity_tests_dir': self._integrity_tests_dir}
         cmd_args = ['-i', self.ANSIBLE_INVENTORY_FILE, self.ANSIBLE_PLAYBOOK,
-                    '-e', f'{var_dict}', '-t', 'initial_provision']
+                    '-e', f'{var_dict}', '-t', 'initial_provision', '-vv']
         self._logger.info('Command args: %s', cmd_args)
         if verbose:
             cmd_args.append('-vvvv')
@@ -401,7 +410,7 @@ class BaseRunner(object):
             full_pkg_name, self.env_name,
         )
         cmd_args = ['-i', self.ANSIBLE_INVENTORY_FILE, self.ANSIBLE_PLAYBOOK,
-                    '-e', f'pkg_name={full_pkg_name}']
+                    '-e', f'pkg_name={full_pkg_name}', '-vv']
         if module_name and module_stream and module_version:
             cmd_args.extend(['-e', f'module_name={module_name}',
                              '-e', f'module_stream={module_stream}',
@@ -429,7 +438,7 @@ class BaseRunner(object):
             full_pkg_name, self.env_name,
         )
         cmd_args = ['-i', self.ANSIBLE_INVENTORY_FILE, self.ANSIBLE_PLAYBOOK,
-                    '-e', f'pkg_name={full_pkg_name}']
+                    '-e', f'pkg_name={full_pkg_name}', '-vv']
         if module_name and module_stream and module_version:
             cmd_args.extend(['-e', f'module_name={module_name}',
                              '-e', f'module_stream={module_stream}',
@@ -503,7 +512,7 @@ class BaseRunner(object):
                 )
                 if artifacts_section.get('stderr'):
                     stderr = replace_host_name(artifacts_section["stderr"])
-                    file_content += f'Stderr:\n\n{stderr}'
+                    file_content += f'\n\nStderr:\n\n{stderr}'
                 fd.write(gzip.compress(file_content.encode()))
 
         for artifact_key, content in self.artifacts.items():
@@ -610,6 +619,28 @@ class BaseRunner(object):
         logger.addHandler(handler)
         return logger
 
+    def reboot_target(self, reboot_timeout: int = 120) -> bool:
+        ansible = local['ansible']
+        module_args = {
+            'reboot_timeout': reboot_timeout,
+        }
+        cmd_args = (
+            '-i', str(self.ANSIBLE_INVENTORY_FILE),
+            '-m', 'reboot',
+            '-a', f'"{json.dumps(module_args)}"',
+            'all',
+        )
+        exit_code, stdout, stderr = ansible.run(
+            args=cmd_args, retcode=None, cwd=self._work_dir,
+        )
+        if exit_code == 0:
+            return True
+        self._logger.error(
+            'Unable to connect to VM. Stdout: %s\nStderr: %s',
+            stdout, stderr,
+        )
+        return False
+
 
 class GenericVMRunner(BaseRunner):
 
@@ -647,11 +678,12 @@ class GenericVMRunner(BaseRunner):
         cmd_args = ('-i', self.ANSIBLE_INVENTORY_FILE, '-m', 'ping', 'all')
         stdout = None
         stderr = None
+        exit_code = 0
         while retries > 0:
             exit_code, stdout, stderr = ansible.run(
                 args=cmd_args, retcode=None, cwd=self._work_dir)
             if exit_code == 0:
-                return True
+                return exit_code, stdout, stderr
             else:
                 retries -= 1
                 time.sleep(10)
@@ -659,8 +691,10 @@ class GenericVMRunner(BaseRunner):
             'Unable to connect to VM. Stdout: %s\nStderr: %s',
             stdout, stderr,
         )
-        return False
+        return exit_code, stdout, stderr
 
+    @command_decorator(StartEnvironmentError, 'start_environment',
+                       'Cannot start environment')
     def start_env(self):
         super().start_env()
         # VM gets its IP address only after deploy.
@@ -671,12 +705,17 @@ class GenericVMRunner(BaseRunner):
         if exit_code != 0:
             error_message = f'Cannot get VM IP: {stderr}'
             self._logger.error(error_message)
-            raise StartEnvironmentError(error_message)
+            return exit_code, stdout, stderr
+        # Because we don't know about a VM's IP before its creating
+        # And get an IP after launch of terraform script
+        self._create_ansible_inventory_file(vm_ip=stdout)
         self._logger.info('Waiting for SSH port to be available')
-        is_online = self._wait_for_ssh()
-        if not is_online:
-            error_message = f'Machine {self.env_name} is started, but ' \
-                            f'SSH connection is not working'
-            self._logger.error(error_message)
-            raise StartEnvironmentError(error_message)
-        self._logger.info('Machine is available for SSH connection')
+        exit_code, stdout, stderr = self._wait_for_ssh()
+        if exit_code:
+            self._logger.error(
+                'Machine %s is started, but SSH connection is not working',
+                self.env_name,
+            )
+        else:
+            self._logger.info('Machine is available for SSH connection')
+        return exit_code, stdout, stderr

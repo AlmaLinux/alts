@@ -33,11 +33,14 @@ testing:
 working_directory:
 jwt_secret:
 hashing_algorithm: 'HS256'
-opennebula_rpc_endpoint:
-opennebula_username:
-opennebula_password:
-opennebula_vm_group:
-opennebula_network:
+opennebula_config:
+  rpc_endpoint:
+  username:
+  password:
+  vm_group:
+  # in MB
+  vm_size:
+  network:
 
 bs_host:
 bs_token:

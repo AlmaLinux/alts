@@ -5,6 +5,7 @@ import tempfile
 import time
 import shutil
 from concurrent.futures import as_completed, ThreadPoolExecutor
+from pathlib import Path
 from typing import List
 
 from fsplit.filesplit import Filesplit
@@ -126,9 +127,11 @@ class PulpBaseUploader(BaseUploader):
             Upload reference and file size.
 
         """
-        file_size = os.path.getsize(file_path)
+        file_size = Path(file_path).stat().st_size
         response = self._uploads_client.create(
-            {'size': file_size}, _request_timeout=self._requests_timeout)
+            {'size': file_size},
+            _request_timeout=self._requests_timeout,
+        )
         return response.pulp_href, file_size
 
     def _commit_upload(self, file_path: str, reference: str) -> str:
@@ -201,14 +204,20 @@ class PulpBaseUploader(BaseUploader):
         if response.results:
             return response.results[0].pulp_href
 
-    def upload(self, artifacts_dir: str, **kwargs) -> List[dict]:
+    def upload(
+            self,
+            artifacts_dir: str,
+            upload_dir: str,
+            **kwargs,
+    ) -> List[dict]:
         """
 
         Parameters
         ----------
         artifacts_dir : str
             Path to files that need to be uploaded.
-
+        upload_dir: str
+            Path to upload directory
         Returns
         -------
         list
@@ -220,7 +229,11 @@ class PulpBaseUploader(BaseUploader):
         self._logger.info('Starting files upload')
         with ThreadPoolExecutor(max_workers=self._concurrency) as executor:
             futures = {
-                executor.submit(self.upload_single_file, artifact): artifact
+                executor.submit(
+                    self.upload_single_file,
+                    artifact,
+                    'test_log',
+                ): artifact
                 for artifact in self.get_artifacts_list(artifacts_dir)
             }
             for future in as_completed(futures):
@@ -238,7 +251,8 @@ class PulpBaseUploader(BaseUploader):
             raise UploadError(f'Unable to upload files: {errored_uploads}')
         return success_uploads
 
-    def upload_single_file(self, filename: str, type_: str = 'test_log') -> dict:
+    def upload_single_file(self, filename: str,
+                           type_: str = 'test_log') -> dict:
         """
 
         Parameters
@@ -254,13 +268,17 @@ class PulpBaseUploader(BaseUploader):
             Information about uploaded file
 
         """
+        base_filename = Path(filename).name
         file_sha256 = hash_file(filename, hash_type='sha256')
         reference = self.check_if_artifact_exists(file_sha256)
         if reference:
-            raise UploadError((f"File {filename} with reference: {reference} Already exists"))
+            raise UploadError(
+                f"File {base_filename} with reference: "
+                f"{reference} Already exists",
+            )
 
         return dict(
-            name=os.path.basename(filename),
+            name=base_filename,
             href=self._send_file(filename),
             type=type_
         )
