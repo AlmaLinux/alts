@@ -20,22 +20,20 @@ from fastapi import (
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer
 from jose import JWTError, jwt
-from pydantic import ValidationError
 
 from alts.scheduler import CONFIG
-from alts.scheduler.db import database, Session, Task
+from alts.scheduler.db import Session, Task, database
 from alts.scheduler.monitoring import TasksMonitor
 from alts.shared.constants import API_VERSION
 from alts.shared.exceptions import ALTSBaseError
 from alts.shared.models import (
-    TaskRequestResponse,
     TaskRequestPayload,
+    TaskRequestResponse,
     TaskResultResponse,
 )
 from alts.worker.app import celery_app
 from alts.worker.mappings import RUNNER_MAPPING
 from alts.worker.tasks import run_tests
-
 
 app = FastAPI()
 monitor = None
@@ -70,9 +68,10 @@ def get_celery_task_result(task_id: str, timeout: int = 1) -> dict:
     except ALTSBaseError as e:
         logging.warning(
             'Task has failed with error: %s: %s',
-            e.__class__.__name__, e,
+            e.__class__.__name__,
+            e,
         )
-    except Exception as e:
+    except Exception:
         logging.exception(
             'Unknown exception while getting resutls from Celery',
         )
@@ -82,7 +81,6 @@ def get_celery_task_result(task_id: str, timeout: int = 1) -> dict:
 
 @app.on_event('startup')
 async def startup():
-
     """Starting up Test System task scheduler app."""
 
     logging.basicConfig(level=logging.INFO)
@@ -106,7 +104,7 @@ async def startup():
                 try:
                     session.add_all(tasks_for_update)
                     session.commit()
-                except Exception as e:
+                except Exception:
                     logging.exception('Cannot save tasks info:')
     del tasks_for_update
 
@@ -126,14 +124,16 @@ async def startup():
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGUSR1, sigusr_handler)
 
-    monitor = TasksMonitor(terminate_event, graceful_terminate_event,
-                           celery_app)
+    monitor = TasksMonitor(
+        terminate_event,
+        graceful_terminate_event,
+        celery_app,
+    )
     monitor.start()
 
 
 @app.on_event('shutdown')
 async def shutdown():
-
     """Shutting down Test System task scheduler app."""
 
     graceful_terminate_event.set()
@@ -162,17 +162,22 @@ async def authenticate_user(credentials: str = Depends(http_bearer_scheme)):
             token = credentials.credentials.split(' ')[-1]
         else:
             token = credentials.credentials
-        return jwt.decode(token, CONFIG.jwt_secret,
-                          algorithms=[CONFIG.hashing_algorithm])
+        return jwt.decode(
+            token, CONFIG.jwt_secret, algorithms=[CONFIG.hashing_algorithm]
+        )
     except JWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                            detail="Could not validate credentials",
-                            headers={"WWW-Authenticate": "Bearer"})
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 @app.get('/tasks/{task_id}/result', response_model=TaskResultResponse)
-async def get_task_result(task_id: str,
-                          _=Depends(authenticate_user)) -> JSONResponse:
+async def get_task_result(
+    task_id: str,
+    _=Depends(authenticate_user),
+) -> JSONResponse:
     """
     Requests for Test System task result.
 
@@ -193,13 +198,18 @@ async def get_task_result(task_id: str,
     return JSONResponse(content=task_result)
 
 
-@app.post('/tasks/schedule', response_model=TaskRequestResponse,
-          responses={
-              201: {'model': TaskRequestResponse},
-              400: {'model': TaskRequestResponse},
-          })
-async def schedule_task(task_data: TaskRequestPayload,
-                        _=Depends(authenticate_user)) -> JSONResponse:
+@app.post(
+    '/tasks/schedule',
+    response_model=TaskRequestResponse,
+    responses={
+        201: {'model': TaskRequestResponse},
+        400: {'model': TaskRequestResponse},
+    },
+)
+async def schedule_task(
+    task_data: TaskRequestPayload,
+    _=Depends(authenticate_user),
+) -> JSONResponse:
     """
     Schedules new tasks in Test System.
 
@@ -218,15 +228,22 @@ async def schedule_task(task_data: TaskRequestPayload,
         JSON-encoded response if task executed successfully or not.
     """
     # Get only supported runners mapping based on the config
-    if isinstance(CONFIG.supported_runners, str) and \
-            CONFIG.supported_runners == 'all':
+    if (
+        isinstance(CONFIG.supported_runners, str)
+        and CONFIG.supported_runners == 'all'
+    ):
         runner_mapping = RUNNER_MAPPING
     elif isinstance(CONFIG.supported_runners, list):
-        runner_mapping = {key: value for key, value in RUNNER_MAPPING.items()
-                          if key in CONFIG.supporter_runners}
+        runner_mapping = {
+            key: value
+            for key, value in RUNNER_MAPPING.items()
+            if key in CONFIG.supported_runners
+        }
     else:
-        raise ValueError(f'Misconfiguration found: supported_runners is '
-                         f'{CONFIG.supported_runners}')
+        raise ValueError(
+            f'Misconfiguration found: supported_runners is '
+            f'{CONFIG.supported_runners}'
+        )
     runner_type = task_data.runner_type
     if runner_type == 'any':
         runner_type = random.choice(list(runner_mapping.keys()))
@@ -245,8 +262,10 @@ async def schedule_task(task_data: TaskRequestPayload,
             queue_arch = arch
 
     if not queue_arch:
-        raise ValueError('Cannot map requested architecture to any '
-                         'host architecture, possible coding error')
+        raise ValueError(
+            'Cannot map requested architecture to any '
+            'host architecture, possible coding error'
+        )
 
     # Make sure all repositories have their names
     # (needed only for RHEL-like distributions)
@@ -264,35 +283,41 @@ async def schedule_task(task_data: TaskRequestPayload,
     queue_name = f'{runner_type}-{queue_arch}-{runner_class.COST}'
     task_id = str(uuid.uuid4())
     response_content = {'api_version': API_VERSION}
-    task_params = task_data.dict()
+    task_params = task_data.model_dump()
     task_params['task_id'] = task_id
     task_params['runner_type'] = runner_type
     task_params['repositories'] = repositories
     try:
-        run_tests.apply_async((task_params,), task_id=task_id,
-                              queue=queue_name)
+        run_tests.apply_async(
+            (task_params,),
+            task_id=task_id,
+            queue=queue_name,
+        )
     except Exception as e:
         logging.exception('Cannot launch the task:')
-        response_content.update({'success': False,
-                                 'error_description': str(e)})
+        response_content.update(
+            {'success': False, 'error_description': str(e)}
+        )
         return JSONResponse(status_code=400, content=response_content)
-    else:
-        with Session() as session:
-            with session.begin():
-                try:
-                    task_record = Task(task_id=task_id, queue_name=queue_name,
-                                       status='NEW')
-                    session.add(task_record)
-                    session.commit()
-                    response_content.update({'success': True,
-                                             'task_id': task_id})
-                    return JSONResponse(status_code=201,
-                                        content=response_content)
-                except Exception as e:
-                    logging.exception('Cannot save task data into DB:')
-                    response_content.update({
-                        'success': False, 'task_id': task_id,
-                        'error_description': str(e)
-                    })
-                    return JSONResponse(status_code=400,
-                                        content=response_content)
+    with Session() as session:
+        with session.begin():
+            try:
+                task_record = Task(
+                    task_id=task_id,
+                    queue_name=queue_name,
+                    status='NEW',
+                )
+                session.add(task_record)
+                session.commit()
+                response_content.update({'success': True, 'task_id': task_id})
+                return JSONResponse(status_code=201, content=response_content)
+            except Exception as e:
+                logging.exception('Cannot save task data into DB:')
+                response_content.update(
+                    {
+                        'success': False,
+                        'task_id': task_id,
+                        'error_description': str(e),
+                    }
+                )
+                return JSONResponse(status_code=400, content=response_content)

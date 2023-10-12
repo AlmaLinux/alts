@@ -62,6 +62,36 @@
       tags:
         - initial_provision
 
+    - name: Install binaries for test executors
+      yum:
+        name:
+          - epel-release
+          - git
+        state: latest
+      when: ansible_distribution_file_variety == 'RedHat'
+      ignore_errors: true
+      tags:
+        - initial_provision
+
+    - name: Install ansible
+      yum:
+        name:
+          - ansible-core
+        state: latest
+      when: ansible_distribution_file_variety == 'RedHat'
+      ignore_errors: true
+      tags:
+        - initial_provision
+
+    - name: Install bats
+      shell: |
+        git clone https://github.com/bats-core/bats-core.git
+        cd bats-core
+        sh ./install.sh /usr/local
+      ignore_errors: true
+      tags:
+        - initial_provision
+
     - name: Delete /etc/rpm/macros.image-language-conf
       file:
         path: /etc/rpm/macros.image-language-conf

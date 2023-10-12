@@ -15,6 +15,8 @@ class CommandExecutor(BaseExecutor):
         logger: Optional[logging.Logger] = None,
         logger_name: str = 'command-executor',
         logging_level: Literal['DEBUG', 'INFO'] = 'DEBUG',
+        connection_type: Literal['local', 'ssh', 'docker'] = 'local',
+        container_name: str = '',
     ):
         super().__init__(
             binary_name=binary_name,
@@ -24,6 +26,8 @@ class CommandExecutor(BaseExecutor):
             logger=logger,
             logger_name=logger_name,
             logging_level=logging_level,
+            connection_type=connection_type,
+            container_name=container_name,
         )
 
     @measure_stage('run_signle_local_command')
@@ -33,3 +37,14 @@ class CommandExecutor(BaseExecutor):
     @measure_stage('run_signle_ssh_command')
     def run_ssh_command(self, cmd_args: List[str]) -> CommandResult:
         return super().run_ssh_command(cmd_args)
+
+    @measure_stage('run_signle_docker_command')
+    def run_docker_command(
+        self,
+        cmd_args: List[str],
+        docker_args: Optional[List[str]] = None,
+    ) -> CommandResult:
+        return super().run_docker_command(
+            cmd_args=cmd_args,
+            docker_args=docker_args,
+        )

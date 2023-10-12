@@ -6,15 +6,18 @@
 
 import os
 import re
-import typing
+from pathlib import Path
+from typing import List, Optional, Union
 
 import pyone
 
-from alts.shared.exceptions import VMImageNotFound
-from alts.shared.models import CeleryConfig
-from alts.worker import CONFIG  # type: CeleryConfig
-from alts.worker.runners.base import GenericVMRunner
-
+from alts.shared.exceptions import ThirdPartyTestError, VMImageNotFound
+from alts.shared.utils.asyncssh import AsyncSSHClient
+from alts.worker import CONFIG
+from alts.worker.executors.ansible import AnsibleExecutor
+from alts.worker.executors.bats import BatsExecutor
+from alts.worker.executors.shell import ShellExecutor
+from alts.worker.runners.base import GenericVMRunner, command_decorator
 
 __all__ = ['OpennebulaRunner']
 
@@ -29,12 +32,14 @@ class OpennebulaRunner(GenericVMRunner):
     TF_MAIN_FILE = 'opennebula.tf'
 
     def __init__(
-        self, task_id: str, dist_name: str,
-        dist_version: typing.Union[str, int],
-        repositories: typing.List[dict] = None,
+        self,
+        task_id: str,
+        dist_name: str,
+        dist_version: Union[str, int],
+        repositories: Optional[List[dict]] = None,
         dist_arch: str = 'x86_64',
-        package_channel: typing.Optional[str] = None,
-        test_configuration: typing.Optional[dict] = None,
+        package_channel: Optional[str] = None,
+        test_configuration: Optional[dict] = None,
     ):
         super().__init__(
             task_id,
@@ -42,7 +47,7 @@ class OpennebulaRunner(GenericVMRunner):
             dist_version,
             repositories=repositories,
             dist_arch=dist_arch,
-            test_configuration=test_configuration
+            test_configuration=test_configuration,
         )
         self.package_channel = package_channel
         user = CONFIG.opennebula_config.username
@@ -51,12 +56,18 @@ class OpennebulaRunner(GenericVMRunner):
             uri=CONFIG.opennebula_config.rpc_endpoint,
             session=f'{user}:{password}',
         )
+        self._tests_dir = '/tests/'
+        self._ssh_client: Optional[AsyncSSHClient] = None
 
-    def find_template_and_image_ids(self) -> tuple[typing.Optional[int], typing.Optional[int]]:
+    def find_template_and_image_ids(
+        self,
+    ) -> tuple[Optional[int], Optional[int]]:
         platform_name_version = f'{self.dist_name}-{self.dist_version}'
         templates = self.opennebula_client.templatepool.info(-1, -1, -1, -1)
-        regex_str = (r'(?P<platform_name>\w+(-\w+)?)-(?P<version>\d+.\d+)'
-                     r'-(?P<arch>\w+).*.test_system')
+        regex_str = (
+            r'(?P<platform_name>\w+(-\w+)?)-(?P<version>\d+.\d+)'
+            r'-(?P<arch>\w+).*.test_system'
+        )
         if self.package_channel is not None:
             channels = '|'.join(CONFIG.allowed_channel_names)
             regex_str += f'.({channels})'
@@ -103,7 +114,8 @@ class OpennebulaRunner(GenericVMRunner):
             return final_template.ID, int(final_image_id)
         images_pool = self.opennebula_client.imagepool.info(-2, -1, -1, -1)
         images = [
-            image for image in images_pool.IMAGE
+            image
+            for image in images_pool.IMAGE
             if image.NAME == final_image_name
         ]
         if images:
@@ -142,8 +154,44 @@ class OpennebulaRunner(GenericVMRunner):
         """
         vars_file = os.path.join(self._work_dir, self.TF_VARIABLES_FILE)
         self._render_template(
-            f'{self.TF_VARIABLES_FILE}.tmpl', vars_file,
+            f'{self.TF_VARIABLES_FILE}.tmpl',
+            vars_file,
             opennebula_rpc_endpoint=CONFIG.opennebula_config.rpc_endpoint,
             opennebula_username=CONFIG.opennebula_config.username,
-            opennebula_password=CONFIG.opennebula_config.password
+            opennebula_password=CONFIG.opennebula_config.password,
         )
+
+    def setup(self):
+        super().setup()
+        self._ssh_client = AsyncSSHClient(**self.default_ssh_params)
+
+    def clone_third_party_repo(self, repo_url: str) -> Path:
+        if self._ssh_client:
+            self._ssh_client.sync_run_command(
+                f'cd {self._tests_dir} && git clone {repo_url}'
+            )
+        return super().clone_third_party_repo(repo_url)
+
+    @command_decorator(ThirdPartyTestError, '', 'Third party tests failed')
+    def run_third_party_test(
+        self,
+        executor: Union[AnsibleExecutor, BatsExecutor, ShellExecutor],
+        cmd_args: List[str],
+        workdir: str = '',
+        docker_args: Optional[List[str]] = None,
+        artifacts_key: str = '',
+        additional_section_name: str = '',
+    ):
+        return (
+            executor.run_ssh_command(
+                cmd_args=cmd_args,
+                workdir=workdir,
+            )
+            .model_dump()
+            .values()
+        )
+
+    def run_third_party_tests(self):
+        if self._ssh_client:
+            self._ssh_client.sync_run_command(f'mkdir -p {self._tests_dir}')
+        return super().run_third_party_tests()

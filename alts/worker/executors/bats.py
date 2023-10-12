@@ -15,6 +15,8 @@ class BatsExecutor(BaseExecutor):
         logger: Optional[logging.Logger] = None,
         logger_name: str = 'bats-executor',
         logging_level: Literal['DEBUG', 'INFO'] = 'DEBUG',
+        connection_type: Literal['local', 'ssh', 'docker'] = 'local',
+        container_name: str = '',
     ):
         super().__init__(
             binary_name=binary_name,
@@ -24,13 +26,29 @@ class BatsExecutor(BaseExecutor):
             logger=logger,
             logger_name=logger_name,
             logging_level=logging_level,
+            connection_type=connection_type,
+            container_name=container_name,
         )
 
     @measure_stage('run_local_bats')
     def run_local_command(self, cmd_args: List[str]) -> CommandResult:
-        cmd_args = ['--tap', *cmd_args]
-        return super().run_local_command(cmd_args)
+        return super().run_local_command(['--tap', *cmd_args])
 
     @measure_stage('run_ssh_bats')
-    def run_ssh_command(self, cmd_args: List[str]) -> CommandResult:
-        return super().run_ssh_command(cmd_args)
+    def run_ssh_command(
+        self,
+        cmd_args: List[str],
+        workdir: str = '',
+    ) -> CommandResult:
+        return super().run_ssh_command(['--tap', *cmd_args], workdir=workdir)
+
+    @measure_stage('run_docker_bats')
+    def run_docker_command(
+        self,
+        cmd_args: List[str],
+        docker_args: Optional[List[str]] = None,
+    ) -> CommandResult:
+        return super().run_docker_command(
+            cmd_args=['--tap', *cmd_args],
+            docker_args=docker_args,
+        )

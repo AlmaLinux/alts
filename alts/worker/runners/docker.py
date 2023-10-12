@@ -5,13 +5,25 @@
 """AlmaLinux Test System docker environment runner."""
 
 import os
-from typing import Union, List, Optional
+from pathlib import Path
+from typing import List, Optional, Union
 
 from plumbum import local
 
-from alts.shared.exceptions import ProvisionError, PackageIntegrityTestsError
+from alts.shared.exceptions import (
+    PackageIntegrityTestsError,
+    ProvisionError,
+    ThirdPartyTestError,
+)
 from alts.worker import CONFIG
-from alts.worker.runners.base import BaseRunner, command_decorator, TESTS_SECTION_NAME
+from alts.worker.executors.ansible import AnsibleExecutor
+from alts.worker.executors.bats import BatsExecutor
+from alts.worker.executors.shell import ShellExecutor
+from alts.worker.runners.base import (
+    TESTS_SECTION_NAME,
+    BaseRunner,
+    command_decorator,
+)
 
 __all__ = ['DockerRunner']
 
@@ -29,7 +41,7 @@ class DockerRunner(BaseRunner):
         task_id: str,
         dist_name: str,
         dist_version: Union[str, int],
-        repositories: List[dict] = None,
+        repositories: Optional[List[dict]] = None,
         dist_arch: str = 'x86_64',
         test_configuration: Optional[dict] = None,
     ):
@@ -55,7 +67,7 @@ class DockerRunner(BaseRunner):
             dist_version,
             repositories=repositories,
             dist_arch=dist_arch,
-            test_configuration=test_configuration
+            test_configuration=test_configuration,
         )
         self._ansible_connection_type = 'docker'
 
@@ -74,15 +86,22 @@ class DockerRunner(BaseRunner):
         external_network = os.environ.get('EXTERNAL_NETWORK', None)
 
         self._render_template(
-            f'{self.TF_MAIN_FILE}.tmpl', docker_tf_file,
-            dist_name=self.dist_name, image_name=image_name,
-            container_name=self.env_name, external_network=external_network
+            f'{self.TF_MAIN_FILE}.tmpl',
+            docker_tf_file,
+            dist_name=self.dist_name,
+            image_name=image_name,
+            container_name=self.env_name,
+            external_network=external_network,
         )
 
     def _render_tf_variables_file(self):
         pass
 
-    def _exec(self, cmd_with_args: (), workdir: str = None):
+    def _exec(
+        self,
+        cmd_with_args: Union[tuple, list],
+        workdir: Optional[str] = None,
+    ):
         """
         Executes a command inside docker container.
 
@@ -101,10 +120,24 @@ class DockerRunner(BaseRunner):
         if workdir:
             cmd.extend(['--workdir', workdir])
         cmd.extend([str(self.env_name), *cmd_with_args])
-        cmd_str = ' '.join(cmd)
-        self._logger.debug(f'Running "docker {cmd_str}" command')
+        self._logger.debug(
+            'Running "docker %s" command',
+            ' '.join(cmd),
+        )
         return local['docker'].run(
-            args=tuple(cmd), retcode=None, cwd=self._work_dir)
+            args=tuple(cmd),
+            retcode=None,
+            cwd=self._work_dir,
+        )
+
+    def _copy(self, copy_args: List[str]):
+        """
+        Copies file/dir into docker container.
+        """
+        local['docker'].run(
+            ['cp', *copy_args],
+            retcode=None,
+        )
 
     def initial_provision(self, verbose=False):
         """
@@ -128,23 +161,31 @@ class DockerRunner(BaseRunner):
         # Installing python3 package before running Ansible
         if self._dist_name in CONFIG.debian_flavors:
             self._logger.info('Installing python3 package...')
-            exit_code, stdout, stderr = self._exec(
-                (self.pkg_manager, 'update'))
+            exit_code, _, stderr = self._exec(
+                (self.pkg_manager, 'update'),
+            )
             if exit_code != 0:
                 raise ProvisionError(f'Cannot update metadata: {stderr}')
             cmd_args = (self.pkg_manager, 'install', '-y', 'python3')
-            exit_code, stdout, stderr = self._exec(cmd_args)
+            exit_code, _, stderr = self._exec(cmd_args)
             if exit_code != 0:
-                raise ProvisionError(f'Cannot install package python3: '
-                                     f'{stderr}')
+                raise ProvisionError(
+                    f'Cannot install package python3: {stderr}'
+                )
             self._logger.info('Installation is completed')
         return super().initial_provision(verbose=verbose)
 
-    @command_decorator(PackageIntegrityTestsError, 'package_integrity_tests',
-                       'Package integrity tests failed',
-                       additional_section_name=TESTS_SECTION_NAME)
-    def run_package_integrity_tests(self, package_name: str,
-                                    package_version: str = None):
+    @command_decorator(
+        PackageIntegrityTestsError,
+        'package_integrity_tests',
+        'Package integrity tests failed',
+        additional_section_name=TESTS_SECTION_NAME,
+    )
+    def run_package_integrity_tests(
+        self,
+        package_name: str,
+        package_version: Optional[str] = None,
+    ):
         """
         Run basic integrity tests for the package
 
@@ -163,14 +204,45 @@ class DockerRunner(BaseRunner):
         """
         tests_dir_basename = os.path.basename(self._integrity_tests_dir)
         remote_tests_path = os.path.join('/tests', tests_dir_basename)
-        cmd_args = ['py.test', '--tap-stream',
-                    '--package-name', package_name]
+        cmd_args = ['py.test', '--tap-stream', '--package-name', package_name]
         if package_version:
             full_pkg_name = f'{package_name}-{package_version}'
             cmd_args.extend(['--package-version', package_version])
         else:
             full_pkg_name = package_name
         cmd_args.append('tests')
-        self._logger.info('Running package integrity tests for '
-                          '%s on %s...', full_pkg_name, self.env_name)
+        self._logger.info(
+            'Running package integrity tests for %s on %s...',
+            full_pkg_name,
+            self.env_name,
+        )
         return self._exec(cmd_args, workdir=remote_tests_path)
+
+    @command_decorator(ThirdPartyTestError, '', 'Third party tests failed')
+    def run_third_party_test(
+        self,
+        executor: Union[AnsibleExecutor, BatsExecutor, ShellExecutor],
+        cmd_args: List[str],
+        docker_args: Optional[List[str]] = None,
+        workdir: str = '',
+        artifacts_key: str = '',
+        additional_section_name: str = '',
+    ):
+        return (
+            executor.run_docker_command(
+                cmd_args=cmd_args,
+                docker_args=docker_args,
+            )
+            .model_dump()
+            .values()
+        )
+
+    def clone_third_party_repo(self, repo_url: str) -> Path:
+        test_repo_path = super().clone_third_party_repo(repo_url)
+        self._copy(
+            [
+                str(test_repo_path),
+                f'{self.env_name}:/tests/{test_repo_path.name}',
+            ]
+        )
+        return test_repo_path

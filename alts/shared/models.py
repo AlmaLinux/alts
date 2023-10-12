@@ -54,7 +54,7 @@ class CommandResult(BaseModel):
 
 
 class TestConfiguration(BaseModel):
-    tests: typing.Optional[typing.List[dict]] = None
+    tests: typing.List[dict] = []
     test_env: typing.Optional[dict] = None
 
 
