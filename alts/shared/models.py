@@ -274,6 +274,7 @@ class CeleryConfig(BaseModel):
     ssh_public_key_path: str = '~/.ssh/id_rsa.pub'
     # Build system settings
     bs_host: typing.Optional[str] = None
+    bs_get_task_endpoint: str = '/api/v1/tests/get_test_tasks/'
     bs_token: typing.Optional[str] = None
     # Log uploader settings
     logs_uploader_config: typing.Optional[

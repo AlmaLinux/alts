@@ -178,16 +178,22 @@ def run_tests(task_params: dict):
         for stage, stage_data in runner.artifacts.items():
             # FIXME: Temporary solution, needs to be removed when this
             #  test system will be the only running one
-            if stage in TESTS_SECTIONS_NAMES:
-                if stage not in summary:
-                    summary[stage] = {}
-                for inner_stage, inner_data in stage_data.items():
-                    summary[stage][inner_stage] = {
-                        'success': is_success(inner_data),
-                        'output': inner_data['stdout'],
-                    }
-            else:
-                summary[stage] = {'success': is_success(stage_data)}
+            if stage not in TESTS_SECTIONS_NAMES:
+                stage_info = {'success': is_success(stage_data)}
+                if CONFIG.logs_uploader_config.skip_artifacts_upload:
+                    stage_info.update(stage_data)
+                summary[stage] = stage_info
+                continue
+            if stage not in summary:
+                summary[stage] = {}
+            for inner_stage, inner_data in stage_data.items():
+                stage_info = {
+                    'success': is_success(inner_data),
+                    'output': inner_data['stdout'],
+                }
+                if CONFIG.logs_uploader_config.skip_artifacts_upload:
+                    stage_info.update(inner_data)
+                summary[stage][inner_stage] = stage_info
         summary['logs'] = runner.uploaded_logs
         if task_params.get('callback_href'):
             full_url = urllib.parse.urljoin(

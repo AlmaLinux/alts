@@ -171,9 +171,11 @@ class BaseRunner(object):
         self._dist_name = dist_name.lower()
         self._dist_version = str(dist_version).lower()
         self._dist_arch = dist_arch.lower()
-        self._env_name = (
+        self._env_name = re.sub(
+            r'\.',
+            '_',
             f'alts_{self.TYPE}_{self.dist_name}_'
-            f'{self.dist_version}_{self.dist_arch}_{task_id}'
+            f'{self.dist_version}_{self.dist_arch}_{task_id}',
         )
 
         # Package installation and test stuff
@@ -856,9 +858,13 @@ class BaseRunner(object):
                     self._uploaded_logs = []
                 if self._task_log_handler:
                     self.__close_task_logger(self._task_log_handler)
-                self._uploaded_logs.append(
-                    self._uploader.upload_single_file(self._task_log_file)
-                )
+                if (
+                    self._task_log_handler
+                    and not CONFIG.logs_uploader_config.skip_artifacts_upload
+                ):
+                    self._uploaded_logs.append(
+                        self._uploader.upload_single_file(self._task_log_file)
+                    )
 
         self.erase_work_dir()
 
