@@ -42,7 +42,7 @@ def get_package_files(pkg: Union[DebianPackage, RpmPackage]) -> List[str]:
     if isinstance(pkg, DebianPackage):
         command = f'dpkg -L {pkg.name}'
     elif isinstance(pkg, RpmPackage):
-        command = f'rpm -ql {pkg.name}'
+        command = f'rpm -ql --noghost {pkg.name}'
     else:
         raise ValueError(f'Unknown package type: {type(pkg)}')
 
@@ -189,7 +189,7 @@ def has_missing_shared_libraries(file_: GNUFile) -> MissingSOResult:
 
     """
     output = file_.run(f'ldd {file_.path}')
-    result = []
+    result = [f'File {file_.path} has missing shared libraries dependencies:']
     assert output.rc == 0
     for item in output.stdout.split('\n'):
         if 'not found' in item.lower():
