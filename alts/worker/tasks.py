@@ -142,7 +142,8 @@ def run_tests(task_params: dict):
             module_stream=module_stream,
             module_version=module_version,
         )
-        runner.run_package_integrity_tests(package_name, package_version)
+        if CONFIG.enable_integrity_tests:
+            runner.run_package_integrity_tests(package_name, package_version)
         runner.run_third_party_tests()
         runner.uninstall_package(
             package_name,

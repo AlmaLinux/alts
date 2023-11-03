@@ -39,7 +39,7 @@ class TasksMonitor(threading.Thread):
             response = requests.get(
                 urllib.parse.urljoin(
                     CONFIG.bs_host,
-                    CONFIG.bs_get_task_endpoint,
+                    CONFIG.bs_tasks_endpoint,
                 ),
                 headers={'Authorization': f'Bearer {CONFIG.bs_token}'},
             ).json()

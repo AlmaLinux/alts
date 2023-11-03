@@ -8,6 +8,7 @@ import re
 import shutil
 import tempfile
 import time
+import urllib.parse
 from functools import wraps
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -180,6 +181,7 @@ class BaseRunner(object):
 
         # Package installation and test stuff
         self._repositories = repositories or []
+        self.add_credentials_in_deb_repos()
 
         self._artifacts = {}
         self._uploaded_logs = None
@@ -247,6 +249,24 @@ class BaseRunner(object):
             'disable_known_hosts_check': True,
             'ignore_encrypted_keys': True,
         }
+
+    def add_credentials_in_deb_repos(self):
+        for repo in self._repositories:
+            if '-br' not in repo['name'] or 'amd64' not in repo['url']:
+                continue
+            parsed = urllib.parse.urlparse(repo['url'])
+            netloc = f'alts:{CONFIG.bs_token}@{parsed.netloc}'
+            url = urllib.parse.urlunparse(
+                (
+                    parsed.scheme,
+                    netloc,
+                    parsed.path,
+                    parsed.params,
+                    parsed.query,
+                    parsed.fragment,
+                )
+            )
+            repo['url'] = f'deb {url} ./'
 
     def __init_task_logger(self, log_file):
         """
@@ -703,7 +723,7 @@ class BaseRunner(object):
         full_pkg_name = package_name
         if package_version:
             full_pkg_name = f'{package_name}-{package_version}'
-            cmd_args.extend(['--package-version', package_version])
+            cmd_args.extend(('--package-version', package_version))
         cmd_args.append('tests')
         self._logger.info(
             'Running package integrity tests for %s on %s...',
