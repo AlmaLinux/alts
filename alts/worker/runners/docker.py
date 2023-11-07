@@ -237,8 +237,14 @@ class DockerRunner(BaseRunner):
             .values()
         )
 
-    def clone_third_party_repo(self, repo_url: str) -> Path:
-        test_repo_path = super().clone_third_party_repo(repo_url)
+    def clone_third_party_repo(
+        self,
+        repo_url: str,
+        git_ref: str,
+    ) -> Optional[Path]:
+        test_repo_path = super().clone_third_party_repo(repo_url, git_ref)
+        if not test_repo_path:
+            return
         self._copy(
             [
                 str(test_repo_path),

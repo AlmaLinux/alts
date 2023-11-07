@@ -31,6 +31,11 @@ from alts.shared.exceptions import (
 from alts.shared.types import ImmutableDict
 from alts.shared.uploaders.base import BaseLogsUploader, UploadError
 from alts.shared.uploaders.pulp import PulpLogsUploader
+from alts.shared.utils.git_utils import (
+    clone_gerrit_repo,
+    clone_git_repo,
+    git_reset_hard,
+)
 from alts.worker import CONFIG, RESOURCES_DIR
 from alts.worker.executors.ansible import AnsibleExecutor
 from alts.worker.executors.bats import BatsExecutor
@@ -415,6 +420,21 @@ class BaseRunner(object):
                 'Cannot create working directory and needed files'
             ) from e
 
+    def clone_third_party_repo(
+        self,
+        repo_url: str,
+        git_ref: str,
+    ) -> Optional[Path]:
+        git_repo_path = None
+        if repo_url.endswith('.git'):
+            func = clone_git_repo
+        elif 'gerrit' in repo_url:
+            func = clone_gerrit_repo
+        else:
+            self._logger.debug('An unknown repository format, skipping')
+            return git_repo_path
+        return func(repo_url, git_ref, self._work_dir, self._logger)
+
     def run_third_party_test(
         self,
         executor: Union[AnsibleExecutor, BatsExecutor, ShellExecutor],
@@ -442,7 +462,10 @@ class BaseRunner(object):
             'ssh_params': self.default_ssh_params,
         }
         for test in self._test_configuration['tests']:
-            test_repo_path = self.clone_third_party_repo(test['url'])
+            git_ref = test.get('git_ref', 'master')
+            test_repo_path = self.clone_third_party_repo(test['url'], git_ref)
+            if not test_repo_path:
+                continue
             workdir = f'/tests/{test_repo_path.name}'
             for file in test_repo_path.iterdir():
                 executor_class = executors_mapping.get(file.suffix)
@@ -454,7 +477,7 @@ class BaseRunner(object):
                     ShellExecutor,
                 ] = executor_class(**executor_params)
                 self._logger.debug(
-                    'Running repo test %s on %s...',
+                    'Running the third party test %s on %s...',
                     file.name,
                     self.env_name,
                 )
@@ -472,7 +495,12 @@ class BaseRunner(object):
                         ),
                     )
                 except ThirdPartyTestError:
-                    continue
+                    pass
+                except Exception:
+                    self._logger.exception(
+                        'An unknown error occurred during the test execution'
+                    )
+            git_reset_hard(test_repo_path, self._logger)
 
     # After: prepare_work_dir_files
     @command_decorator(
@@ -793,23 +821,6 @@ class BaseRunner(object):
             self._uploaded_logs = artifacts
         except UploadError as e:
             raise PublishArtifactsError from e
-
-    def clone_third_party_repo(
-        self,
-        repo_url: str,
-    ) -> Path:
-        self._logger.debug('Cloning git repo: %s', repo_url)
-        exit_code, _, stderr = local['git'].run(
-            ['clone', repo_url],
-            retcode=None,
-            cwd=self._work_dir,
-        )
-        if exit_code != 0:
-            raise ValueError(f'Cannot clone git repo:\n{stderr}')
-        return Path(
-            self._work_dir,
-            Path(repo_url).name.replace('.git', ''),
-        )
 
     # After: install_package and run_tests
     @command_decorator(

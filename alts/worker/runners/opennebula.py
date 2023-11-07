@@ -13,6 +13,7 @@ import pyone
 
 from alts.shared.exceptions import ThirdPartyTestError, VMImageNotFound
 from alts.shared.utils.asyncssh import AsyncSSHClient
+from alts.shared.utils.git_utils import prepare_gerrit_command
 from alts.worker import CONFIG
 from alts.worker.executors.ansible import AnsibleExecutor
 from alts.worker.executors.bats import BatsExecutor
@@ -165,12 +166,35 @@ class OpennebulaRunner(GenericVMRunner):
         super().setup()
         self._ssh_client = AsyncSSHClient(**self.default_ssh_params)
 
-    def clone_third_party_repo(self, repo_url: str) -> Path:
+    def clone_third_party_repo(
+        self,
+        repo_url: str,
+        git_ref: str,
+    ) -> Optional[Path]:
+        git_repo_path = super().clone_third_party_repo(repo_url, git_ref)
+        if not git_repo_path:
+            return
         if self._ssh_client:
             self._ssh_client.sync_run_command(
                 f'cd {self._tests_dir} && git clone {repo_url}'
             )
-        return super().clone_third_party_repo(repo_url)
+            repo_path = Path(
+                self._tests_dir,
+                Path(repo_url).name.replace('.git', ''),
+            )
+            command = f'git fetch origin && git checkout {git_ref}'
+            if 'gerrit' in repo_url:
+                command = prepare_gerrit_command(git_ref)
+            result = self._ssh_client.sync_run_command(
+                f'cd {repo_path} && {command}',
+            )
+            if not result.is_successful():
+                self._logger.error(
+                    'Cannot prepare git repository:\n%s',
+                    result.stderr,
+                )
+                return
+        return git_repo_path
 
     @command_decorator(ThirdPartyTestError, '', 'Third party tests failed')
     def run_third_party_test(
