@@ -100,6 +100,17 @@
       tags:
         - initial_provision
 
+    - name: Install custom ldconfig
+      copy:
+        src: custom-ts.conf
+        dest: /etc/ld.so.conf.d/custom-ts.conf
+        owner: root
+        group: root
+        mode: 0644
+
+    - name: Reload ldconfig
+      shell: ldconfig
+
     - name: Enable module
       shell: dnf module enable -y "{{ module_name }}:{{ module_stream }}:{{ module_version }}"
       when: ansible_distribution_file_variety == 'RedHat' and module_name is defined and module_stream is defined and module_version is defined
