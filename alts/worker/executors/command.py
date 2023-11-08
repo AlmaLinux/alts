@@ -35,7 +35,11 @@ class CommandExecutor(BaseExecutor):
         return super().run_local_command(cmd_args)
 
     @measure_stage('run_signle_ssh_command')
-    def run_ssh_command(self, cmd_args: List[str]) -> CommandResult:
+    def run_ssh_command(
+        self,
+        cmd_args: List[str],
+        workdir: str = '',
+    ) -> CommandResult:
         return super().run_ssh_command(cmd_args)
 
     @measure_stage('run_signle_docker_command')

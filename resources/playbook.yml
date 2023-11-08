@@ -35,6 +35,11 @@
             name: "*"
             state: latest
 
+        - name: Install additional packages
+          apt:
+            name: "python3-pip"
+            state: latest
+
         - name: Add required repositories
           apt_repository:
             repo: "{{ item.url }}"
@@ -129,6 +134,7 @@
       apt:
         name: "{{ pkg_name }}"
         state: present
+        allow_unauthenticated: true
       when: ansible_distribution_file_variety == 'Debian'
       tags:
         - install_package

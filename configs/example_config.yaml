@@ -43,6 +43,7 @@ opennebula_config:
   network:
 
 bs_host:
+bs_tasks_endpoint: '/api/v1/tests/get_test_tasks/'
 bs_token:
 logs_uploader_config:
   pulp_host:

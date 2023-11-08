@@ -254,6 +254,7 @@ class CeleryConfig(BaseModel):
     azure_connection_string: typing.Optional[str] = None
     task_default_queue: str = 'default'
     task_acks_late: bool = True
+    enable_integrity_tests: bool = True
     task_track_started: bool = True
     worker_prefetch_multiplier: int = 1
     broker_pool_limit: int = 20
@@ -274,6 +275,7 @@ class CeleryConfig(BaseModel):
     ssh_public_key_path: str = '~/.ssh/id_rsa.pub'
     # Build system settings
     bs_host: typing.Optional[str] = None
+    bs_tasks_endpoint: str = '/api/v1/tests/get_test_tasks/'
     bs_token: typing.Optional[str] = None
     # Log uploader settings
     logs_uploader_config: typing.Optional[

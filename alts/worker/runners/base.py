@@ -8,6 +8,7 @@ import re
 import shutil
 import tempfile
 import time
+import urllib.parse
 from functools import wraps
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -30,6 +31,11 @@ from alts.shared.exceptions import (
 from alts.shared.types import ImmutableDict
 from alts.shared.uploaders.base import BaseLogsUploader, UploadError
 from alts.shared.uploaders.pulp import PulpLogsUploader
+from alts.shared.utils.git_utils import (
+    clone_gerrit_repo,
+    clone_git_repo,
+    git_reset_hard,
+)
 from alts.worker import CONFIG, RESOURCES_DIR
 from alts.worker.executors.ansible import AnsibleExecutor
 from alts.worker.executors.bats import BatsExecutor
@@ -171,13 +177,16 @@ class BaseRunner(object):
         self._dist_name = dist_name.lower()
         self._dist_version = str(dist_version).lower()
         self._dist_arch = dist_arch.lower()
-        self._env_name = (
+        self._env_name = re.sub(
+            r'\.',
+            '_',
             f'alts_{self.TYPE}_{self.dist_name}_'
-            f'{self.dist_version}_{self.dist_arch}_{task_id}'
+            f'{self.dist_version}_{self.dist_arch}_{task_id}',
         )
 
         # Package installation and test stuff
         self._repositories = repositories or []
+        self.add_credentials_in_deb_repos()
 
         self._artifacts = {}
         self._uploaded_logs = None
@@ -245,6 +254,24 @@ class BaseRunner(object):
             'disable_known_hosts_check': True,
             'ignore_encrypted_keys': True,
         }
+
+    def add_credentials_in_deb_repos(self):
+        for repo in self._repositories:
+            if '-br' not in repo['name'] or 'amd64' not in repo['url']:
+                continue
+            parsed = urllib.parse.urlparse(repo['url'])
+            netloc = f'alts:{CONFIG.bs_token}@{parsed.netloc}'
+            url = urllib.parse.urlunparse(
+                (
+                    parsed.scheme,
+                    netloc,
+                    parsed.path,
+                    parsed.params,
+                    parsed.query,
+                    parsed.fragment,
+                )
+            )
+            repo['url'] = f'deb {url} ./'
 
     def __init_task_logger(self, log_file):
         """
@@ -393,6 +420,21 @@ class BaseRunner(object):
                 'Cannot create working directory and needed files'
             ) from e
 
+    def clone_third_party_repo(
+        self,
+        repo_url: str,
+        git_ref: str,
+    ) -> Optional[Path]:
+        git_repo_path = None
+        if repo_url.endswith('.git'):
+            func = clone_git_repo
+        elif 'gerrit' in repo_url:
+            func = clone_gerrit_repo
+        else:
+            self._logger.debug('An unknown repository format, skipping')
+            return git_repo_path
+        return func(repo_url, git_ref, self._work_dir, self._logger)
+
     def run_third_party_test(
         self,
         executor: Union[AnsibleExecutor, BatsExecutor, ShellExecutor],
@@ -420,7 +462,10 @@ class BaseRunner(object):
             'ssh_params': self.default_ssh_params,
         }
         for test in self._test_configuration['tests']:
-            test_repo_path = self.clone_third_party_repo(test['url'])
+            git_ref = test.get('git_ref', 'master')
+            test_repo_path = self.clone_third_party_repo(test['url'], git_ref)
+            if not test_repo_path:
+                continue
             workdir = f'/tests/{test_repo_path.name}'
             for file in test_repo_path.iterdir():
                 executor_class = executors_mapping.get(file.suffix)
@@ -432,7 +477,7 @@ class BaseRunner(object):
                     ShellExecutor,
                 ] = executor_class(**executor_params)
                 self._logger.debug(
-                    'Running repo test %s on %s...',
+                    'Running the third party test %s on %s...',
                     file.name,
                     self.env_name,
                 )
@@ -450,7 +495,12 @@ class BaseRunner(object):
                         ),
                     )
                 except ThirdPartyTestError:
-                    continue
+                    pass
+                except Exception:
+                    self._logger.exception(
+                        'An unknown error occurred during the test execution'
+                    )
+            git_reset_hard(test_repo_path, self._logger)
 
     # After: prepare_work_dir_files
     @command_decorator(
@@ -701,7 +751,7 @@ class BaseRunner(object):
         full_pkg_name = package_name
         if package_version:
             full_pkg_name = f'{package_name}-{package_version}'
-            cmd_args.extend(['--package-version', package_version])
+            cmd_args.extend(('--package-version', package_version))
         cmd_args.append('tests')
         self._logger.info(
             'Running package integrity tests for %s on %s...',
@@ -772,23 +822,6 @@ class BaseRunner(object):
         except UploadError as e:
             raise PublishArtifactsError from e
 
-    def clone_third_party_repo(
-        self,
-        repo_url: str,
-    ) -> Path:
-        self._logger.debug('Cloning git repo: %s', repo_url)
-        exit_code, _, stderr = local['git'].run(
-            ['clone', repo_url],
-            retcode=None,
-            cwd=self._work_dir,
-        )
-        if exit_code != 0:
-            raise ValueError(f'Cannot clone git repo:\n{stderr}')
-        return Path(
-            self._work_dir,
-            Path(repo_url).name.replace('.git', ''),
-        )
-
     # After: install_package and run_tests
     @command_decorator(
         StopEnvironmentError,
@@ -856,9 +889,13 @@ class BaseRunner(object):
                     self._uploaded_logs = []
                 if self._task_log_handler:
                     self.__close_task_logger(self._task_log_handler)
-                self._uploaded_logs.append(
-                    self._uploader.upload_single_file(self._task_log_file)
-                )
+                if (
+                    self._task_log_handler
+                    and not CONFIG.logs_uploader_config.skip_artifacts_upload
+                ):
+                    self._uploaded_logs.append(
+                        self._uploader.upload_single_file(self._task_log_file)
+                    )
 
         self.erase_work_dir()
 

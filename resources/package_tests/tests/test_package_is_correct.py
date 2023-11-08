@@ -1,7 +1,16 @@
 import pytest_check as check
 from testinfra.modules.package import RpmPackage
 
-from ..base import *
+from ..base import (
+    get_package_files,
+    get_shared_libraries,
+    has_missing_shared_libraries,
+    is_debuginfo_package,
+    is_file_dynamically_linked,
+    is_package_empty,
+    is_rpath_correct,
+    resolve_symlink,
+)
 
 
 def test_package_is_installed(host, package_name, package_version):
@@ -26,15 +35,17 @@ def test_package_is_installed(host, package_name, package_version):
     check.is_true(package.is_installed)
     if package_version:
         check.is_in(
-            package.version, package_version,
-            'Version does not match: required: {0}, actual: {1}'.format(
-                package_version, package.version)
+            package.version,
+            package_version,
+            f'Version does not match: required: {package_version}, '
+            f'actual: {package.version}',
         )
         if isinstance(package, RpmPackage):
             check.is_in(
-                package.release, package_version,
-                'Release does not match: required: {0}, actual: {1}'.format(
-                    package_version, package.release)
+                package.release,
+                package_version,
+                f'Release does not match: required: {package_version}, '
+                f'actual: {package.release}',
             )
 
 
@@ -64,16 +75,20 @@ def test_all_package_files_exist(host, package_name):
         file_obj = host.file(file_)
         check.is_true(
             file_obj.exists,
-            'File is absent on the file system: {}'.format(file_)
+            f'File is absent on the file system: {file_}',
         )
         # Check all symlinks point to existing files
         if file_obj.is_symlink:
             resolved = resolve_symlink(host, file_obj)
             check.is_not_none(
-                resolved, 'Symlink cannot be resolved: {}'.format(file_))
+                resolved,
+                f'Symlink cannot be resolved: {file_}',
+            )
             file_obj = host.file(resolved)
             check.is_true(
-                file_obj.exists, 'Symlink is broken: {}'.format(file_))
+                file_obj.exists,
+                f'Symlink is broken: {file_}',
+            )
 
 
 def test_binaries_have_all_dependencies(host, package_name):
@@ -130,5 +145,7 @@ def test_check_rpath_is_correct(host, package_name):
         return
 
     for library in get_shared_libraries(package):
-        check.is_true(is_rpath_correct(host.file(library)),
-                      'RPATH is broken in {}'.format(library))
+        check.is_true(
+            is_rpath_correct(host.file(library)),
+            f'RPATH is broken in {library}',
+        )
