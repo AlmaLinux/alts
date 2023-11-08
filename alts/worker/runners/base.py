@@ -35,6 +35,7 @@ from alts.shared.utils.git_utils import (
     clone_gerrit_repo,
     clone_git_repo,
     git_reset_hard,
+    prepare_gerrit_repo_url,
 )
 from alts.worker import CONFIG, RESOURCES_DIR
 from alts.worker.executors.ansible import AnsibleExecutor
@@ -75,10 +76,10 @@ def command_decorator(
             exit_code, stdout, stderr = fn(self, *args, **kwargs)
             finish = datetime.datetime.utcnow()
             add_to = self._artifacts
-            key = kwargs.get('artifacts_key') or artifacts_key
-            section_name = (
-                kwargs.get('additional_section_name')
-                or additional_section_name
+            key = kwargs.get('artifacts_key', artifacts_key)
+            section_name = kwargs.get(
+                'additional_section_name',
+                additional_section_name,
             )
             if section_name:
                 if section_name not in self._artifacts:
@@ -161,14 +162,16 @@ class BaseRunner(object):
             directories=[RESOURCES_DIR, self._class_resources_dir]
         )
         self._uploader = artifacts_uploader
-        if not artifacts_uploader:
-            if not CONFIG.logs_uploader_config.skip_artifacts_upload:
-                self._uploader = PulpLogsUploader(
-                    CONFIG.logs_uploader_config.pulp_host,
-                    CONFIG.logs_uploader_config.pulp_user,
-                    CONFIG.logs_uploader_config.pulp_password,
-                    concurrency=CONFIG.logs_uploader_config.uploader_concurrency,
-                )
+        if (
+            not artifacts_uploader
+            and not CONFIG.logs_uploader_config.skip_artifacts_upload
+        ):
+            self._uploader = PulpLogsUploader(
+                CONFIG.logs_uploader_config.pulp_host,
+                CONFIG.logs_uploader_config.pulp_user,
+                CONFIG.logs_uploader_config.pulp_password,
+                concurrency=CONFIG.logs_uploader_config.uploader_concurrency,
+            )
 
         # Basic commands and tools setup
         self._ansible_connection_type = 'ssh'
@@ -463,9 +466,17 @@ class BaseRunner(object):
         }
         for test in self._test_configuration['tests']:
             git_ref = test.get('git_ref', 'master')
-            test_repo_path = self.clone_third_party_repo(test['url'], git_ref)
+            repo_url = test['url']
+            repo_url = (
+                prepare_gerrit_repo_url(repo_url)
+                if 'gerrit' in repo_url
+                else repo_url
+            )
+            test_repo_path = self.clone_third_party_repo(repo_url, git_ref)
             if not test_repo_path:
                 continue
+            # TODO: workdir + test folder, i.e:
+            #       /tests/repo/pkg_tests/common
             workdir = f'/tests/{test_repo_path.name}'
             for file in test_repo_path.iterdir():
                 executor_class = executors_mapping.get(file.suffix)
@@ -889,13 +900,12 @@ class BaseRunner(object):
                     self._uploaded_logs = []
                 if self._task_log_handler:
                     self.__close_task_logger(self._task_log_handler)
-                if (
-                    self._task_log_handler
-                    and not CONFIG.logs_uploader_config.skip_artifacts_upload
-                ):
-                    self._uploaded_logs.append(
-                        self._uploader.upload_single_file(self._task_log_file)
-                    )
+                    if not CONFIG.logs_uploader_config.skip_artifacts_upload:
+                        self._uploaded_logs.append(
+                            self._uploader.upload_single_file(
+                                self._task_log_file
+                            )
+                        )
 
         self.erase_work_dir()
 

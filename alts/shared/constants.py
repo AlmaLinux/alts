@@ -29,8 +29,8 @@ SUPPORTED_ARCHITECTURES = [
     's390x',
 ]
 SUPPORTED_DISTRIBUTIONS = ['almalinux', 'centos', 'ubuntu', 'debian']
-RHEL_FLAVORS = ('rhel', 'fedora', 'centos', 'almalinux', 'cloudlinux')
-DEBIAN_FLAVORS = ('debian', 'ubuntu', 'raspbian')
+RHEL_FLAVORS = ['rhel', 'fedora', 'centos', 'almalinux', 'cloudlinux']
+DEBIAN_FLAVORS = ['debian', 'ubuntu', 'raspbian']
 ALLOWED_CHANNELS = ['stable', 'beta']
 
 
