@@ -13,7 +13,9 @@ __all__ = [
     'PublishArtifactsError',
     'StartEnvironmentError',
     'StopEnvironmentError',
+    'SystemInfoCmdError',
     'TerraformInitializationError',
+    'ThirdPartyTestError',
     'WorkDirPreparationError',
     'PackageIntegrityTestsError',
     'UninstallPackageError',
@@ -75,3 +77,7 @@ class VMImageNotFound(StartEnvironmentError):
 
 class ThirdPartyTestError(ALTSBaseError):
     """Error occurred while running third party test"""
+
+
+class SystemInfoCmdError(ALTSBaseError):
+    pass

@@ -100,15 +100,18 @@ class BaseExecutor:
             )
 
     @measure_stage('run_local_command')
-    def run_local_command(self, cmd_args: List[str]) -> CommandResult:
+    def run_local_command(
+        self,
+        cmd_args: List[str],
+        workdir: str = '',
+    ) -> CommandResult:
         try:
-            exit_code, stdout, stderr = (
-                local[self.binary_name]
-                .with_env(**self.env_vars)
-                .run(
-                    args=cmd_args,
-                    timeout=self.timeout,
-                )
+            executable = local[self.binary_name].with_env(**self.env_vars)
+            if workdir:
+                executable = executable.with_cwd(workdir)
+            exit_code, stdout, stderr = executable.run(
+                args=cmd_args,
+                timeout=self.timeout,
             )
         except Exception:
             self.logger.exception('Cannot run local command:')
@@ -127,15 +130,16 @@ class BaseExecutor:
     ) -> CommandResult:
         if not self.ssh_client:
             raise ValueError('SSH params are missing')
-        direcrtory = f'cd {workdir} && ' if workdir else ''
+        directory = f'cd {workdir} && ' if workdir else ''
         return self.ssh_client.sync_run_command(
-            direcrtory + ' '.join([self.binary_name, *cmd_args])
+            directory + ' '.join([self.binary_name, *cmd_args])
         )
 
     @measure_stage('run_docker_command')
     def run_docker_command(
         self,
         cmd_args: List[str],
+        workdir: str = '',
         docker_args: Optional[List[str]] = None,
     ) -> CommandResult:
         docker_args = docker_args if docker_args else []
@@ -163,3 +167,17 @@ class BaseExecutor:
             stdout=stdout,
             stderr=stderr,
         )
+
+    def run(
+        self,
+        cmd_args: List[str],
+        workdir: str = '',
+        **kwargs
+    ) -> CommandResult:
+        if self.connection_type == 'ssh':
+            executable = self.run_ssh_command
+        elif self.connection_type == 'docker':
+            executable = self.run_docker_command
+        else:
+            executable = self.run_local_command
+        return executable(cmd_args, workdir=workdir, **kwargs)

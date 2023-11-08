@@ -171,6 +171,11 @@ class TasksMonitor(threading.Thread):
                         _ = task_result.get(timeout=self.__get_result_timeout)
                     except TimeoutError:
                         pass
+                    except Exception as e:
+                        self.logger.warning(
+                            'Non-critical error in acquiring task result: %s',
+                            str(e)
+                        )
                     if task_result.state != task.status:
                         self.logger.info(
                             'Updating task %s status to %s',

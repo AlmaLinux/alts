@@ -65,7 +65,7 @@ def get_celery_task_result(task_id: str, timeout: int = 1) -> dict:
         )
     except Exception:
         logging.exception(
-            'Unknown exception while getting resutls from Celery',
+            'Unknown exception while getting results from Celery',
         )
     result['state'] = task_data.state
     return result

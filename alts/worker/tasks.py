@@ -135,6 +135,7 @@ def run_tests(task_params: dict):
         package_name = task_params['package_name']
         package_version = task_params.get('package_version')
         runner.setup()
+        runner.run_system_info_commands()
         runner.install_package(
             package_name,
             package_version,

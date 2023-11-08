@@ -46,6 +46,7 @@ class AnsibleExecutor(BaseExecutor):
     def run_docker_command(
         self,
         cmd_args: List[str],
+        workdir: str = '',
         docker_args: Optional[List[str]] = None,
     ) -> CommandResult:
         return super().run_docker_command(

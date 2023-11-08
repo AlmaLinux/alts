@@ -7,7 +7,9 @@ from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 from alts.shared import constants
 
 __all__ = [
+    'AsyncSSHParams',
     'CeleryConfig',
+    'CommandResult',
     'Repository',
     'SchedulerConfig',
     'TaskRequestResponse',
