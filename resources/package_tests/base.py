@@ -189,7 +189,7 @@ def has_missing_shared_libraries(file_: GNUFile) -> MissingSOResult:
 
     """
     output = file_.run(f'ldd {file_.path}')
-    result = [f'File {file_.path} has missing shared libraries dependencies:']
+    result = []
     assert output.rc == 0
     for item in output.stdout.split('\n'):
         if 'not found' in item.lower():
@@ -197,6 +197,9 @@ def has_missing_shared_libraries(file_: GNUFile) -> MissingSOResult:
 
     if len(result):
         return MissingSOResult(True, '\n'.join(result))
+    result.insert(
+        0, f'File {file_.path} has missing shared libraries dependencies:'
+    )
     return MissingSOResult(False, '')
 
 
