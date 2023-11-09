@@ -24,7 +24,6 @@ from alts.shared.exceptions import (
     PublishArtifactsError,
     StartEnvironmentError,
     StopEnvironmentError,
-    SystemInfoCmdError,
     TerraformInitializationError,
     ThirdPartyTestError,
     UninstallPackageError,
@@ -69,9 +68,9 @@ BASE_SYSTEM_INFO_COMMANDS = {
 
 
 def command_decorator(
-    exception_class,
     artifacts_key,
     error_message,
+    exception_class=None,
     additional_section_name=None,
 ):
     def method_wrapper(fn):
@@ -103,7 +102,7 @@ def command_decorator(
                 'finish_ts': finish.isoformat(),
                 'delta': (finish - start).total_seconds(),
             }
-            if exit_code != 0:
+            if exit_code != 0 and exception_class:
                 self._logger.error(
                     '%s, exit code: %s, error:\n%s',
                     error_message,
@@ -529,7 +528,6 @@ class BaseRunner(object):
         return basic_commands
 
     @command_decorator(
-        SystemInfoCmdError,
         'system_info',
         'System information commands block is failed',
     )
@@ -539,12 +537,11 @@ class BaseRunner(object):
         successful_commands = {}
         error_output = ''
         executor_params = self.get_test_executor_params()
-        executor_params['timeout'] = 30
+        executor_params['timeout'] = CONFIG.commands_exec_timeout
         for section, cmd in self.get_system_info_commands_list().items():
             try:
                 cmd_as_list = cmd.split(' ')
-                binary = cmd_as_list[0]
-                args = cmd_as_list[1:]
+                binary, *args = cmd_as_list
                 result = CommandExecutor(binary, **executor_params).run(args)
                 output = '\n'.join([result.stdout, result.stderr])
                 if result.is_successful():
@@ -594,9 +591,9 @@ class BaseRunner(object):
 
     # After: prepare_work_dir_files
     @command_decorator(
-        TerraformInitializationError,
         'initialize_terraform',
         'Cannot initialize terraform',
+        exception_class=TerraformInitializationError,
     )
     def initialize_terraform(self):
         self._logger.info(
@@ -618,9 +615,9 @@ class BaseRunner(object):
 
     # After: initialize_terraform
     @command_decorator(
-        StartEnvironmentError,
         'start_environment',
         'Cannot start environment',
+        exception_class=StartEnvironmentError,
     )
     def start_env(self):
         self._logger.info(
@@ -639,9 +636,9 @@ class BaseRunner(object):
 
     # After: start_env
     @command_decorator(
-        ProvisionError,
         'initial_provision',
         'Cannot run initial provision',
+        exception_class=ProvisionError,
     )
     def initial_provision(self, verbose=False):
         # To pass dictionary into Ansible variables we need to pass
@@ -677,9 +674,9 @@ class BaseRunner(object):
         )
 
     @command_decorator(
-        InstallPackageError,
         'install_package',
         'Cannot install package',
+        exception_class=InstallPackageError,
     )
     def install_package(
         self,
@@ -731,9 +728,9 @@ class BaseRunner(object):
         )
 
     @command_decorator(
-        UninstallPackageError,
         'uninstall_package',
         'Cannot uninstall package',
+        exception_class=UninstallPackageError,
     )
     def uninstall_package(
         self,
@@ -787,9 +784,9 @@ class BaseRunner(object):
         )
 
     @command_decorator(
-        PackageIntegrityTestsError,
         'package_integrity_tests',
         'Package integrity tests failed',
+        exception_class=PackageIntegrityTestsError,
         additional_section_name=TESTS_SECTION_NAME,
     )
     def run_package_integrity_tests(
@@ -903,9 +900,9 @@ class BaseRunner(object):
 
     # After: install_package and run_tests
     @command_decorator(
-        StopEnvironmentError,
         'stop_environment',
         'Cannot destroy environment',
+        exception_class=StopEnvironmentError,
     )
     def stop_env(self):
         if os.path.exists(self._work_dir):
@@ -1085,9 +1082,9 @@ class GenericVMRunner(BaseRunner):
         return exit_code, stdout, stderr
 
     @command_decorator(
-        StartEnvironmentError,
         'start_environment',
         'Cannot start environment',
+        exception_class=StartEnvironmentError,
     )
     def start_env(self):
         super().start_env()
