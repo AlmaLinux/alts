@@ -196,10 +196,10 @@ def has_missing_shared_libraries(file_: GNUFile) -> MissingSOResult:
             result.append(item)
 
     if len(result):
+        result.insert(
+            0, f'File {file_.path} has missing shared libraries dependencies:'
+        )
         return MissingSOResult(True, '\n'.join(result))
-    result.insert(
-        0, f'File {file_.path} has missing shared libraries dependencies:'
-    )
     return MissingSOResult(False, '')
 
 
