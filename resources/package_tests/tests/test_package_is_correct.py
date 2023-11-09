@@ -72,6 +72,11 @@ def test_all_package_files_exist(host, package_name):
         return
 
     for file_ in get_package_files(package):
+        # .build-id/$something files can be safely skipped,
+        # they are never in the package (except for debuginfo)
+        # and even if they are there we do not care.
+        if '.build-id' in file_:
+            continue
         file_obj = host.file(file_)
         check.is_true(
             file_obj.exists,
@@ -114,9 +119,17 @@ def test_binaries_have_all_dependencies(host, package_name):
         return
 
     for file_path in get_package_files(package):
+        # .build-id/$something files can be safely skipped,
+        # they are never in the package (except for debuginfo)
+        # and even if they are there we do not care.
+        if '.build-id' in file_path:
+            continue
         file_ = host.file(file_path)
         if file_.is_symlink:
-            file_ = host.file(resolve_symlink(host, file_))
+            try:
+                file_ = host.file(resolve_symlink(host, file_))
+            except ValueError:
+                pass
         if is_file_dynamically_linked(file_):
             check_result = has_missing_shared_libraries(file_)
             check.is_false(check_result.missing, check_result.output)
