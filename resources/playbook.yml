@@ -112,9 +112,13 @@
         owner: root
         group: root
         mode: 0644
+      tags:
+        - initial_provision
 
     - name: Reload ldconfig
       shell: ldconfig
+      tags:
+        - initial_provision
 
     - name: Enable module
       shell: dnf module enable -y "{{ module_name }}:{{ module_stream }}:{{ module_version }}"
