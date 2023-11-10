@@ -106,12 +106,16 @@
         - initial_provision
 
     - name: Install custom ldconfig
-      copy:
-        src: custom-ts.conf
-        dest: /etc/ld.so.conf.d/custom-ts.conf
+      lineinfile:
+        path: /etc/ld.so.conf.d/custom-ts.conf
+        line: "{{ item }}"
+        create: yes
         owner: root
         group: root
         mode: 0644
+      with_items:
+        - "/usr/lib64/firefox"
+        - "/usr/lib64/thunderbird"
       tags:
         - initial_provision
 
