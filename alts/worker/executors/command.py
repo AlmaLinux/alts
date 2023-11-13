@@ -30,11 +30,11 @@ class CommandExecutor(BaseExecutor):
             container_name=container_name,
         )
 
-    @measure_stage('run_signle_local_command')
+    @measure_stage('run_single_local_command')
     def run_local_command(self, cmd_args: List[str]) -> CommandResult:
         return super().run_local_command(cmd_args)
 
-    @measure_stage('run_signle_ssh_command')
+    @measure_stage('run_single_ssh_command')
     def run_ssh_command(
         self,
         cmd_args: List[str],
@@ -42,10 +42,11 @@ class CommandExecutor(BaseExecutor):
     ) -> CommandResult:
         return super().run_ssh_command(cmd_args)
 
-    @measure_stage('run_signle_docker_command')
+    @measure_stage('run_single_docker_command')
     def run_docker_command(
         self,
         cmd_args: List[str],
+        workdir: str = '',
         docker_args: Optional[List[str]] = None,
     ) -> CommandResult:
         return super().run_docker_command(

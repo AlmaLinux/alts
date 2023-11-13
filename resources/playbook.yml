@@ -12,7 +12,7 @@
 
         - name: Install file package
           yum:
-            name: ["file", "python3-pip"]
+            name: ["file", "python3-pip", "iproute", "procps-ng"]
             state: present
 
         - name: Add required repositories

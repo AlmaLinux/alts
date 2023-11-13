@@ -196,7 +196,10 @@ class OpennebulaRunner(GenericVMRunner):
                 return
         return git_repo_path
 
-    @command_decorator(ThirdPartyTestError, '', 'Third party tests failed')
+    @command_decorator(
+        '', 'Third party tests failed',
+        exception_class=ThirdPartyTestError
+    )
     def run_third_party_test(
         self,
         executor: Union[AnsibleExecutor, BatsExecutor, ShellExecutor],

@@ -176,9 +176,9 @@ class DockerRunner(BaseRunner):
         return super().initial_provision(verbose=verbose)
 
     @command_decorator(
-        PackageIntegrityTestsError,
         'package_integrity_tests',
         'Package integrity tests failed',
+        exception_class=PackageIntegrityTestsError,
         additional_section_name=TESTS_SECTION_NAME,
     )
     def run_package_integrity_tests(
@@ -218,7 +218,10 @@ class DockerRunner(BaseRunner):
         )
         return self._exec(cmd_args, workdir=remote_tests_path)
 
-    @command_decorator(ThirdPartyTestError, '', 'Third party tests failed')
+    @command_decorator(
+        '', 'Third party tests failed',
+        exception_class=ThirdPartyTestError,
+    )
     def run_third_party_test(
         self,
         executor: Union[AnsibleExecutor, BatsExecutor, ShellExecutor],

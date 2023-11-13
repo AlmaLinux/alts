@@ -4,6 +4,7 @@ import gzip
 import json
 import logging
 import os
+import random
 import re
 import shutil
 import tempfile
@@ -39,6 +40,7 @@ from alts.shared.utils.git_utils import (
 from alts.worker import CONFIG, RESOURCES_DIR
 from alts.worker.executors.ansible import AnsibleExecutor
 from alts.worker.executors.bats import BatsExecutor
+from alts.worker.executors.command import CommandExecutor
 from alts.worker.executors.shell import ShellExecutor
 
 __all__ = [
@@ -57,12 +59,18 @@ TESTS_SECTIONS_NAMES = (
     THIRD_PARTY_SECTION_NAME,
 )
 TF_INIT_LOCK_PATH = '/tmp/tf_init_lock'
+BASE_SYSTEM_INFO_COMMANDS = {
+    'Current disk space usage': 'df -h',
+    'Kernel version': 'uname -a',
+    'Environment IP': 'ip a',
+    'Environment uptime': 'uptime',
+}
 
 
 def command_decorator(
-    exception_class,
     artifacts_key,
     error_message,
+    exception_class=None,
     additional_section_name=None,
 ):
     def method_wrapper(fn):
@@ -94,7 +102,7 @@ def command_decorator(
                 'finish_ts': finish.isoformat(),
                 'delta': (finish - start).total_seconds(),
             }
-            if exit_code != 0:
+            if exit_code != 0 and exception_class:
                 self._logger.error(
                     '%s, exit code: %s, error:\n%s',
                     error_message,
@@ -446,6 +454,14 @@ class BaseRunner(object):
     ):
         raise NotImplementedError
 
+    def get_test_executor_params(self) -> dict:
+        return {
+            'connection_type': self.ansible_connection_type,
+            'container_name': str(self.env_name),
+            'logger': self._logger,
+            'ssh_params': self.default_ssh_params,
+        }
+
     def run_third_party_tests(self):
         if not self._test_configuration:
             return
@@ -455,12 +471,7 @@ class BaseRunner(object):
             '.yml': AnsibleExecutor,
             '.yaml': AnsibleExecutor,
         }
-        executor_params = {
-            'connection_type': self.ansible_connection_type,
-            'container_name': str(self.env_name),
-            'logger': self._logger,
-            'ssh_params': self.default_ssh_params,
-        }
+        executor_params = self.get_test_executor_params()
         for test in self._test_configuration['tests']:
             git_ref = test.get('git_ref', 'master')
             test_repo_path = self.clone_third_party_repo(test['url'], git_ref)
@@ -488,11 +499,7 @@ class BaseRunner(object):
                         docker_args=['--workdir', workdir],
                         workdir=workdir,
                         artifacts_key=f'third_party_test_{file.name}',
-                        additional_section_name=(
-                            TESTS_SECTION_NAME
-                            if isinstance(executor, BatsExecutor)
-                            else THIRD_PARTY_SECTION_NAME
-                        ),
+                        additional_section_name=THIRD_PARTY_SECTION_NAME,
                     )
                 except ThirdPartyTestError:
                     pass
@@ -502,18 +509,64 @@ class BaseRunner(object):
                     )
             git_reset_hard(test_repo_path, self._logger)
 
-    # After: prepare_work_dir_files
+    def get_system_info_commands_list(self) -> Dict[str, str]:
+        self._logger.debug('Returning default system info commands list')
+        basic_commands = BASE_SYSTEM_INFO_COMMANDS.copy()
+        if self._dist_name in CONFIG.rhel_flavors:
+            basic_commands['Installed packages'] = 'rpm -qa'
+            basic_commands['Repositories list'] = f'{self.pkg_manager} repolist'
+            basic_commands['Repositories details'] = (
+                'find /etc/yum.repos.d/ -type f -exec cat {} +'
+            )
+        else:
+            basic_commands['Installed packages'] = 'dpkg -l'
+            basic_commands['Repositories list'] = f'apt-cache policy'
+            basic_commands['Repositories details'] = (
+                'find /etc/apt/ -type f -name *.list* -o -name *.sources* '
+                '-exec cat {} +'
+            )
+        return basic_commands
+
     @command_decorator(
-        TerraformInitializationError,
-        'initialize_terraform',
-        'Cannot initialize terraform',
+        'system_info',
+        'System information commands block is failed',
     )
-    def initialize_terraform(self):
-        self._logger.info(
-            'Initializing Terraform environment for %s...',
-            self.env_name,
-        )
-        self._logger.debug('Running "terraform init" command')
+    def run_system_info_commands(self):
+        self._logger.info('Starting system info section')
+        errored_commands = {}
+        successful_commands = {}
+        error_output = ''
+        executor_params = self.get_test_executor_params()
+        executor_params['timeout'] = CONFIG.commands_exec_timeout
+        for section, cmd in self.get_system_info_commands_list().items():
+            try:
+                cmd_as_list = cmd.split(' ')
+                binary, *args = cmd_as_list
+                result = CommandExecutor(binary, **executor_params).run(args)
+                output = '\n'.join([result.stdout, result.stderr])
+                if result.is_successful():
+                    successful_commands[section] = output
+                else:
+                    errored_commands[section] = output
+            except Exception as e:
+                errored_commands[section] = str(e)
+        success_output = '\n\n'.join((
+            section + '\n' + section_out
+            for section, section_out in successful_commands.items()
+        ))
+        if errored_commands:
+            error_output = '\n\n'.join((
+                section + '\n' + section_out
+                for section, section_out in errored_commands.items()
+            ))
+        final_output = f'System info commands:\n{success_output}'
+        if error_output:
+            final_output += (f'\n\nCommands that have failed to run:\n'
+                             f'{error_output}')
+        self._logger.info('System info section is finished')
+        return 0, final_output, ''
+
+    def __terraform_init(self):
         lock = None
         lock_fileno = None
         try:
@@ -528,7 +581,6 @@ class BaseRunner(object):
                     break
             return local['terraform'].run(
                 'init',
-                retcode=None,
                 cwd=self._work_dir,
             )
         finally:
@@ -537,11 +589,35 @@ class BaseRunner(object):
             if lock:
                 lock.close()
 
+    # After: prepare_work_dir_files
+    @command_decorator(
+        'initialize_terraform',
+        'Cannot initialize terraform',
+        exception_class=TerraformInitializationError,
+    )
+    def initialize_terraform(self):
+        self._logger.info(
+            'Initializing Terraform environment for %s...',
+            self.env_name,
+        )
+        self._logger.debug('Running "terraform init" command')
+        attempts = 5
+        recorded_exc = None
+        while attempts > 0:
+            try:
+                return self.__terraform_init()
+            except Exception as e:
+                recorded_exc = e
+                attempts -= 1
+                time.sleep(random.randint(5, 10))
+        if attempts == 0 and recorded_exc:
+            return 1, '', str(recorded_exc)
+
     # After: initialize_terraform
     @command_decorator(
-        StartEnvironmentError,
         'start_environment',
         'Cannot start environment',
+        exception_class=StartEnvironmentError,
     )
     def start_env(self):
         self._logger.info(
@@ -560,9 +636,9 @@ class BaseRunner(object):
 
     # After: start_env
     @command_decorator(
-        ProvisionError,
         'initial_provision',
         'Cannot run initial provision',
+        exception_class=ProvisionError,
     )
     def initial_provision(self, verbose=False):
         # To pass dictionary into Ansible variables we need to pass
@@ -598,9 +674,9 @@ class BaseRunner(object):
         )
 
     @command_decorator(
-        InstallPackageError,
         'install_package',
         'Cannot install package',
+        exception_class=InstallPackageError,
     )
     def install_package(
         self,
@@ -652,9 +728,9 @@ class BaseRunner(object):
         )
 
     @command_decorator(
-        UninstallPackageError,
         'uninstall_package',
         'Cannot uninstall package',
+        exception_class=UninstallPackageError,
     )
     def uninstall_package(
         self,
@@ -708,9 +784,9 @@ class BaseRunner(object):
         )
 
     @command_decorator(
-        PackageIntegrityTestsError,
         'package_integrity_tests',
         'Package integrity tests failed',
+        exception_class=PackageIntegrityTestsError,
         additional_section_name=TESTS_SECTION_NAME,
     )
     def run_package_integrity_tests(
@@ -824,9 +900,9 @@ class BaseRunner(object):
 
     # After: install_package and run_tests
     @command_decorator(
-        StopEnvironmentError,
         'stop_environment',
         'Cannot destroy environment',
+        exception_class=StopEnvironmentError,
     )
     def stop_env(self):
         if os.path.exists(self._work_dir):
@@ -1006,9 +1082,9 @@ class GenericVMRunner(BaseRunner):
         return exit_code, stdout, stderr
 
     @command_decorator(
-        StartEnvironmentError,
         'start_environment',
         'Cannot start environment',
+        exception_class=StartEnvironmentError,
     )
     def start_env(self):
         super().start_env()

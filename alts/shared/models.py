@@ -1,3 +1,4 @@
+import os
 import ssl
 import typing
 from logging import Logger
@@ -7,7 +8,9 @@ from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 from alts.shared import constants
 
 __all__ = [
+    'AsyncSSHParams',
     'CeleryConfig',
+    'CommandResult',
     'Repository',
     'SchedulerConfig',
     'TaskRequestResponse',
@@ -286,6 +289,7 @@ class CeleryConfig(BaseModel):
         'kernel',
         'dnf',
     ]
+    commands_exec_timeout: int = 30  # unit in seconds
 
     @property
     def result_backend(self) -> str:
