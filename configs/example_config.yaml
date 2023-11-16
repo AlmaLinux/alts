@@ -29,6 +29,7 @@ task_acks_late: true
 task_track_started: true
 artifacts_root_directory: 'test_system_artifacts'
 worker_prefetch_multiplier: 1
+gerrit_username:
 testing:
 working_directory:
 jwt_secret:

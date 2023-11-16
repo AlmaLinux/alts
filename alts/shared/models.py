@@ -1,9 +1,17 @@
 import os
 import ssl
-import typing
 from logging import Logger
+from typing import (
+    Any,
+    Dict,
+    List,
+    Literal,
+    Optional,
+    Tuple,
+    Union,
+)
 
-from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict
 
 from alts.shared import constants
 
@@ -20,7 +28,7 @@ __all__ = [
 
 
 class Repository(BaseModel):
-    name: typing.Optional[str] = None
+    name: Optional[str] = None
     baseurl: str
 
 
@@ -28,22 +36,22 @@ class AsyncSSHParams(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     host: str
-    username: typing.Optional[str] = None
-    password: typing.Optional[str] = None
-    timeout: typing.Optional[int] = None
-    client_keys_files: typing.Optional[typing.List[str]] = None
-    known_hosts_files: typing.Optional[typing.List[str]] = None
-    env_vars: typing.Optional[typing.Dict[str, typing.Any]] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
+    timeout: Optional[int] = None
+    client_keys_files: Optional[List[str]] = None
+    known_hosts_files: Optional[List[str]] = None
+    env_vars: Optional[Dict[str, Any]] = None
     disable_known_hosts_check: bool = False
     ignore_encrypted_keys: bool = False
     keepalive_interval: int = 0
     keepalive_count_max: int = 3
-    logger: typing.Optional[Logger] = None
+    logger: Optional[Logger] = None
     logger_name: str = 'asyncssh-client'
-    logging_level: typing.Literal['DEBUG', 'INFO'] = 'DEBUG'
-    preferred_auth: typing.Union[
+    logging_level: Literal['DEBUG', 'INFO'] = 'DEBUG'
+    preferred_auth: Union[
         str,
-        typing.List[str],
+        List[str],
     ] = constants.DEFAULT_SSH_AUTH_METHODS
 
 
@@ -57,45 +65,36 @@ class CommandResult(BaseModel):
 
 
 class TestConfiguration(BaseModel):
-    tests: typing.List[dict] = []
-    test_env: typing.Optional[dict] = None
+    tests: List[dict] = []
+    test_env: Optional[dict] = None
 
 
 class TaskRequestPayload(BaseModel):
-    runner_type: str = 'any'
+    runner_type: Literal['any', 'docker', 'opennebula'] = 'any'
     dist_name: str
-    dist_version: typing.Union[str, int]
+    dist_version: Union[str, int]
     dist_arch: str
-    package_channel: typing.Optional[typing.Literal["stable", "beta"]] = None
-    test_configuration: typing.Optional[TestConfiguration] = None
-    repositories: typing.List[Repository] = []
+    package_channel: Optional[Literal["stable", "beta"]] = None
+    test_configuration: Optional[TestConfiguration] = None
+    repositories: List[Repository] = []
     package_name: str
-    package_version: typing.Optional[str] = None
-    module_name: typing.Optional[str] = None
-    module_stream: typing.Optional[str] = None
-    module_version: typing.Optional[str] = None
-    callback_href: typing.Optional[str] = None
-
-    @field_validator('runner_type')
-    @classmethod
-    def validate_runner_type(cls, value: str) -> str:
-        # TODO: Add config or constant to have all possible runner types
-        runner_types = constants.DRIVERS + ('any',)
-        if value not in runner_types:
-            raise ValidationError(f'Unknown runner type: {value}', cls)
-        return value
+    package_version: Optional[str] = None
+    module_name: Optional[str] = None
+    module_stream: Optional[str] = None
+    module_version: Optional[str] = None
+    callback_href: Optional[str] = None
 
 
 class TaskRequestResponse(BaseModel):
     success: bool
-    error_description: typing.Optional[str] = None
-    task_id: typing.Optional[str] = None
+    error_description: Optional[str] = None
+    task_id: Optional[str] = None
     api_version: str
 
 
 class TaskResultResponse(BaseModel):
     state: str
-    result: typing.Optional[dict] = None
+    result: Optional[dict] = None
 
 
 class SslConfig(BaseModel):
@@ -133,17 +132,17 @@ class BaseResultsConfig(BaseModel):
 
 class OpennebulaConfig(BaseModel):
     # OpenNebula section
-    rpc_endpoint: typing.Optional[str] = None
-    username: typing.Optional[str] = None
-    password: typing.Optional[str] = None
-    vm_group: typing.Optional[str] = None
-    vm_size: typing.Optional[int] = 15000
-    network: typing.Optional[str] = None
+    rpc_endpoint: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
+    vm_group: Optional[str] = None
+    vm_size: Optional[int] = 15000
+    network: Optional[str] = None
 
 
 class RabbitmqBrokerConfig(BaseBrokerConfig):
     use_ssl: bool = False
-    ssl_config: typing.Optional[SslConfig] = None
+    ssl_config: Optional[SslConfig] = None
     rabbitmq_host: str
     rabbitmq_port: int = 5672
     rabbitmq_ssl_port: int = 5671
@@ -170,7 +169,7 @@ class RedisBrokerConfig(BaseBrokerConfig):
     redis_port: int = 6379
     redis_db_number: int = 0
     redis_user: str = 'default'
-    redis_password: typing.Optional[str] = None
+    redis_password: Optional[str] = None
 
     @property
     def broker_url(self) -> str:
@@ -234,11 +233,11 @@ class CeleryConfig(BaseModel):
     # Whether to setup Celery SSL
     use_ssl: bool = False
     # SSL configuration section
-    ssl_config: typing.Optional[SslConfig] = None
+    ssl_config: Optional[SslConfig] = None
     # Celery configuration variables
-    broker_config: typing.Union[RabbitmqBrokerConfig, RedisBrokerConfig]
-    opennebula_config: typing.Optional[OpennebulaConfig] = None
-    results_backend_config: typing.Union[
+    broker_config: Union[RabbitmqBrokerConfig, RedisBrokerConfig]
+    opennebula_config: Optional[OpennebulaConfig] = None
+    results_backend_config: Union[
         AzureResultsConfig,
         FilesystemResultsConfig,
         RedisResultsConfig,
@@ -246,15 +245,15 @@ class CeleryConfig(BaseModel):
     ]
     result_backend_always_retry: bool = True
     result_backend_max_retries: int = 10
-    s3_access_key_id: typing.Optional[str] = None
-    s3_secret_access_key: typing.Optional[str] = None
-    s3_bucket: typing.Optional[str] = None
-    s3_base_path: typing.Optional[str] = None
-    s3_region: typing.Optional[str] = None
-    s3_endpoint_url: typing.Optional[str] = None
-    azureblockblob_container_name: typing.Optional[str] = None
+    s3_access_key_id: Optional[str] = None
+    s3_secret_access_key: Optional[str] = None
+    s3_bucket: Optional[str] = None
+    s3_base_path: Optional[str] = None
+    s3_region: Optional[str] = None
+    s3_endpoint_url: Optional[str] = None
+    azureblockblob_container_name: Optional[str] = None
     azureblockblob_base_path: str = 'celery_result_backend/'
-    azure_connection_string: typing.Optional[str] = None
+    azure_connection_string: Optional[str] = None
     task_default_queue: str = 'default'
     task_acks_late: bool = True
     enable_integrity_tests: bool = True
@@ -264,27 +263,24 @@ class CeleryConfig(BaseModel):
     # Task track timeout
     task_tracking_timeout: int = 3600
     # Supported architectures and distributions
-    supported_architectures: typing.List[
-        str
-    ] = constants.SUPPORTED_ARCHITECTURES
-    supported_distributions: typing.List[
-        str
-    ] = constants.SUPPORTED_DISTRIBUTIONS
-    rhel_flavors: typing.Tuple[str] = constants.RHEL_FLAVORS
-    debian_flavors: typing.Tuple[str] = constants.DEBIAN_FLAVORS
-    supported_runners: typing.Union[typing.List[str], str] = 'all'
-    allowed_channel_names: typing.List[str] = constants.ALLOWED_CHANNELS
+    supported_architectures: List[str] = constants.SUPPORTED_ARCHITECTURES
+    supported_distributions: List[str] = constants.SUPPORTED_DISTRIBUTIONS
+    rhel_flavors: List[str] = constants.RHEL_FLAVORS
+    debian_flavors: List[str] = constants.DEBIAN_FLAVORS
+    supported_runners: Union[List[str], str] = 'all'
+    allowed_channel_names: List[str] = constants.ALLOWED_CHANNELS
+    gerrit_username: str = ''
     # SSH section
     ssh_public_key_path: str = '~/.ssh/id_rsa.pub'
     # Build system settings
-    bs_host: typing.Optional[str] = None
+    bs_host: Optional[str] = None
     bs_tasks_endpoint: str = '/api/v1/tests/get_test_tasks/'
-    bs_token: typing.Optional[str] = None
+    bs_token: Optional[str] = None
     # Log uploader settings
-    logs_uploader_config: typing.Optional[
-        typing.Union[AzureLogsConfig, PulpLogsConfig]
+    logs_uploader_config: Optional[
+        Union[AzureLogsConfig, PulpLogsConfig]
     ] = None
-    uninstall_excluded_pkgs: typing.List[str] = [
+    uninstall_excluded_pkgs: List[str] = [
         'almalinux-release',
         'kernel',
         'dnf',

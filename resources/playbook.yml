@@ -89,11 +89,17 @@
         - initial_provision
 
     - name: Install bats
-      shell: |
-        git clone https://github.com/bats-core/bats-core.git
-        cd bats-core
-        sh ./install.sh /usr/local
-      ignore_errors: true
+      block:
+        - name: Gather the package facts
+          package_facts:
+            manager: auto
+        - name: Install missing bats
+          shell: |
+            git clone https://github.com/bats-core/bats-core.git
+            cd bats-core
+            sh ./install.sh /usr/local
+          ignore_errors: true
+          when: "'bats' not in ansible_facts.packages"
       tags:
         - initial_provision
 
