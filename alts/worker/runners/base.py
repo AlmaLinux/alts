@@ -752,7 +752,7 @@ class BaseRunner(object):
         module_version: Optional[str] = None,
     ):
         if package_name in CONFIG.uninstall_excluded_pkgs:
-            return
+            return 0, '', ''
 
         full_pkg_name = self._detect_full_package_name(
             package_name, package_version=package_version
