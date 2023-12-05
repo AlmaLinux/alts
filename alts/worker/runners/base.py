@@ -478,6 +478,8 @@ class BaseRunner(object):
         for test in self._test_configuration['tests']:
             git_ref = test.get('git_ref', 'master')
             repo_url = test['url']
+            test_dir = test['test_dir']
+            tests_to_run = test.get('tests_to_run', [])
             repo_url = (
                 prepare_gerrit_repo_url(repo_url)
                 if 'gerrit' in repo_url
@@ -486,10 +488,10 @@ class BaseRunner(object):
             test_repo_path = self.clone_third_party_repo(repo_url, git_ref)
             if not test_repo_path:
                 continue
-            # TODO: workdir + test folder, i.e:
-            #       /tests/repo/pkg_tests/common
-            workdir = f'/tests/{test_repo_path.name}'
-            for file in test_repo_path.iterdir():
+            workdir = f'/tests/{test_repo_path.name}/{test_dir}'
+            for file in Path(test_repo_path, test_dir).iterdir():
+                if tests_to_run and file.name not in tests_to_run:
+                    continue
                 executor_class = executors_mapping.get(file.suffix)
                 if not executor_class:
                     continue
@@ -525,13 +527,15 @@ class BaseRunner(object):
         basic_commands = BASE_SYSTEM_INFO_COMMANDS.copy()
         if self._dist_name in CONFIG.rhel_flavors:
             basic_commands['Installed packages'] = 'rpm -qa'
-            basic_commands['Repositories list'] = f'{self.pkg_manager} repolist'
+            basic_commands['Repositories list'] = (
+                f'{self.pkg_manager} repolist'
+            )
             basic_commands['Repositories details'] = (
                 'find /etc/yum.repos.d/ -type f -exec cat {} +'
             )
         else:
             basic_commands['Installed packages'] = 'dpkg -l'
-            basic_commands['Repositories list'] = f'apt-cache policy'
+            basic_commands['Repositories list'] = 'apt-cache policy'
             basic_commands['Repositories details'] = (
                 'find /etc/apt/ -type f -name *.list* -o -name *.sources* '
                 '-exec cat {} +'
@@ -561,19 +565,24 @@ class BaseRunner(object):
                     errored_commands[section] = output
             except Exception as e:
                 errored_commands[section] = str(e)
-        success_output = '\n\n'.join((
-            section + '\n' + section_out
-            for section, section_out in successful_commands.items()
-        ))
-        if errored_commands:
-            error_output = '\n\n'.join((
+        success_output = '\n\n'.join(
+            (
                 section + '\n' + section_out
-                for section, section_out in errored_commands.items()
-            ))
+                for section, section_out in successful_commands.items()
+            )
+        )
+        if errored_commands:
+            error_output = '\n\n'.join(
+                (
+                    section + '\n' + section_out
+                    for section, section_out in errored_commands.items()
+                )
+            )
         final_output = f'System info commands:\n{success_output}'
         if error_output:
-            final_output += (f'\n\nCommands that have failed to run:\n'
-                             f'{error_output}')
+            final_output += (
+                f'\n\nCommands that have failed to run:\n{error_output}'
+            )
         self._logger.info('System info section is finished')
         return 0, final_output, ''
 
@@ -716,16 +725,14 @@ class BaseRunner(object):
             '-vv',
         ]
         if module_name and module_stream and module_version:
-            cmd_args.extend(
-                [
-                    '-e',
-                    f'module_name={module_name}',
-                    '-e',
-                    f'module_stream={module_stream}',
-                    '-e',
-                    f'module_version={module_version}',
-                ]
-            )
+            cmd_args.extend([
+                '-e',
+                f'module_name={module_name}',
+                '-e',
+                f'module_stream={module_stream}',
+                '-e',
+                f'module_version={module_version}',
+            ])
         cmd_args.extend(['-t', 'install_package'])
         cmd_args_str = ' '.join(cmd_args)
         self._logger.debug(
@@ -772,16 +779,14 @@ class BaseRunner(object):
             '-vv',
         ]
         if module_name and module_stream and module_version:
-            cmd_args.extend(
-                [
-                    '-e',
-                    f'module_name={module_name}',
-                    '-e',
-                    f'module_stream={module_stream}',
-                    '-e',
-                    f'module_version={module_version}',
-                ]
-            )
+            cmd_args.extend([
+                '-e',
+                f'module_name={module_name}',
+                '-e',
+                f'module_stream={module_stream}',
+                '-e',
+                f'module_version={module_version}',
+            ])
         cmd_args.extend(['-t', 'uninstall_package'])
         cmd_args_str = ' '.join(cmd_args)
         self._logger.debug(
