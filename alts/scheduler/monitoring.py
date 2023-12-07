@@ -33,7 +33,7 @@ class TasksMonitor(threading.Thread):
         self.logger = logging.getLogger(__file__)
 
     def get_available_test_tasks(self) -> List[dict]:
-        response = []
+        response_as_json = []
         try:
             self.logger.info('Getting new available test tasks')
             response = requests.get(
@@ -42,12 +42,14 @@ class TasksMonitor(threading.Thread):
                     CONFIG.bs_tasks_endpoint,
                 ),
                 headers={'Authorization': f'Bearer {CONFIG.bs_token}'},
-            ).json()
-            if not response:
+            )
+            response.raise_for_status()
+            response_as_json = response.json()
+            if not response_as_json:
                 self.logger.info('There is no available test tasks')
         except Exception:
             self.logger.exception('Cannot get available test tasks:')
-        return response
+        return response_as_json
 
     def schedule_test_task(self, payload: TaskRequestPayload):
         """
