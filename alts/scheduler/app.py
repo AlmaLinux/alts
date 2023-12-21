@@ -22,6 +22,7 @@ from jose import JWTError, jwt
 from alts.scheduler import CONFIG
 from alts.scheduler.db import Session, Task, database
 from alts.scheduler.monitoring import TasksMonitor
+from alts.scheduler.scheduling import TestsScheduler
 from alts.shared.constants import API_VERSION
 from alts.shared.exceptions import ALTSBaseError
 from alts.shared.models import TaskResultResponse
@@ -29,6 +30,7 @@ from alts.worker.app import celery_app
 
 app = FastAPI()
 monitor = None
+scheduler = None
 terminate_event = Event()
 graceful_terminate_event = Event()
 http_bearer_scheme = HTTPBearer()
@@ -103,6 +105,7 @@ async def startup():
     global graceful_terminate_event
     global terminate_event
     global monitor
+    global scheduler
 
     def signal_handler(signum, frame):
         logging.info('Terminating all threads...')
@@ -121,7 +124,13 @@ async def startup():
         graceful_terminate_event,
         celery_app,
     )
+    scheduler = TestsScheduler(
+        terminate_event,
+        graceful_terminate_event,
+        celery_app,
+    )
     monitor.start()
+    scheduler.start()
 
 
 @app.on_event('shutdown')
