@@ -157,7 +157,10 @@ class BaseRunner(object):
         # Environment ID and working directory preparation
         self._task_id = task_id
         self._vm_ip = None
+        if test_configuration is None:
+            test_configuration = {}
         self._test_configuration = test_configuration
+        self._test_env = self._test_configuration.get('test_env', {})
         self._logger = self.init_test_task_logger(task_id, dist_arch)
         self._task_log_file = None
         self._task_log_handler = None
@@ -197,7 +200,7 @@ class BaseRunner(object):
 
         # Package installation and test stuff
         self._repositories = repositories or []
-        self.add_credentials_in_deb_repos()
+        self.add_credentials_to_build_repos()
 
         self._artifacts = {}
         self._uploaded_logs = None
@@ -225,8 +228,28 @@ class BaseRunner(object):
         raise ValueError(f'Unknown distribution: {self._dist_name}')
 
     @property
-    def ansible_connection_type(self):
+    def ansible_connection_type(self) -> str:
         return self._ansible_connection_type
+
+    @property
+    def pytest_is_needed(self) -> bool:
+        return self._test_env.get('pytest_is_needed', True)
+
+    @property
+    def use_deprecated_ansible(self) -> bool:
+        return self._test_env.get('use_deprecated_ansible', False)
+
+    @property
+    def ansible_binary(self) -> str:
+        if self.use_deprecated_ansible:
+            return '/code/ansible_env/bin/ansible'
+        return 'ansible'
+
+    @property
+    def ansible_playbook_binary(self) -> str:
+        if self.use_deprecated_ansible:
+            return '/code/ansible_env/bin/ansible-playbook'
+        return 'ansible-playbook'
 
     @property
     def dist_arch(self):
@@ -266,23 +289,24 @@ class BaseRunner(object):
             'ignore_encrypted_keys': True,
         }
 
-    def add_credentials_in_deb_repos(self):
+    def add_credentials_to_build_repos(self):
         for repo in self._repositories:
-            if '-br' not in repo['name'] or 'amd64' not in repo['url']:
+            if '-br' not in repo['name']:
                 continue
             parsed = urllib.parse.urlparse(repo['url'])
             netloc = f'alts:{CONFIG.bs_token}@{parsed.netloc}'
-            url = urllib.parse.urlunparse(
-                (
-                    parsed.scheme,
-                    netloc,
-                    parsed.path,
-                    parsed.params,
-                    parsed.query,
-                    parsed.fragment,
-                )
-            )
-            repo['url'] = f'deb {url} ./'
+            url = urllib.parse.urlunparse((
+                parsed.scheme,
+                netloc,
+                parsed.path,
+                parsed.params,
+                parsed.query,
+                parsed.fragment,
+            ))
+            if 'amd64' in repo['name']:
+                repo['url'] = f'deb {url} ./'
+                continue
+            repo['url'] = url
 
     def __init_task_logger(self, log_file):
         """
@@ -454,6 +478,7 @@ class BaseRunner(object):
         workdir: str = '',
         artifacts_key: str = '',
         additional_section_name: str = '',
+        env_vars: Optional[List[str]] = None,
     ):
         raise NotImplementedError
 
@@ -513,6 +538,7 @@ class BaseRunner(object):
                         workdir=workdir,
                         artifacts_key=f'third_party_test_{file.name}',
                         additional_section_name=THIRD_PARTY_SECTION_NAME,
+                        env_vars=self._test_env.get('extra_env_vars', []),
                     )
                 except ThirdPartyTestError:
                     pass
@@ -565,19 +591,15 @@ class BaseRunner(object):
                     errored_commands[section] = output
             except Exception as e:
                 errored_commands[section] = str(e)
-        success_output = '\n\n'.join(
-            (
-                section + '\n' + section_out
-                for section, section_out in successful_commands.items()
-            )
-        )
+        success_output = '\n\n'.join((
+            section + '\n' + section_out
+            for section, section_out in successful_commands.items()
+        ))
         if errored_commands:
-            error_output = '\n\n'.join(
-                (
-                    section + '\n' + section_out
-                    for section, section_out in errored_commands.items()
-                )
-            )
+            error_output = '\n\n'.join((
+                section + '\n' + section_out
+                for section, section_out in errored_commands.items()
+            ))
         final_output = f'System info commands:\n{success_output}'
         if error_output:
             final_output += (
@@ -667,6 +689,8 @@ class BaseRunner(object):
         var_dict = {
             'repositories': self._repositories,
             'integrity_tests_dir': self._integrity_tests_dir,
+            'connection_type': self.ansible_connection_type,
+            'pytest_is_needed': self.pytest_is_needed,
         }
         cmd_args = [
             '-i',
@@ -687,7 +711,7 @@ class BaseRunner(object):
             'Running "ansible-playbook %s" command',
             cmd_args_str,
         )
-        return local['ansible-playbook'].run(
+        return local[self.ansible_playbook_binary].run(
             args=cmd_args,
             retcode=None,
             cwd=self._work_dir,
@@ -739,7 +763,7 @@ class BaseRunner(object):
             'Running "ansible-playbook %s" command',
             cmd_args_str,
         )
-        return local['ansible-playbook'].run(
+        return local[self.ansible_playbook_binary].run(
             args=cmd_args,
             retcode=None,
             cwd=self._work_dir,
@@ -793,7 +817,7 @@ class BaseRunner(object):
             'Running "ansible-playbook %s" command',
             cmd_args_str,
         )
-        return local['ansible-playbook'].run(
+        return local[self.ansible_playbook_binary].run(
             args=cmd_args,
             retcode=None,
             cwd=self._work_dir,
@@ -1014,7 +1038,7 @@ class BaseRunner(object):
         return logger
 
     def reboot_target(self, reboot_timeout: int = 120) -> bool:
-        ansible = local['ansible']
+        ansible = local[self.ansible_binary]
         module_args = {
             'reboot_timeout': reboot_timeout,
         }
@@ -1074,7 +1098,7 @@ class GenericVMRunner(BaseRunner):
         return self._ssh_public_key
 
     def _wait_for_ssh(self, retries=60):
-        ansible = local['ansible']
+        ansible = local[self.ansible_binary]
         cmd_args = ('-i', self.ANSIBLE_INVENTORY_FILE, '-m', 'ping', 'all')
         stdout = None
         stderr = None

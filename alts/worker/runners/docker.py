@@ -29,7 +29,6 @@ __all__ = ['DockerRunner']
 
 
 class DockerRunner(BaseRunner):
-
     """Docker environment runner for testing tasks."""
 
     TYPE = 'docker'
@@ -219,7 +218,8 @@ class DockerRunner(BaseRunner):
         return self._exec(cmd_args, workdir=remote_tests_path)
 
     @command_decorator(
-        '', 'Third party tests failed',
+        '',
+        'Third party tests failed',
         exception_class=ThirdPartyTestError,
     )
     def run_third_party_test(
@@ -230,11 +230,13 @@ class DockerRunner(BaseRunner):
         workdir: str = '',
         artifacts_key: str = '',
         additional_section_name: str = '',
+        env_vars: Optional[List[str]] = None,
     ):
         return (
             executor.run_docker_command(
                 cmd_args=cmd_args,
                 docker_args=docker_args,
+                env_vars=env_vars,
             )
             .model_dump()
             .values()
@@ -248,10 +250,8 @@ class DockerRunner(BaseRunner):
         test_repo_path = super().clone_third_party_repo(repo_url, git_ref)
         if not test_repo_path:
             return
-        self._copy(
-            [
-                str(test_repo_path),
-                f'{self.env_name}:/tests/{test_repo_path.name}',
-            ]
-        )
+        self._copy([
+            str(test_repo_path),
+            f'{self.env_name}:/tests/{test_repo_path.name}',
+        ])
         return test_repo_path

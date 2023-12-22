@@ -24,7 +24,6 @@ __all__ = ['OpennebulaRunner']
 
 
 class OpennebulaRunner(GenericVMRunner):
-
     """Opennebula environment runner for testing tasks."""
 
     TYPE = 'opennebula'
@@ -197,22 +196,25 @@ class OpennebulaRunner(GenericVMRunner):
         return git_repo_path
 
     @command_decorator(
-        '', 'Third party tests failed',
-        exception_class=ThirdPartyTestError
+        '',
+        'Third party tests failed',
+        exception_class=ThirdPartyTestError,
     )
     def run_third_party_test(
         self,
         executor: Union[AnsibleExecutor, BatsExecutor, ShellExecutor],
         cmd_args: List[str],
-        workdir: str = '',
         docker_args: Optional[List[str]] = None,
+        workdir: str = '',
         artifacts_key: str = '',
         additional_section_name: str = '',
+        env_vars: Optional[List[str]] = None,
     ):
         return (
             executor.run_ssh_command(
                 cmd_args=cmd_args,
                 workdir=workdir,
+                env_vars=env_vars,
             )
             .model_dump()
             .values()
