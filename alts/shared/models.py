@@ -136,7 +136,8 @@ class OpennebulaConfig(BaseModel):
     username: Optional[str] = None
     password: Optional[str] = None
     vm_group: Optional[str] = None
-    vm_size: Optional[int] = 15000
+    default_vm_disk_size: Optional[int] = 15000
+    default_vm_ram_size: Optional[int] = 1024
     network: Optional[str] = None
 
 

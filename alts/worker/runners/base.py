@@ -252,6 +252,20 @@ class BaseRunner(object):
         return 'ansible-playbook'
 
     @property
+    def vm_disk_size(self) -> int:
+        return self._test_env.get(
+            'vm_disk_size',
+            CONFIG.opennebula_config.default_vm_disk_size,
+        )
+
+    @property
+    def vm_ram_size(self) -> int:
+        return self._test_env.get(
+            'vm_ram_size',
+            CONFIG.opennebula_config.default_vm_ram_size,
+        )
+
+    @property
     def dist_arch(self):
         return self._dist_arch
 

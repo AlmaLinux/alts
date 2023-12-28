@@ -40,7 +40,8 @@ opennebula_config:
   password:
   vm_group:
   # in MB
-  vm_size:
+  default_vm_disk_size:
+  default_vm_ram_size:
   network:
 
 bs_host:
