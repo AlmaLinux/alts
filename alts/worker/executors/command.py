@@ -31,7 +31,11 @@ class CommandExecutor(BaseExecutor):
         )
 
     @measure_stage('run_single_local_command')
-    def run_local_command(self, cmd_args: List[str]) -> CommandResult:
+    def run_local_command(
+        self,
+        cmd_args: List[str],
+        workdir: str = '',
+    ) -> CommandResult:
         return super().run_local_command(cmd_args)
 
     @measure_stage('run_single_ssh_command')
@@ -39,6 +43,7 @@ class CommandExecutor(BaseExecutor):
         self,
         cmd_args: List[str],
         workdir: str = '',
+        env_vars: Optional[List[str]] = None,
     ) -> CommandResult:
         return super().run_ssh_command(cmd_args)
 

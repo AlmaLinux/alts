@@ -31,7 +31,11 @@ class AnsibleExecutor(BaseExecutor):
         )
 
     @measure_stage('run_local_ansible')
-    def run_local_command(self, cmd_args: List[str]) -> CommandResult:
+    def run_local_command(
+        self,
+        cmd_args: List[str],
+        workdir: str = '',
+    ) -> CommandResult:
         return super().run_local_command(cmd_args)
 
     @measure_stage('run_remote_ansible')
@@ -39,8 +43,13 @@ class AnsibleExecutor(BaseExecutor):
         self,
         cmd_args: List[str],
         workdir: str = '',
+        env_vars: Optional[List[str]] = None,
     ) -> CommandResult:
-        return super().run_ssh_command(cmd_args, workdir=workdir)
+        return super().run_ssh_command(
+            cmd_args,
+            workdir=workdir,
+            env_vars=env_vars,
+        )
 
     @measure_stage('run_docker_ansible')
     def run_docker_command(
@@ -48,8 +57,10 @@ class AnsibleExecutor(BaseExecutor):
         cmd_args: List[str],
         workdir: str = '',
         docker_args: Optional[List[str]] = None,
+        env_vars: Optional[List[str]] = None,
     ) -> CommandResult:
         return super().run_docker_command(
             cmd_args=cmd_args,
             docker_args=docker_args,
+            env_vars=env_vars,
         )

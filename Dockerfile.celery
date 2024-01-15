@@ -18,6 +18,15 @@ RUN cd /code \
     && pip3 install --no-cache -U pip setuptools \
     && pip3 install --no-cache -r /tmp/requirements/celery.txt \
     && deactivate \
-    && rm -rf /tmp/requirements \
     && ansible-galaxy collection install community.docker
+RUN cd /code \
+    && python3.9 -m venv ansible_env \
+    && source ansible_env/bin/activate \
+    && pip3 install --no-cache -U pip setuptools \
+    && pip3 install --no-cache -r /tmp/requirements/celery.txt \
+    && pip3 install ansible-core==2.12.10 \
+    && ansible-galaxy collection install community.docker \
+    && deactivate \
+    && rm -rf /tmp/requirements
+RUN update-crypto-policies --set LEGACY
 WORKDIR /code

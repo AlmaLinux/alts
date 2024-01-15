@@ -31,7 +31,11 @@ class BatsExecutor(BaseExecutor):
         )
 
     @measure_stage('run_local_bats')
-    def run_local_command(self, cmd_args: List[str]) -> CommandResult:
+    def run_local_command(
+        self,
+        cmd_args: List[str],
+        workdir: str = '',
+    ) -> CommandResult:
         return super().run_local_command(['--tap', *cmd_args])
 
     @measure_stage('run_ssh_bats')
@@ -39,8 +43,13 @@ class BatsExecutor(BaseExecutor):
         self,
         cmd_args: List[str],
         workdir: str = '',
+        env_vars: Optional[List[str]] = None,
     ) -> CommandResult:
-        return super().run_ssh_command(['--tap', *cmd_args], workdir=workdir)
+        return super().run_ssh_command(
+            ['--tap', *cmd_args],
+            workdir=workdir,
+            env_vars=env_vars,
+        )
 
     @measure_stage('run_docker_bats')
     def run_docker_command(
@@ -48,8 +57,10 @@ class BatsExecutor(BaseExecutor):
         cmd_args: List[str],
         workdir: str = '',
         docker_args: Optional[List[str]] = None,
+        env_vars: Optional[List[str]] = None,
     ) -> CommandResult:
         return super().run_docker_command(
             cmd_args=['--tap', *cmd_args],
             docker_args=docker_args,
+            env_vars=env_vars,
         )

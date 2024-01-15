@@ -30,6 +30,9 @@ services:
 
   celery:
     image: quay.io/almalinuxorg/alts-celery:latest
+    build:
+      dockerfile: Dockerfile.celery
+      context: .
     environment:
       CELERY_CONFIG_PATH: "/celery_config.yaml"
     command: "bash -c 'source env/bin/activate && pip3 install --upgrade pip && 
@@ -51,6 +54,9 @@ services:
 
   scheduler:
     image: quay.io/almalinuxorg/alts-scheduler:latest
+    build:
+      dockerfile: Dockerfile.scheduler
+      context: .
     environment:
       CELERY_CONFIG_PATH: "/scheduler_config.yaml"
       SCHEDULER_CONFIG_PATH: "/scheduler_config.yaml"

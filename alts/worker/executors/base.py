@@ -127,12 +127,16 @@ class BaseExecutor:
         self,
         cmd_args: List[str],
         workdir: str = '',
+        env_vars: Optional[List[str]] = None,
     ) -> CommandResult:
         if not self.ssh_client:
             raise ValueError('SSH params are missing')
         directory = f'cd {workdir} && ' if workdir else ''
+        additional_env_vars = f"{' '.join(env_vars)} " if env_vars else ''
         return self.ssh_client.sync_run_command(
-            directory + ' '.join([self.binary_name, *cmd_args])
+            directory
+            + additional_env_vars
+            + ' '.join([self.binary_name, *cmd_args])
         )
 
     @measure_stage('run_docker_command')
@@ -141,8 +145,13 @@ class BaseExecutor:
         cmd_args: List[str],
         workdir: str = '',
         docker_args: Optional[List[str]] = None,
+        env_vars: Optional[List[str]] = None,
     ) -> CommandResult:
         docker_args = docker_args if docker_args else []
+        additional_env_vars = []
+        if env_vars:
+            for var in env_vars:
+                additional_env_vars.extend(('-e', var))
         try:
             exit_code, stdout, stderr = (
                 local['docker']
@@ -151,6 +160,7 @@ class BaseExecutor:
                     args=[
                         'exec',
                         *docker_args,
+                        *additional_env_vars,
                         self.container_name,
                         self.binary_name,
                         *cmd_args,
@@ -172,12 +182,11 @@ class BaseExecutor:
         self,
         cmd_args: List[str],
         workdir: str = '',
-        **kwargs
+        **kwargs,
     ) -> CommandResult:
+        executable = self.run_local_command
         if self.connection_type == 'ssh':
             executable = self.run_ssh_command
         elif self.connection_type == 'docker':
             executable = self.run_docker_command
-        else:
-            executable = self.run_local_command
         return executable(cmd_args, workdir=workdir, **kwargs)

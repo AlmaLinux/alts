@@ -158,4 +158,4 @@ class TestsScheduler(threading.Thread):
                 self.schedule_test_task(
                     TaskRequestPayload(**test_task_payload)
                 )
-            time.sleep(1)
+            time.sleep(10)

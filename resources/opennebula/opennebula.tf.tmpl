@@ -19,13 +19,14 @@ resource "opennebula_virtual_machine" "${vm_name}" {
   template_id = ${template_id}
   permissions = "660"
   group = "${opennebula_vm_group}"
+  memory = "${vm_ram_size}"
 
   cpumodel {
     model = "host-passthrough"
   }
   disk {
     image_id = ${image_id}
-    size = ${vm_size}
+    size = ${vm_disk_size}
     target = "sda"
   }
   nic {
