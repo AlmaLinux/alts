@@ -287,6 +287,7 @@ class CeleryConfig(BaseModel):
         'dnf',
     ]
     commands_exec_timeout: int = 30  # unit in seconds
+    tests_exec_timeout: int = 3600  # 1 hour in seconds
 
     @property
     def result_backend(self) -> str:

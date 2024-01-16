@@ -514,6 +514,7 @@ class BaseRunner(object):
             '.yaml': AnsibleExecutor,
         }
         executor_params = self.get_test_executor_params()
+        executor_params['timeout'] = CONFIG.tests_exec_timeout
         for test in self._test_configuration['tests']:
             git_ref = test.get('git_ref', 'master')
             repo_url = test['url']
@@ -637,6 +638,7 @@ class BaseRunner(object):
                     break
             return local['terraform'].run(
                 'init',
+                '-no-color',
                 cwd=self._work_dir,
             )
         finally:
@@ -681,7 +683,7 @@ class BaseRunner(object):
             self.env_name,
         )
         self._logger.debug('Running "terraform apply --auto-approve" command')
-        cmd_args = ['apply', '--auto-approve']
+        cmd_args = ['apply', '--auto-approve', '-no-color']
         if self.TF_VARIABLES_FILE:
             cmd_args.extend(['--var-file', self.TF_VARIABLES_FILE])
         return local['terraform'].run(
@@ -714,7 +716,6 @@ class BaseRunner(object):
             f'{var_dict}',
             '-t',
             'initial_provision',
-            '-vv',
         ]
         self._logger.info('Command args: %s', cmd_args)
         if verbose:
@@ -760,7 +761,6 @@ class BaseRunner(object):
             self.ANSIBLE_PLAYBOOK,
             '-e',
             f'pkg_name={full_pkg_name}',
-            '-vv',
         ]
         if module_name and module_stream and module_version:
             cmd_args.extend([
@@ -814,7 +814,6 @@ class BaseRunner(object):
             self.ANSIBLE_PLAYBOOK,
             '-e',
             f'pkg_name={full_pkg_name}',
-            '-vv',
         ]
         if module_name and module_stream and module_version:
             cmd_args.extend([
@@ -967,7 +966,7 @@ class BaseRunner(object):
             self._logger.debug(
                 'Running "terraform destroy --auto-approve" command'
             )
-            cmd_args = ['destroy', '--auto-approve']
+            cmd_args = ['destroy', '--auto-approve', '-no-color']
             if self.TF_VARIABLES_FILE:
                 cmd_args.extend(['--var-file', self.TF_VARIABLES_FILE])
             return local['terraform'].run(
@@ -1145,7 +1144,7 @@ class GenericVMRunner(BaseRunner):
         # To extract it, the `vm_ip` output should be defined
         # in Terraform main file.
         exit_code, stdout, stderr = local['terraform'].run(
-            args=('output', '-raw', 'vm_ip'),
+            args=('output', '-raw',  '-no-color', 'vm_ip'),
             retcode=None,
             cwd=self._work_dir,
         )
