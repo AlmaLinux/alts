@@ -640,6 +640,7 @@ class BaseRunner(object):
                 'init',
                 '-no-color',
                 cwd=self._work_dir,
+                timeout=CONFIG.provision_timeout,
             )
         finally:
             if lock_fileno:
@@ -690,6 +691,7 @@ class BaseRunner(object):
             args=cmd_args,
             retcode=None,
             cwd=self._work_dir,
+            timeout=CONFIG.provision_timeout,
         )
 
     # After: start_env
@@ -730,6 +732,7 @@ class BaseRunner(object):
             args=cmd_args,
             retcode=None,
             cwd=self._work_dir,
+            timeout=CONFIG.provision_timeout,
         )
 
     @command_decorator(
@@ -781,6 +784,7 @@ class BaseRunner(object):
             args=cmd_args,
             retcode=None,
             cwd=self._work_dir,
+            timeout=CONFIG.provision_timeout,
         )
 
     @command_decorator(
@@ -834,6 +838,7 @@ class BaseRunner(object):
             args=cmd_args,
             retcode=None,
             cwd=self._work_dir,
+            timeout=CONFIG.provision_timeout,
         )
 
     @command_decorator(
@@ -891,6 +896,7 @@ class BaseRunner(object):
             args=cmd_args,
             retcode=None,
             cwd=self._integrity_tests_dir,
+            timeout=CONFIG.tests_exec_timeout,
         )
 
     def publish_artifacts_to_storage(self):
@@ -973,6 +979,7 @@ class BaseRunner(object):
                 args=cmd_args,
                 retcode=None,
                 cwd=self._work_dir,
+                timeout=CONFIG.provision_timeout,
             )
 
     def erase_work_dir(self):
@@ -1068,6 +1075,7 @@ class BaseRunner(object):
             args=cmd_args,
             retcode=None,
             cwd=self._work_dir,
+            timeout=CONFIG.provision_timeout,
         )
         if exit_code == 0:
             return True
@@ -1147,6 +1155,7 @@ class GenericVMRunner(BaseRunner):
             args=('output', '-raw',  '-no-color', 'vm_ip'),
             retcode=None,
             cwd=self._work_dir,
+            timeout=CONFIG.provision_timeout,
         )
         if exit_code != 0:
             error_message = f'Cannot get VM IP: {stderr}'
