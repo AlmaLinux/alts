@@ -7,7 +7,6 @@ from typing import (
     List,
     Literal,
     Optional,
-    Tuple,
     Union,
 )
 
@@ -186,9 +185,9 @@ class RedisBrokerConfig(BaseBrokerConfig):
 
 
 class AzureResultsConfig(BaseResultsConfig):
-    azureblockblob_container_name: str
+    azureblockblob_container_name: Optional[str] = None
     azureblockblob_base_path: str = 'celery_result_backend/'
-    azure_connection_string: str
+    azure_connection_string: Optional[str] = None
 
 
 class FilesystemResultsConfig(BaseResultsConfig):
@@ -209,13 +208,13 @@ class S3ResultsConfig(BaseResultsConfig):
 
 
 class AzureLogsConfig(BaseLogsConfig, AzureResultsConfig):
-    azure_logs_container: str
+    azure_logs_container: Optional[str] = None
 
 
 class PulpLogsConfig(BaseLogsConfig):
-    pulp_host: str
-    pulp_user: str
-    pulp_password: str
+    pulp_host: Optional[str] = None
+    pulp_user: Optional[str] = None
+    pulp_password: Optional[str] = None
 
 
 class CeleryConfig(BaseModel):
