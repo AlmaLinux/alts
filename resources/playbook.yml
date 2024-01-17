@@ -10,10 +10,22 @@
             name: "*"
             state: latest
 
-        - name: Install file package
+        - name: Install additional packages
           yum:
-            name: ["file", "python3-pip", "iproute"]
+            name: ["file", "iproute", "procps-ng"]
             state: present
+
+        - name: Install pip package (8 and higher)
+          dnf:
+            name: ["python3-pip", "python3-setuptools"]
+            state: present
+          when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version >= '8'"
+
+        - name: Install pip package (7 and less)
+          dnf:
+            name: [ "python-pip", "python-setuptools" ]
+            state: present
+          when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version < '8'"
 
         - name: Add required repositories
           yum_repository:
