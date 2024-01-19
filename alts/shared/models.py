@@ -238,9 +238,9 @@ class CeleryConfig(BaseModel):
     broker_config: Union[RabbitmqBrokerConfig, RedisBrokerConfig]
     opennebula_config: Optional[OpennebulaConfig] = None
     results_backend_config: Union[
-        AzureResultsConfig,
-        FilesystemResultsConfig,
         RedisResultsConfig,
+        FilesystemResultsConfig,
+        AzureResultsConfig,
         S3ResultsConfig,
     ]
     result_backend_always_retry: bool = True

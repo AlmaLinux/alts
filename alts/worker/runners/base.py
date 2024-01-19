@@ -637,8 +637,7 @@ class BaseRunner(object):
                 else:
                     break
             return local['terraform'].run(
-                'init',
-                '-no-color',
+                ('init', '-no-color'),
                 cwd=self._work_dir,
                 timeout=CONFIG.provision_timeout,
             )
