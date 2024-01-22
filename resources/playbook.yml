@@ -6,7 +6,7 @@
     - name: Initial provision (RedHat-like distros)
       block:
         - name: Update all packages
-          yum:
+          package:
             name: "*"
             state: latest
 
@@ -22,7 +22,7 @@
           when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version >= '8'"
 
         - name: Install pip package (7 and less)
-          dnf:
+          yum:
             name: [ "python-pip", "python-setuptools" ]
             state: present
           when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version < '8'"
@@ -54,7 +54,7 @@
 
         - name: Add required repositories
           apt_repository:
-            repo: "{{ item.url }}"
+            repo: "deb {{ item.url }} ./"
             filename: 'test_repos'
           with_items: "{{ repositories }}"
           when: repositories is defined and (repositories | length > 0)
