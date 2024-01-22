@@ -317,10 +317,10 @@ class BaseRunner(object):
                 parsed.query,
                 parsed.fragment,
             ))
-            repo_type = repo.get('type', 'rpm')
-            if repo_type == 'deb' and not repo['url'].startswith('deb '):
-                repo['url'] = f'deb {url} ./'
-                continue
+            if (self.dist_name in CONFIG.debian_flavors
+                    and not repo['url'].startswith('deb ')):
+                url = f'deb {url} ./'
+                self._logger.info('Modified repo url: %s', url)
             repo['url'] = url
         self._logger.info('Repositories: %s', self._repositories)
 
