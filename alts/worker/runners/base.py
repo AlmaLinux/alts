@@ -318,10 +318,11 @@ class BaseRunner(object):
                 parsed.fragment,
             ))
             repo_type = repo.get('type', 'rpm')
-            if repo_type == 'deb':
+            if repo_type == 'deb' and not repo['url'].startswith('deb '):
                 repo['url'] = f'deb {url} ./'
                 continue
             repo['url'] = url
+        self._logger.info('Repositories: %s', self._repositories)
 
     def __init_task_logger(self, log_file):
         """
