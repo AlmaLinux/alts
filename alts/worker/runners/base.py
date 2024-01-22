@@ -160,7 +160,7 @@ class BaseRunner(object):
         if test_configuration is None:
             test_configuration = {}
         self._test_configuration = test_configuration
-        self._test_env = self._test_configuration.get('test_env', {})
+        self._test_env = self._test_configuration.get('test_env') or {}
         self._logger = self.init_test_task_logger(task_id, dist_arch)
         self._task_log_file = None
         self._task_log_handler = None
