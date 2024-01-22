@@ -63,6 +63,7 @@
           apt_repository:
             repo: "{{ item.url }}"
             filename: 'test_repos'
+            update_cache: no
           with_items: "{{ repositories }}"
           when: repositories is defined and (repositories | length > 0)
       when: ansible_distribution_file_variety == 'Debian'

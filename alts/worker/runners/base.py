@@ -317,7 +317,8 @@ class BaseRunner(object):
                 parsed.query,
                 parsed.fragment,
             ))
-            if 'amd64' in repo['name']:
+            repo_type = repo.get('type', 'rpm')
+            if repo_type == 'deb':
                 repo['url'] = f'deb {url} ./'
                 continue
             repo['url'] = url
