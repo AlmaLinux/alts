@@ -21,10 +21,17 @@
             state: present
           when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version >= '8'"
 
+        - name: Install epel release
+          yum:
+            name: epel-release
+            state: present
+          when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version < '8'"
+
         - name: Install pip package (7 and less)
           yum:
             name: [ "python-pip", "python-setuptools" ]
             state: present
+            enablerepo: epel
           when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version < '8'"
 
         - name: Add required repositories
