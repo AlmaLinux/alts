@@ -84,7 +84,10 @@ def prepare_gerrit_command(git_ref: str) -> str:
 
 def prepare_gerrit_repo_url(url: str) -> str:
     parsed = urlparse(url)
-    netloc = f'{CONFIG.gerrit_username}@{parsed.netloc}'
+    if CONFIG.gerrit_username:
+        netloc = f'{CONFIG.gerrit_username}@{parsed.netloc}'
+    else:
+        netloc = parsed.netloc
     return urlunparse(
         (
             parsed.scheme,
