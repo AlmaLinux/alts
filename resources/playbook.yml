@@ -107,6 +107,8 @@
     - name: Gather the package facts
       package_facts:
         manager: auto
+      tags:
+        - initial_provision
 
     - name: Install bats
       block:
@@ -114,9 +116,14 @@
           git:
             repo: https://github.com/bats-core/bats-core.git
             dest: /tmp/bats-core
+            version: v1.10.0
+            accept_hostkey: yes
 
         - name: Install missing bats
           shell: |
+            mkdir -p /usr/local/libexec/bats-core
+            mkdir -p /usr/local/lib/bats-core
+            mkdir -p /usr/local/man
             cd /tmp/bats-core
             sh ./install.sh /usr/local
       when: "'bats' not in ansible_facts.packages"

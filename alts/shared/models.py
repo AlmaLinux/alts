@@ -278,7 +278,7 @@ class CeleryConfig(BaseModel):
     bs_token: Optional[str] = None
     # Log uploader settings
     logs_uploader_config: Optional[
-        Union[AzureLogsConfig, PulpLogsConfig]
+        Union[PulpLogsConfig, AzureLogsConfig]
     ] = None
     uninstall_excluded_pkgs: List[str] = [
         'almalinux-release',
