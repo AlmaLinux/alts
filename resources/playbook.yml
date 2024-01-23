@@ -2,6 +2,8 @@
 - name: Prepare environment
   hosts: all
   remote_user: root
+  vars:
+    procps_pkg: "procps-ng"
   tasks:
     - name: Initial provision (RedHat-like distros)
       block:
@@ -30,6 +32,11 @@
             state: present
           when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version == '6'"
 
+        - name: Re-define procps package name
+          set_fact:
+            procps_pkg: "procps"
+          when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version == '6'"
+
         - name: Update all packages
           package:
             name: "*"
@@ -42,7 +49,7 @@
               - bats
               - file
               - iproute
-              - procps-ng
+              - "{{ procps_pkg }}"
             enablerepo: epel
             state: present
 
