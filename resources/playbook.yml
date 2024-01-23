@@ -5,6 +5,11 @@
   tasks:
     - name: Initial provision (RedHat-like distros)
       block:
+        - name: Install epel release
+          yum:
+            name: epel-release
+            state: present
+
         - name: Update all packages
           package:
             name: "*"
@@ -20,12 +25,6 @@
             name: ["python3-pip", "python3-setuptools"]
             state: present
           when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version >= '8'"
-
-        - name: Install epel release
-          yum:
-            name: epel-release
-            state: present
-          when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version < '8'"
 
         - name: Install pip package (7 and less)
           yum:
@@ -97,23 +96,11 @@
         - initial_provision
 
     - name: Install binaries for test executors
-      yum:
+      package:
         name:
-          - epel-release
           - git
-        state: latest
-      when: ansible_distribution_file_variety == 'RedHat'
-      ignore_errors: true
-      tags:
-        - initial_provision
-
-    - name: Install ansible
-      yum:
-        name:
-          - ansible-core
-        state: latest
-      when: ansible_distribution_file_variety == 'RedHat' and connection_type == 'ssh'
-      ignore_errors: true
+          - ansible
+        state: present
       tags:
         - initial_provision
 
@@ -127,7 +114,6 @@
             git clone https://github.com/bats-core/bats-core.git
             cd bats-core
             sh ./install.sh /usr/local
-          ignore_errors: true
           when: "'bats' not in ansible_facts.packages"
       tags:
         - initial_provision
