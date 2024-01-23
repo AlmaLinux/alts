@@ -36,7 +36,6 @@ from alts.shared.utils.git_utils import (
     clone_gerrit_repo,
     clone_git_repo,
     git_reset_hard,
-    prepare_gerrit_repo_url,
 )
 from alts.worker import CONFIG, RESOURCES_DIR
 from alts.worker.executors.ansible import AnsibleExecutor
@@ -496,7 +495,13 @@ class BaseRunner(object):
         else:
             self._logger.debug('An unknown repository format, skipping')
             return git_repo_path
-        return func(repo_url, git_ref, self._work_dir, self._logger)
+        return func(
+            repo_url,
+            git_ref,
+            self._work_dir,
+            self._logger,
+            reference_directory=CONFIG.git_reference_directory
+        )
 
     def run_third_party_test(
         self,
@@ -518,6 +523,24 @@ class BaseRunner(object):
             'ssh_params': self.default_ssh_params,
         }
 
+    @staticmethod
+    def prepare_gerrit_repo_url(url: str) -> str:
+        parsed = urllib.parse.urlparse(url)
+        if CONFIG.gerrit_username:
+            netloc = f'{CONFIG.gerrit_username}@{parsed.netloc}'
+        else:
+            netloc = parsed.netloc
+        return urllib.parse.urlunparse(
+            (
+                parsed.scheme,
+                netloc,
+                parsed.path,
+                parsed.params,
+                parsed.query,
+                parsed.fragment,
+            )
+        )
+
     def run_third_party_tests(self):
         if not self._test_configuration:
             return
@@ -535,7 +558,7 @@ class BaseRunner(object):
             test_dir = test['test_dir']
             tests_to_run = test.get('tests_to_run', [])
             repo_url = (
-                prepare_gerrit_repo_url(repo_url)
+                self.prepare_gerrit_repo_url(repo_url)
                 if 'gerrit' in repo_url
                 else repo_url
             )

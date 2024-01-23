@@ -293,6 +293,7 @@ class CeleryConfig(BaseModel):
         'https://dl.fedoraproject.org/pub/archive/epel/6/x86_64/'
         'epel-release-6-8.noarch.rpm'
     )
+    git_reference_directory: Optional[str] = None
     development_mode: bool = False
 
     @property
