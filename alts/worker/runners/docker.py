@@ -138,6 +138,11 @@ class DockerRunner(BaseRunner):
             retcode=None,
         )
 
+    @command_decorator(
+        'initial_provision',
+        'Cannot run initial provision',
+        exception_class=ProvisionError,
+    )
     def initial_provision(self, verbose=False):
         """
         Creates initial provision inside docker container.
@@ -160,11 +165,11 @@ class DockerRunner(BaseRunner):
         # Installing python3 package before running Ansible
         if self._dist_name in CONFIG.debian_flavors:
             self._logger.info('Installing python3 package...')
-            exit_code, _, stderr = self._exec(
+            exit_code, stdout, stderr = self._exec(
                 (self.pkg_manager, 'update'),
             )
             if exit_code != 0:
-                raise ProvisionError(f'Cannot update metadata: {stderr}')
+                return exit_code, stdout, stderr
             cmd_args = (self.pkg_manager, 'install', '-y', 'python3')
             exit_code, _, stderr = self._exec(cmd_args)
             if exit_code != 0:
