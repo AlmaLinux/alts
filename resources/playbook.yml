@@ -18,10 +18,17 @@
             - "updates"
           when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version == '6'"
 
-        - name: Install epel release
+        - name: Install epel-release
           yum:
             name: epel-release
             state: present
+          when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version != '6'"
+
+        - name: Install epel-release
+          yum:
+            name: https://dl.fedoraproject.org/pub/archive/epel/6/x86_64/epel-release-6-8.noarch.rpm
+            state: present
+          when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version == '6'"
 
         - name: Update all packages
           package:
