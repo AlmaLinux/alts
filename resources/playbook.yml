@@ -104,17 +104,22 @@
       tags:
         - initial_provision
 
+    - name: Gather the package facts
+      package_facts:
+        manager: auto
+
     - name: Install bats
       block:
-        - name: Gather the package facts
-          package_facts:
-            manager: auto
+        - name: Clone bats-core repository
+          git:
+            repo: https://github.com/bats-core/bats-core.git
+            dest: /tmp/bats-core
+
         - name: Install missing bats
           shell: |
-            git clone https://github.com/bats-core/bats-core.git
-            cd bats-core
+            cd /tmp/bats-core
             sh ./install.sh /usr/local
-          when: "'bats' not in ansible_facts.packages"
+      when: "'bats' not in ansible_facts.packages"
       tags:
         - initial_provision
 
