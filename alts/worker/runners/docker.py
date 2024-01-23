@@ -195,7 +195,9 @@ class DockerRunner(BaseRunner):
                 return exit_code, stdout, stderr
             self._logger.info('Installation is completed')
         if self.dist_name in CONFIG.rhel_flavors and self.dist_version == '6':
-            self._exec(('rm', '-f', '/etc/yum.repos.d/*'))
+            self._logger.info('Removing old repositories')
+            self._exec(('find', '/etc/yum.repos.d', '-type', 'f', '-exec',
+                        'rm', '-f', '{}', '+'))
         return super().initial_provision(verbose=verbose)
 
     @command_decorator(

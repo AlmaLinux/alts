@@ -76,6 +76,7 @@
           apt:
             name:
               - ansible
+              - apt-transport-https
               - bats
               - python3-pip
             state: present
