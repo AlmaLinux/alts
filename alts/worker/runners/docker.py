@@ -190,12 +190,12 @@ class DockerRunner(BaseRunner):
             if exit_code != 0:
                 return exit_code, stdout, stderr
             cmd_args = (self.pkg_manager, 'install', '-y', 'python3')
-            exit_code, _, stderr = self._exec(cmd_args)
+            exit_code, stdout, stderr = self._exec(cmd_args)
             if exit_code != 0:
-                raise ProvisionError(
-                    f'Cannot install package python3: {stderr}'
-                )
+                return exit_code, stdout, stderr
             self._logger.info('Installation is completed')
+        if self.dist_name in CONFIG.rhel_flavors and self.dist_version == '6':
+            self._exec(('rm', '-f', '/etc/yum.repos.d/*'))
         return super().initial_provision(verbose=verbose)
 
     @command_decorator(
