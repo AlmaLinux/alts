@@ -140,6 +140,7 @@ class BaseRunner(object):
     TF_VERSIONS_FILE = 'versions.tf'
     ANSIBLE_PLAYBOOK = 'playbook.yml'
     ANSIBLE_CONFIG = 'ansible.cfg'
+    ANSIBLE_TEMPLATES_DIR = 'templates'
     ANSIBLE_INVENTORY_FILE = 'hosts'
     TEMPFILE_PREFIX = 'base_test_runner_'
     INTEGRITY_TESTS_DIR = 'package_tests'
@@ -443,12 +444,19 @@ class BaseRunner(object):
             self._work_dir = self._create_work_dir()
             self._artifacts_dir = self._create_artifacts_dir()
         try:
+            copy_list = [
+                self.ANSIBLE_CONFIG,
+                self.ANSIBLE_PLAYBOOK,
+                self.ANSIBLE_TEMPLATES_DIR,
+            ]
             # Write resources that are not templated into working directory
-            for ansible_file in (self.ANSIBLE_CONFIG, self.ANSIBLE_PLAYBOOK):
-                shutil.copy(
-                    os.path.join(RESOURCES_DIR, ansible_file),
-                    os.path.join(self._work_dir, ansible_file),
-                )
+            for ansible_file in copy_list:
+                src_path = os.path.join(RESOURCES_DIR, ansible_file)
+                dst_path = os.path.join(self._work_dir, ansible_file)
+                if os.path.isdir(src_path):
+                    shutil.copytree(src_path, dst_path)
+                else:
+                    shutil.copy(src_path, dst_path)
             shutil.copy(
                 os.path.join(self._class_resources_dir, self.TF_VERSIONS_FILE),
                 os.path.join(self._work_dir, self.TF_VERSIONS_FILE),
