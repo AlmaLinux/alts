@@ -59,11 +59,19 @@
             name: "python3-pip"
             state: latest
 
+        - name: Install custom apt.conf
+          template:
+            src: custom-apt.conf
+            dest: /etc/apt/apt.conf.d/test-system-conf
+            mode: 0644
+            owner: root
+            group: root
+
         - name: Add required repositories
           apt_repository:
             repo: "{{ item.url }}"
             filename: 'test_repos'
-            update_cache: no
+            update_cache: yes
           with_items: "{{ repositories }}"
           when: repositories is defined and (repositories | length > 0)
       when: ansible_distribution_file_variety == 'Debian'

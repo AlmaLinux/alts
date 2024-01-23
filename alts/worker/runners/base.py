@@ -710,6 +710,7 @@ class BaseRunner(object):
             'integrity_tests_dir': self._integrity_tests_dir,
             'connection_type': self.ansible_connection_type,
             'pytest_is_needed': self.pytest_is_needed,
+            'development_mode': CONFIG.development_mode,
         }
         cmd_args = [
             '-i',
