@@ -723,6 +723,7 @@ class BaseRunner(object):
             'connection_type': self.ansible_connection_type,
             'pytest_is_needed': self.pytest_is_needed,
             'development_mode': CONFIG.development_mode,
+            'centos_6_epel_release_url': CONFIG.centos_6_epel_release_url,
         }
         cmd_args = [
             '-i',

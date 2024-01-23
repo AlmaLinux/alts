@@ -289,6 +289,10 @@ class CeleryConfig(BaseModel):
     provision_timeout: int = 600  # 10 minutes in seconds
     tests_exec_timeout: int = 3600  # 1 hour in seconds
     deprecated_ansible_venv: str = '/code/ansible_env'
+    centos_6_epel_release_url: str = (
+        'https://dl.fedoraproject.org/pub/archive/epel/6/x86_64/'
+        'epel-release-6-8.noarch.rpm'
+    )
     development_mode: bool = False
 
     @property
