@@ -243,13 +243,17 @@ class BaseRunner(object):
     @property
     def ansible_binary(self) -> str:
         if self.use_deprecated_ansible:
-            return '/code/ansible_env/bin/ansible'
+            return os.path.join(CONFIG.deprecated_ansible_venv, 'bin', 'ansible')
         return 'ansible'
 
     @property
     def ansible_playbook_binary(self) -> str:
         if self.use_deprecated_ansible:
-            return '/code/ansible_env/bin/ansible-playbook'
+            return os.path.join(
+                CONFIG.deprecated_ansible_venv,
+                'bin',
+                'ansible-playbook'
+            )
         return 'ansible-playbook'
 
     @property
@@ -1005,7 +1009,7 @@ class BaseRunner(object):
             else:
                 self._logger.info('Working directory was successfully removed')
 
-    def setup(self):
+    def setup(self, skip_provision: bool = False):
         self._stats['started_at'] = datetime.datetime.utcnow().isoformat()
         self.prepare_work_dir_files()
         self._task_log_file = os.path.join(
@@ -1015,7 +1019,8 @@ class BaseRunner(object):
         self._task_log_handler = self.__init_task_logger(self._task_log_file)
         self.initialize_terraform()
         self.start_env()
-        self.initial_provision()
+        if not skip_provision:
+            self.initial_provision()
 
     def teardown(self, publish_artifacts: bool = True):
         try:

@@ -162,8 +162,8 @@ class OpennebulaRunner(GenericVMRunner):
             opennebula_password=CONFIG.opennebula_config.password,
         )
 
-    def setup(self):
-        super().setup()
+    def setup(self, skip_provision: bool = False):
+        super().setup(skip_provision=skip_provision)
         self._ssh_client = AsyncSSHClient(**self.default_ssh_params)
 
     def clone_third_party_repo(

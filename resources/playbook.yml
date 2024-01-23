@@ -17,7 +17,13 @@
 
         - name: Install additional packages
           yum:
-            name: ["file", "iproute", "procps-ng"]
+            name:
+              - ansible
+              - bats
+              - file
+              - iproute
+              - procps-ng
+            enablerepo: epel
             state: present
 
         - name: Install pip package (8 and higher)
@@ -55,8 +61,11 @@
 
         - name: Install additional packages
           apt:
-            name: "python3-pip"
-            state: latest
+            name:
+              - ansible
+              - bats
+              - python3-pip
+            state: present
 
         - name: Install custom apt.conf
           template:
@@ -92,41 +101,6 @@
           - pytest-check
           - pytest-tap
       when: pytest_is_needed | bool
-      tags:
-        - initial_provision
-
-    - name: Install binaries for test executors
-      package:
-        name:
-          - git
-          - ansible
-        state: present
-      tags:
-        - initial_provision
-
-    - name: Gather the package facts
-      package_facts:
-        manager: auto
-      tags:
-        - initial_provision
-
-    - name: Install bats
-      block:
-        - name: Clone bats-core repository
-          git:
-            repo: https://github.com/bats-core/bats-core.git
-            dest: /tmp/bats-core
-            version: v1.10.0
-            accept_hostkey: yes
-
-        - name: Install missing bats
-          shell: |
-            mkdir -p /usr/local/libexec/bats-core
-            mkdir -p /usr/local/lib/bats-core
-            mkdir -p /usr/local/man
-            cd /tmp/bats-core
-            sh ./install.sh /usr/local
-      when: "'bats' not in ansible_facts.packages"
       tags:
         - initial_provision
 

@@ -163,7 +163,26 @@ class DockerRunner(BaseRunner):
             or installing.
         """
         # Installing python3 package before running Ansible
+        # This is needed because Debian/Ubuntu docker images
+        # may not have python as pre-installed package
         if self._dist_name in CONFIG.debian_flavors:
+            # Debian 9 has its repos in archive now + the archive
+            # does not contain updates repository, so hacking sources.list
+            if self.dist_name == 'debian' and self.dist_version.startswith('9'):
+                self._exec((
+                    'sed',
+                    '-E',
+                    '-i',
+                    r's/.*(stretch-updates).*//',
+                    '/etc/apt/sources.list',
+                ))
+                self._exec((
+                    'sed',
+                    '-E',
+                    '-i',
+                    r's/(deb|security)\.debian\.org/archive\.debian\.org/',
+                    '/etc/apt/sources.list',
+                ))
             self._logger.info('Installing python3 package...')
             exit_code, stdout, stderr = self._exec(
                 (self.pkg_manager, 'update'),
