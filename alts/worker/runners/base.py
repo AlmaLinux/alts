@@ -495,12 +495,15 @@ class BaseRunner(object):
         else:
             self._logger.debug('An unknown repository format, skipping')
             return git_repo_path
+        repo_name = os.path.basename(repo_url)
+        repo_reference_dir = os.path.join(
+            CONFIG.git_reference_directory, repo_name)
         return func(
             repo_url,
             git_ref,
             self._work_dir,
             self._logger,
-            reference_directory=CONFIG.git_reference_directory
+            reference_directory=repo_reference_dir
         )
 
     def run_third_party_test(
