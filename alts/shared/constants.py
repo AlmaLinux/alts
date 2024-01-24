@@ -34,8 +34,6 @@ RHEL_FLAVORS = [
     'fedora',
     'centos',
     'almalinux',
-    'cloudlinux',
-    'cloudlinux-hybrid',
 ]
 DEBIAN_FLAVORS = ['debian', 'ubuntu', 'raspbian']
 ALLOWED_CHANNELS = ['stable', 'beta']

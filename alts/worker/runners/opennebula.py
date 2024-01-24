@@ -176,7 +176,9 @@ class OpennebulaRunner(GenericVMRunner):
             return
         if self._ssh_client:
             self._ssh_client.sync_run_command(
-                f'cd {self._tests_dir} && git clone {repo_url}'
+                f'mkdir -p {self._tests_dir} '
+                f'&& cd {self._tests_dir} '
+                f'&& git clone {repo_url}'
             )
             repo_path = Path(
                 self._tests_dir,
