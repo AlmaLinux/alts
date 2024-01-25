@@ -10,7 +10,7 @@ from typing import (
     Union,
 )
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, computed_field
 
 from alts.shared import constants
 
@@ -264,7 +264,6 @@ class CeleryConfig(BaseModel):
     task_tracking_timeout: int = 3600
     # Supported architectures and distributions
     supported_architectures: List[str] = constants.SUPPORTED_ARCHITECTURES
-    supported_distributions: List[str] = constants.SUPPORTED_DISTRIBUTIONS
     rhel_flavors: List[str] = constants.RHEL_FLAVORS
     debian_flavors: List[str] = constants.DEBIAN_FLAVORS
     supported_runners: Union[List[str], str] = 'all'
@@ -312,6 +311,11 @@ class CeleryConfig(BaseModel):
     @property
     def broker_url(self) -> str:
         return self.broker_config.broker_url
+
+    @computed_field
+    @property
+    def supported_distributions(self):
+        return set(self.rhel_flavors + self.debian_flavors)
 
 
 class SchedulerConfig(CeleryConfig):
