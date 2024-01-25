@@ -8,6 +8,7 @@ from typing import (
     Literal,
     Optional,
     Union,
+    Set,
 )
 
 from pydantic import BaseModel, ConfigDict, computed_field
@@ -312,7 +313,7 @@ class CeleryConfig(BaseModel):
     def broker_url(self) -> str:
         return self.broker_config.broker_url
 
-    @computed_field
+    @computed_field(return_type=Set[str])
     @property
     def supported_distributions(self):
         return set(self.rhel_flavors + self.debian_flavors)
