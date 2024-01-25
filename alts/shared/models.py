@@ -48,7 +48,7 @@ class AsyncSSHParams(BaseModel):
     keepalive_count_max: int = 3
     logger: Optional[Logger] = None
     logger_name: str = 'asyncssh-client'
-    logging_level: Literal['DEBUG', 'INFO'] = 'DEBUG'
+    logging_level: Literal['DEBUG', 'INFO'] = 'INFO'
     preferred_auth: Union[
         str,
         List[str],
@@ -83,6 +83,7 @@ class TaskRequestPayload(BaseModel):
     module_stream: Optional[str] = None
     module_version: Optional[str] = None
     callback_href: Optional[str] = None
+    verbose: bool = False
 
 
 class TaskRequestResponse(BaseModel):

@@ -153,6 +153,7 @@ class BaseRunner(object):
         dist_arch: str = 'x86_64',
         artifacts_uploader: Optional[BaseLogsUploader] = None,
         test_configuration: Optional[dict] = None,
+        verbose: bool = False,
     ):
         # Environment ID and working directory preparation
         self._task_id = task_id
@@ -161,7 +162,11 @@ class BaseRunner(object):
             test_configuration = {}
         self._test_configuration = test_configuration
         self._test_env = self._test_configuration.get('test_env', {})
-        self._logger = self.init_test_task_logger(task_id, dist_arch)
+        self._logger = self.init_test_task_logger(
+            task_id,
+            dist_arch,
+            verbose=verbose,
+        )
         self._task_log_file = None
         self._task_log_handler = None
         self._work_dir = None
@@ -205,6 +210,7 @@ class BaseRunner(object):
         self._artifacts = {}
         self._uploaded_logs = None
         self._stats = {}
+        self._verbose = verbose
 
     @property
     def artifacts(self):
@@ -218,7 +224,7 @@ class BaseRunner(object):
     def pkg_manager(self):
         if self._dist_name == 'fedora' or (
             self._dist_name in CONFIG.rhel_flavors
-            and self._dist_version.startswith('8')
+            and self._dist_version.startswith(('8', '9', '10'))
         ):
             return 'dnf'
         if self._dist_name in CONFIG.rhel_flavors:
@@ -305,6 +311,7 @@ class BaseRunner(object):
             'client_keys_files': ['~/.ssh/id_rsa.pub'],
             'disable_known_hosts_check': True,
             'ignore_encrypted_keys': True,
+            'logging_level': 'DEBUG' if self._verbose else 'INFO'
         }
 
     def add_credentials_to_build_repos(self):
@@ -1083,7 +1090,7 @@ class BaseRunner(object):
         self.erase_work_dir()
 
     @staticmethod
-    def init_test_task_logger(task_id, arch):
+    def init_test_task_logger(task_id, arch, verbose: bool = False):
         """
         Test task logger initialization.
 
@@ -1094,13 +1101,14 @@ class BaseRunner(object):
         """
         logger = logging.getLogger(f'test_task-{task_id}-{arch}-logger')
         logger.handlers = []
-        logger.setLevel(logging.DEBUG)
+        log_level = logging.DEBUG if verbose else logging.INFO
+        logger.setLevel(log_level)
         formatter = logging.Formatter(
             "%(asctime)s %(levelname)-8s: %(message)s",
             "%H:%M:%S %d.%m.%y",
         )
         handler = logging.StreamHandler()
-        handler.setLevel(logging.DEBUG)
+        handler.setLevel(log_level)
         handler.setFormatter(formatter)
         logger.addHandler(handler)
         return logger
@@ -1144,6 +1152,7 @@ class GenericVMRunner(BaseRunner):
         repositories: Optional[List[dict]] = None,
         dist_arch: str = 'x86_64',
         test_configuration: Optional[dict] = None,
+        verbose: bool = False,
     ):
         super().__init__(
             task_id,
@@ -1152,6 +1161,7 @@ class GenericVMRunner(BaseRunner):
             repositories=repositories,
             dist_arch=dist_arch,
             test_configuration=test_configuration,
+            verbose=verbose,
         )
         ssh_key_path = os.path.abspath(
             os.path.expanduser(CONFIG.ssh_public_key_path)

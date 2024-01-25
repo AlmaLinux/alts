@@ -43,6 +43,7 @@ class DockerRunner(BaseRunner):
         repositories: Optional[List[dict]] = None,
         dist_arch: str = 'x86_64',
         test_configuration: Optional[dict] = None,
+        verbose: bool = False,
     ):
         """
         Docker environment class initialization.
@@ -67,6 +68,7 @@ class DockerRunner(BaseRunner):
             repositories=repositories,
             dist_arch=dist_arch,
             test_configuration=test_configuration,
+            verbose=verbose,
         )
         self._ansible_connection_type = 'docker'
 

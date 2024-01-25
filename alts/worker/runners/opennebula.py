@@ -40,6 +40,7 @@ class OpennebulaRunner(GenericVMRunner):
         dist_arch: str = 'x86_64',
         package_channel: Optional[str] = None,
         test_configuration: Optional[dict] = None,
+        verbose: bool = False,
     ):
         super().__init__(
             task_id,
@@ -48,6 +49,7 @@ class OpennebulaRunner(GenericVMRunner):
             repositories=repositories,
             dist_arch=dist_arch,
             test_configuration=test_configuration,
+            verbose=verbose,
         )
         self.package_channel = package_channel
         user = CONFIG.opennebula_config.username
