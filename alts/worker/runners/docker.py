@@ -228,7 +228,10 @@ class DockerRunner(BaseRunner):
 
         """
         tests_dir_basename = os.path.basename(self._integrity_tests_dir)
-        remote_tests_path = os.path.join('/tests', tests_dir_basename)
+        remote_tests_path = os.path.join(
+            CONFIG.tests_base_dir,
+            tests_dir_basename,
+        )
         cmd_args = ['py.test', '--tap-stream', '--package-name', package_name]
         if package_version:
             full_pkg_name = f'{package_name}-{package_version}'

@@ -94,10 +94,18 @@ class BaseExecutor:
             self.logger.exception('Cannot check binary existence:')
             raise exc
         if not result.is_successful():
-            raise FileNotFoundError(
-                f'Binary "{self.binary_name}" is not found in PATH '
-                f'on the machine\n{result.stderr}',
-            )
+            # Some commands do not have --version option, try --help instead
+            try:
+                result = func(['--version'])
+            except Exception as exc:
+                self.logger.exception('Cannot check binary existence:')
+                raise exc
+            if not result.is_successful():
+                raise FileNotFoundError(
+                    f'Binary "{self.binary_name}" is not found '
+                    f'or cannot be executed '
+                    f'on the machine:\n{result.stderr}',
+                )
 
     @measure_stage('run_local_command')
     def run_local_command(

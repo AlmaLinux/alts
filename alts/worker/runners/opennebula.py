@@ -56,10 +56,7 @@ class OpennebulaRunner(GenericVMRunner):
             uri=CONFIG.opennebula_config.rpc_endpoint,
             session=f'{user}:{password}',
         )
-        self._tests_dir = (
-            os.path.abspath(CONFIG.nebula_tests_base_dir)
-            if CONFIG.nebula_tests_base_dir else '/tests'
-        )
+        self._tests_dir = CONFIG.tests_base_dir
         self._ssh_client: Optional[AsyncSSHClient] = None
 
     def find_template_and_image_ids(
