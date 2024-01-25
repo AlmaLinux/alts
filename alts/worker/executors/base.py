@@ -100,6 +100,10 @@ class BaseExecutor:
             except Exception as exc:
                 self.logger.exception('Cannot check binary existence:')
                 raise exc
+            # Special case: 'ip' command returns 255 status when asking for help
+            if ((self.binary_name == 'ip' or self.binary_name.endswith('/ip'))
+                    and result.exit_code == 255):
+                return
             if not result.is_successful():
                 raise FileNotFoundError(
                     f'Binary "{self.binary_name}" is not found '
