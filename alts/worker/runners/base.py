@@ -570,7 +570,11 @@ class BaseRunner(object):
             test_repo_path = self.clone_third_party_repo(repo_url, git_ref)
             if not test_repo_path:
                 continue
-            workdir = f'/tests/{test_repo_path.name}/{test_dir}'
+            workdir = os.path.join(
+                CONFIG.tests_base_dir,
+                test_repo_path.name,
+                test_dir,
+            )
             for file in Path(test_repo_path, test_dir).iterdir():
                 if tests_to_run and file.name not in tests_to_run:
                     continue
