@@ -14,7 +14,7 @@ class ShellExecutor(BaseExecutor):
         timeout: Optional[int] = None,
         logger: Optional[logging.Logger] = None,
         logger_name: str = 'shell-executor',
-        logging_level: Literal['DEBUG', 'INFO'] = 'DEBUG',
+        logging_level: Literal['DEBUG', 'INFO'] = 'INFO',
         connection_type: Literal['local', 'ssh', 'docker'] = 'local',
         container_name: str = '',
     ):

@@ -372,9 +372,12 @@ class BaseRunner(object):
         task_handler : logging.Handler
             Task log handler.
         """
-        task_handler.flush()
-        task_handler.close()
-        self._logger.handlers.remove(task_handler)
+        try:
+            task_handler.flush()
+            task_handler.close()
+            self._logger.handlers.remove(task_handler)
+        except ValueError:
+            pass
 
     # TODO: Think of better implementation
     def _create_work_dir(self):
