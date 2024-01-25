@@ -96,7 +96,7 @@ class BaseExecutor:
         if not result.is_successful():
             # Some commands do not have --version option, try --help instead
             try:
-                result = func(['--version'])
+                result = func(['--help'])
             except Exception as exc:
                 self.logger.exception('Cannot check binary existence:')
                 raise exc
