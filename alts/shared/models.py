@@ -294,6 +294,7 @@ class CeleryConfig(BaseModel):
         'epel-release-6-8.noarch.rpm'
     )
     git_reference_directory: Optional[str] = None
+    nebula_tests_base_dir: Optional[str] = None
     development_mode: bool = False
 
     @property

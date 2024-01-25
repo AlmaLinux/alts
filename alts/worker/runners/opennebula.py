@@ -56,7 +56,10 @@ class OpennebulaRunner(GenericVMRunner):
             uri=CONFIG.opennebula_config.rpc_endpoint,
             session=f'{user}:{password}',
         )
-        self._tests_dir = '/tests/'
+        self._tests_dir = (
+            os.path.abspath(CONFIG.nebula_tests_base_dir)
+            if CONFIG.nebula_tests_base_dir else '/tests'
+        )
         self._ssh_client: Optional[AsyncSSHClient] = None
 
     def find_template_and_image_ids(
@@ -175,11 +178,13 @@ class OpennebulaRunner(GenericVMRunner):
         if not git_repo_path:
             return
         if self._ssh_client:
-            self._ssh_client.sync_run_command(
-                f'mkdir -p {self._tests_dir} '
-                f'&& cd {self._tests_dir} '
-                f'&& git clone {repo_url}'
+            repo_path = Path(
+                self._tests_dir,
+                Path(repo_url).name.replace('.git', ''),
             )
+            cmd = (f'[ if -e {repo_path} ] then; cd {repo_path} && git pull; '
+                   f'else cd {self._tests_dir} && git clone {repo_url}; fi')
+            self._ssh_client.sync_run_command(cmd)
             repo_path = Path(
                 self._tests_dir,
                 Path(repo_url).name.replace('.git', ''),
