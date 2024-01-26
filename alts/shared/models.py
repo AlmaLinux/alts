@@ -258,18 +258,19 @@ class CeleryConfig(BaseModel):
     azure_connection_string: Optional[str] = None
     task_default_queue: str = 'default'
     task_acks_late: bool = True
-    enable_integrity_tests: bool = True
     task_track_started: bool = True
     worker_prefetch_multiplier: int = 1
     broker_pool_limit: int = 20
     # Task track timeout
     task_tracking_timeout: int = 3600
+    # Application-level settings
     # Supported architectures and distributions
     supported_architectures: List[str] = constants.SUPPORTED_ARCHITECTURES
     rhel_flavors: List[str] = constants.RHEL_FLAVORS
     debian_flavors: List[str] = constants.DEBIAN_FLAVORS
     supported_runners: Union[List[str], str] = 'all'
     allowed_channel_names: List[str] = constants.ALLOWED_CHANNELS
+    enable_integrity_tests: bool = True
     gerrit_username: str = ''
     # SSH section
     ssh_public_key_path: str = '~/.ssh/id_rsa.pub'

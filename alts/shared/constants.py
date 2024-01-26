@@ -22,6 +22,7 @@ ARCHITECTURES = ('x86_64', 'aarch64', 'ppc64le', 's390x')
 DRIVERS = ('docker', 'opennebula')
 SUPPORTED_ARCHITECTURES = [
     'x86_64',
+    'i386',
     'i686',
     'amd64',
     'arm64',
