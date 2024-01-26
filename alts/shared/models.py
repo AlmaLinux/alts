@@ -70,6 +70,7 @@ class TestConfiguration(BaseModel):
 
 
 class TaskRequestPayload(BaseModel):
+    albs_task_id: int
     runner_type: Literal['any', 'docker', 'opennebula'] = 'any'
     dist_name: str
     dist_version: Union[str, int]
@@ -95,6 +96,10 @@ class TaskRequestResponse(BaseModel):
 class TaskResultResponse(BaseModel):
     state: str
     result: Optional[dict] = None
+
+
+class CancelTaskResponse(BaseModel):
+    success: bool
 
 
 class SslConfig(BaseModel):

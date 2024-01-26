@@ -5,10 +5,13 @@
 """AlmaLinux Test System tasks scheduler application."""
 
 import logging
+import requests
 import signal
+import urllib.parse
 from threading import Event
 
 from celery.exceptions import TimeoutError
+from celery.states import READY_STATES, RECEIVED, STARTED
 from fastapi import (
     Depends,
     FastAPI,
@@ -18,14 +21,15 @@ from fastapi import (
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer
 from jose import JWTError, jwt
+from sqlalchemy import select
 
 from alts.scheduler import CONFIG
 from alts.scheduler.db import Session, Task, database
 from alts.scheduler.monitoring import TasksMonitor
 from alts.scheduler.scheduling import TestsScheduler
-from alts.shared.constants import API_VERSION
+from alts.shared.constants import API_VERSION, DEFAULT_REQUEST_TIMEOUT
 from alts.shared.exceptions import ALTSBaseError
-from alts.shared.models import TaskResultResponse
+from alts.shared.models import CancelTaskResponse, TaskResultResponse
 from alts.worker.app import celery_app
 
 app = FastAPI()
@@ -199,3 +203,71 @@ async def get_task_result(
     task_result = get_celery_task_result(task_id)
     task_result['api_version'] = API_VERSION
     return JSONResponse(content=task_result)
+
+
+@app.post('/cancel_tasks', response_model=CancelTaskResponse)
+async def cancel_task(
+    payload: dict,
+    _=Depends(authenticate_user),
+) -> JSONResponse:
+    """
+    Requests for cancelling tasks.
+
+    Parameters
+    ----------
+    task_id : list(str)
+        Test System task identifier.
+    _ : dict
+        Authenticated user's token.
+
+    Returns
+    -------
+    JSON
+        JSON-encoded response with task result.
+    """
+    with Session() as session, session.begin():
+        tasks = (
+            session.execute(
+                select(Task).where(
+                    Task.status.notin_(READY_STATES),
+                    Task.albs_task_id.in_(payload['albs_task_ids'])
+                )
+            )
+        ).scalars().all()
+        task_ids = {task.albs_task_id:task.task_id for task in tasks}
+
+        logging.info(f'cancel_tests have been called - {payload=}')
+        logging.info(f'Current tasks in db - {task_ids=}')
+        celery_app.control.revoke(
+            list(task_ids.values()),
+        #    # Terminating only works on eventlet and prefork Celery pools
+        #    terminate=True,
+        )
+        for task in tasks:
+            result = get_celery_task_result(task.task_id)
+            # Here we only post revoked test results that are still
+            # waiting to be enqueued/processed by workers.
+            # The rest of the tests results are posted by the workers.
+            if result.get('state') in (RECEIVED, STARTED):
+                continue
+
+            full_url = urllib.parse.urljoin(
+                CONFIG.bs_host,
+                f'/api/v1/tests/{task.albs_task_id}/result/',
+            )
+            payload = {
+                'api_version': API_VERSION,
+                'result': {
+                    'revoked': True
+                },
+                'stats': {}
+            }
+            response = requests.post(
+                full_url,
+                json=payload,
+                headers={'Authorization': f'Bearer {CONFIG.bs_token}'},
+                timeout=DEFAULT_REQUEST_TIMEOUT,
+            )
+            response.raise_for_status()
+    result = { 'success': True }
+    return JSONResponse(content=result)

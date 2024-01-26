@@ -40,6 +40,7 @@ class TasksMonitor(threading.Thread):
                     # by getting task result
                     try:
                         _ = task_result.get(timeout=self.__get_result_timeout)
+                        self.logger.debug(f"Current status of {task.task_id} is {task_result.state}")
                     except TimeoutError:
                         pass
                     except Exception as e:

@@ -4,8 +4,11 @@
 
 """AlmaLinux Test System package testing tasks running."""
 
+import celery
 import logging
 import urllib.parse
+from celery.states import REVOKED
+from celery.exceptions import Ignore
 from collections import defaultdict
 from typing import Union
 
@@ -30,6 +33,10 @@ from alts.worker.runners.docker import DockerRunner
 from alts.worker.runners.opennebula import OpennebulaRunner
 
 __all__ = ['run_tests']
+
+
+class RevokedTask(Exception):
+    pass
 
 
 def are_tap_tests_success(tests_output: str):
@@ -76,6 +83,17 @@ def run_tests(task_params: dict):
     dict
         Result summary of a test execution.
     """
+    revoked = False
+    celery_inspect = celery.current_app.control.inspect()
+    def is_revoked():
+        nonlocal revoked
+        revoked_tasks = set()
+        for tasks in celery_inspect.revoked().values():
+            revoked_tasks.update(tasks)
+        revoked = task_params.get('task_id') in revoked_tasks
+        logging.warning(f'Current revoked_tasks: {revoked_tasks}')
+        if revoked:
+            raise RevokedTask
 
     def is_success(stage_data_: dict):
         tap_result = are_tap_tests_success(stage_data_['stdout'])
@@ -135,6 +153,7 @@ def run_tests(task_params: dict):
         package_name = task_params['package_name']
         package_version = task_params.get('package_version')
         runner.setup()
+        is_revoked()
         runner.run_system_info_commands()
         runner.install_package(
             package_name,
@@ -145,6 +164,7 @@ def run_tests(task_params: dict):
         )
         if CONFIG.enable_integrity_tests:
             runner.run_package_integrity_tests(package_name, package_version)
+        is_revoked()
         runner.run_third_party_tests()
         runner.uninstall_package(
             package_name,
@@ -167,6 +187,14 @@ def run_tests(task_params: dict):
         logging.exception('Cannot uninstall package: %s', exc)
     except StopEnvironmentError as exc:
         logging.exception('Cannot stop environment: %s', exc)
+    except RevokedTask:
+        run_tests.update_state(state=REVOKED)
+        logging.warning(
+            'Task %s has been revoked. Terminating',
+            task_params['task_id']
+        )
+        raise Ignore()
+
     except Exception as exc:
         logging.exception('Unexpected exception: %s', exc)
         set_artifacts_when_stage_has_unexpected_exception(
@@ -177,6 +205,8 @@ def run_tests(task_params: dict):
     finally:
         runner.teardown()
         summary = defaultdict(dict)
+        if revoked:
+            summary['revoked'] = True
         for stage, stage_data in runner.artifacts.items():
             # FIXME: Temporary solution, needs to be removed when this
             #  test system will be the only running one
