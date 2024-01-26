@@ -564,6 +564,7 @@ class BaseRunner(object):
             '.sh': ShellExecutor,
             '.yml': AnsibleExecutor,
             '.yaml': AnsibleExecutor,
+            '': ShellExecutor,
         }
         executor_params = self.get_test_executor_params()
         executor_params['timeout'] = CONFIG.tests_exec_timeout
@@ -590,6 +591,7 @@ class BaseRunner(object):
                     continue
                 executor_class = executors_mapping.get(file.suffix)
                 if not executor_class:
+                    self._logger.warning('Cannot get executor for test %s', file)
                     continue
                 executor: Union[
                     AnsibleExecutor,
