@@ -516,9 +516,8 @@ class BaseRunner(object):
                     time.sleep(1)
                 else:
                     break
-            return local['terraform'].run(
+            return local['terraform'].with_cwd(self._work_dir).run(
                 ('init', '-no-color'),
-                cwd=self._work_dir,
                 timeout=CONFIG.provision_timeout,
             )
         finally:
@@ -566,10 +565,9 @@ class BaseRunner(object):
         cmd_args = ['apply', '--auto-approve', '-no-color']
         if self.TF_VARIABLES_FILE:
             cmd_args.extend(['--var-file', self.TF_VARIABLES_FILE])
-        return local['terraform'].run(
+        return local['terraform'].with_cwd(self._work_dir).run(
             args=cmd_args,
             retcode=None,
-            cwd=self._work_dir,
             timeout=CONFIG.provision_timeout,
         )
 
@@ -609,10 +607,9 @@ class BaseRunner(object):
             'Running "ansible-playbook %s" command',
             cmd_args_str,
         )
-        return local[self.ansible_playbook_binary].run(
+        return local[self.ansible_playbook_binary].with_cwd(self._work_dir).run(
             args=cmd_args,
             retcode=None,
-            cwd=self._work_dir,
             timeout=CONFIG.provision_timeout,
         )
 
@@ -721,10 +718,9 @@ class BaseRunner(object):
             'Running "ansible-playbook %s" command',
             cmd_args_str,
         )
-        return local[self.ansible_playbook_binary].run(
+        return local[self.ansible_playbook_binary].with_cwd(self._work_dir).run(
             args=cmd_args,
             retcode=None,
-            cwd=self._work_dir,
             timeout=CONFIG.provision_timeout,
         )
 
@@ -775,10 +771,9 @@ class BaseRunner(object):
             'Running "ansible-playbook %s" command',
             cmd_args_str,
         )
-        return local[self.ansible_playbook_binary].run(
+        return local[self.ansible_playbook_binary].with_cwd(self._work_dir).run(
             args=cmd_args,
             retcode=None,
-            cwd=self._work_dir,
             timeout=CONFIG.provision_timeout,
         )
 
@@ -833,10 +828,9 @@ class BaseRunner(object):
             full_pkg_name,
             self.env_name,
         )
-        return local['py.test'].run(
+        return local['py.test'].with_cwd(self._integrity_tests_dir).run(
             args=cmd_args,
             retcode=None,
-            cwd=self._integrity_tests_dir,
             timeout=CONFIG.tests_exec_timeout,
         )
 
@@ -1071,10 +1065,9 @@ class BaseRunner(object):
             cmd_args = ['destroy', '--auto-approve', '-no-color']
             if self.TF_VARIABLES_FILE:
                 cmd_args.extend(['--var-file', self.TF_VARIABLES_FILE])
-            return local['terraform'].run(
+            return local['terraform'].with_cwd(self._work_dir).run(
                 args=cmd_args,
                 retcode=None,
-                cwd=self._work_dir,
                 timeout=CONFIG.provision_timeout,
             )
 
@@ -1157,22 +1150,18 @@ class BaseRunner(object):
 
     def reboot_target(self, reboot_timeout: int = 300) -> bool:
         ansible = local[self.ansible_binary]
-        module_args = {
-            'reboot_timeout': reboot_timeout,
-        }
         cmd_args = (
             '-i',
             str(self.ANSIBLE_INVENTORY_FILE),
             '-m',
             'reboot',
             '-a',
-            f'"{json.dumps(module_args)}"',
+            f'reboot_timeout={reboot_timeout}',
             'all',
         )
-        exit_code, stdout, stderr = ansible.run(
+        exit_code, stdout, stderr = ansible.with_cwd(self._work_dir).run(
             args=cmd_args,
             retcode=None,
-            cwd=self._work_dir,
             timeout=CONFIG.provision_timeout,
         )
         if exit_code == 0:
@@ -1229,10 +1218,9 @@ class GenericVMRunner(BaseRunner):
         stderr = None
         exit_code = 0
         while retries > 0:
-            exit_code, stdout, stderr = ansible.run(
+            exit_code, stdout, stderr = ansible.with_cwd(self._work_dir).run(
                 args=cmd_args,
                 retcode=None,
-                cwd=self._work_dir,
             )
             if exit_code == 0:
                 return exit_code, stdout, stderr
@@ -1255,10 +1243,10 @@ class GenericVMRunner(BaseRunner):
         # VM gets its IP address only after deploy.
         # To extract it, the `vm_ip` output should be defined
         # in Terraform main file.
-        exit_code, stdout, stderr = local['terraform'].run(
+        exit_code, stdout, stderr = local['terraform'].with_cwd(
+            self._work_dir).run(
             args=('output', '-raw',  '-no-color', 'vm_ip'),
             retcode=None,
-            cwd=self._work_dir,
             timeout=CONFIG.provision_timeout,
         )
         if exit_code != 0:

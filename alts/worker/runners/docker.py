@@ -125,10 +125,9 @@ class DockerRunner(BaseRunner):
             'Running "docker %s" command',
             ' '.join(cmd),
         )
-        return local['docker'].run(
+        return local['docker'].with_cwd(self._work_dir).run(
             args=tuple(cmd),
             retcode=None,
-            cwd=self._work_dir,
         )
 
     def _copy(self, copy_args: List[str]):
