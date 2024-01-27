@@ -32,10 +32,12 @@ from alts.shared.exceptions import (
 from alts.shared.types import ImmutableDict
 from alts.shared.uploaders.base import BaseLogsUploader, UploadError
 from alts.shared.uploaders.pulp import PulpLogsUploader
+from alts.shared.utils.asyncssh import AsyncSSHClient
 from alts.shared.utils.git_utils import (
     clone_gerrit_repo,
     clone_git_repo,
     git_reset_hard,
+    prepare_gerrit_command,
 )
 from alts.worker import CONFIG, RESOURCES_DIR
 from alts.worker.executors.ansible import AnsibleExecutor
@@ -143,6 +145,7 @@ class BaseRunner(object):
     ANSIBLE_INVENTORY_FILE = 'hosts'
     TEMPFILE_PREFIX = 'base_test_runner_'
     INTEGRITY_TESTS_DIR = 'package_tests'
+    INIT_TESTS = frozenset(['0_init', '0_init.yml'])
 
     def __init__(
         self,
@@ -492,44 +495,6 @@ class BaseRunner(object):
                 'Cannot create working directory and needed files'
             ) from e
 
-    def clone_third_party_repo(
-        self,
-        repo_url: str,
-        git_ref: str,
-    ) -> Optional[Path]:
-        git_repo_path = None
-        if repo_url.endswith('.git'):
-            func = clone_git_repo
-        elif 'gerrit' in repo_url:
-            func = clone_gerrit_repo
-        else:
-            self._logger.debug('An unknown repository format, skipping')
-            return git_repo_path
-        repo_name = os.path.basename(repo_url)
-        repo_reference_dir = None
-        if CONFIG.git_reference_directory:
-            repo_reference_dir = os.path.join(
-                CONFIG.git_reference_directory, repo_name)
-        return func(
-            repo_url,
-            git_ref,
-            self._work_dir,
-            self._logger,
-            reference_directory=repo_reference_dir
-        )
-
-    def run_third_party_test(
-        self,
-        executor: Union[AnsibleExecutor, BatsExecutor, ShellExecutor],
-        cmd_args: List[str],
-        docker_args: Optional[List[str]] = None,
-        workdir: str = '',
-        artifacts_key: str = '',
-        additional_section_name: str = '',
-        env_vars: Optional[List[str]] = None,
-    ):
-        raise NotImplementedError
-
     def get_test_executor_params(self) -> dict:
         return {
             'connection_type': self.ansible_connection_type,
@@ -537,149 +502,6 @@ class BaseRunner(object):
             'logger': self._logger,
             'ssh_params': self.default_ssh_params,
         }
-
-    @staticmethod
-    def prepare_gerrit_repo_url(url: str) -> str:
-        parsed = urllib.parse.urlparse(url)
-        if CONFIG.gerrit_username:
-            netloc = f'{CONFIG.gerrit_username}@{parsed.netloc}'
-        else:
-            netloc = parsed.netloc
-        return urllib.parse.urlunparse(
-            (
-                parsed.scheme,
-                netloc,
-                parsed.path,
-                parsed.params,
-                parsed.query,
-                parsed.fragment,
-            )
-        )
-
-    def run_third_party_tests(self):
-        if not self._test_configuration:
-            return
-        executors_mapping = {
-            '.bats': BatsExecutor,
-            '.sh': ShellExecutor,
-            '.yml': AnsibleExecutor,
-            '.yaml': AnsibleExecutor,
-            '': ShellExecutor,
-        }
-        executor_params = self.get_test_executor_params()
-        executor_params['timeout'] = CONFIG.tests_exec_timeout
-        for test in self._test_configuration['tests']:
-            git_ref = test.get('git_ref', 'master')
-            repo_url = test['url']
-            test_dir = test['test_dir']
-            tests_to_run = test.get('tests_to_run', [])
-            repo_url = (
-                self.prepare_gerrit_repo_url(repo_url)
-                if 'gerrit' in repo_url
-                else repo_url
-            )
-            test_repo_path = self.clone_third_party_repo(repo_url, git_ref)
-            if not test_repo_path:
-                continue
-            workdir = os.path.join(
-                CONFIG.tests_base_dir,
-                test_repo_path.name,
-                test_dir,
-            )
-            for file in Path(test_repo_path, test_dir).iterdir():
-                if tests_to_run and file.name not in tests_to_run:
-                    continue
-                executor_class = executors_mapping.get(file.suffix)
-                if not executor_class:
-                    self._logger.warning('Cannot get executor for test %s', file)
-                    continue
-                executor: Union[
-                    AnsibleExecutor,
-                    BatsExecutor,
-                    ShellExecutor,
-                ] = executor_class(**executor_params)
-                self._logger.debug(
-                    'Running the third party test %s on %s...',
-                    file.name,
-                    self.env_name,
-                )
-                try:
-                    self.run_third_party_test(
-                        executor=executor,
-                        cmd_args=[file.name],
-                        docker_args=['--workdir', workdir],
-                        workdir=workdir,
-                        artifacts_key=f'third_party_test_{file.name}',
-                        additional_section_name=THIRD_PARTY_SECTION_NAME,
-                        env_vars=self._test_env.get('extra_env_vars', []),
-                    )
-                except ThirdPartyTestError:
-                    pass
-                except Exception:
-                    self._logger.exception(
-                        'An unknown error occurred during the test execution'
-                    )
-            git_reset_hard(test_repo_path, self._logger)
-
-    def get_system_info_commands_list(self) -> Dict[str, str]:
-        self._logger.debug('Returning default system info commands list')
-        basic_commands = BASE_SYSTEM_INFO_COMMANDS.copy()
-        if self._dist_name in CONFIG.rhel_flavors:
-            basic_commands['Installed packages'] = 'rpm -qa'
-            basic_commands['Repositories list'] = (
-                f'{self.pkg_manager} repolist'
-            )
-            basic_commands['Repositories details'] = (
-                'find /etc/yum.repos.d/ -type f -exec cat {} +'
-            )
-        else:
-            basic_commands['Installed packages'] = 'dpkg -l'
-            basic_commands['Repositories list'] = 'apt-cache policy'
-            basic_commands['Repositories details'] = (
-                'find /etc/apt/ -type f -name *.list* -o -name *.sources* '
-                '-exec cat {} +'
-            )
-        return basic_commands
-
-    @command_decorator(
-        'system_info',
-        'System information commands block is failed',
-    )
-    def run_system_info_commands(self):
-        self._logger.info('Starting system info section')
-        errored_commands = {}
-        successful_commands = {}
-        error_output = ''
-        executor_params = self.get_test_executor_params()
-        executor_params['timeout'] = CONFIG.commands_exec_timeout
-        for section, cmd in self.get_system_info_commands_list().items():
-            try:
-                cmd_as_list = cmd.split(' ')
-                binary, *args = cmd_as_list
-                result = CommandExecutor(binary, **executor_params).run(args)
-                output = '\n'.join([result.stdout, result.stderr])
-                if result.is_successful():
-                    successful_commands[section] = output
-                else:
-                    errored_commands[section] = output
-            except Exception as e:
-                errored_commands[section] = str(e)
-        success_output = '\n\n'.join((
-            section + '\n' + section_out
-            for section, section_out in successful_commands.items()
-        ))
-        if errored_commands:
-            error_output = '\n\n'.join((
-                section + '\n' + section_out
-                for section, section_out in errored_commands.items()
-            ))
-        final_output = f'System info commands:\n{success_output}'
-        if error_output:
-            final_output += (
-                f'\n\nCommands that have failed to run:\n{error_output}'
-            )
-        self._logger.info('System info section is finished')
-        return 0, final_output, ''
 
     def __terraform_init(self):
         lock = None
@@ -793,6 +615,66 @@ class BaseRunner(object):
             cwd=self._work_dir,
             timeout=CONFIG.provision_timeout,
         )
+
+    def get_system_info_commands_list(self) -> Dict[str, str]:
+        self._logger.debug('Returning default system info commands list')
+        basic_commands = BASE_SYSTEM_INFO_COMMANDS.copy()
+        if self._dist_name in CONFIG.rhel_flavors:
+            basic_commands['Installed packages'] = 'rpm -qa'
+            basic_commands['Repositories list'] = (
+                f'{self.pkg_manager} repolist'
+            )
+            basic_commands['Repositories details'] = (
+                'find /etc/yum.repos.d/ -type f -exec cat {} +'
+            )
+        else:
+            basic_commands['Installed packages'] = 'dpkg -l'
+            basic_commands['Repositories list'] = 'apt-cache policy'
+            basic_commands['Repositories details'] = (
+                'find /etc/apt/ -type f -name *.list* -o -name *.sources* '
+                '-exec cat {} +'
+            )
+        return basic_commands
+
+    @command_decorator(
+        'system_info',
+        'System information commands block is failed',
+    )
+    def run_system_info_commands(self):
+        self._logger.info('Starting system info section')
+        errored_commands = {}
+        successful_commands = {}
+        error_output = ''
+        executor_params = self.get_test_executor_params()
+        executor_params['timeout'] = CONFIG.commands_exec_timeout
+        for section, cmd in self.get_system_info_commands_list().items():
+            try:
+                cmd_as_list = cmd.split(' ')
+                binary, *args = cmd_as_list
+                result = CommandExecutor(binary, **executor_params).run(args)
+                output = '\n'.join([result.stdout, result.stderr])
+                if result.is_successful():
+                    successful_commands[section] = output
+                else:
+                    errored_commands[section] = output
+            except Exception as e:
+                errored_commands[section] = str(e)
+        success_output = '\n\n'.join((
+            section + '\n' + section_out
+            for section, section_out in successful_commands.items()
+        ))
+        if errored_commands:
+            error_output = '\n\n'.join((
+                section + '\n' + section_out
+                for section, section_out in errored_commands.items()
+            ))
+        final_output = f'System info commands:\n{success_output}'
+        if error_output:
+            final_output += (
+                f'\n\nCommands that have failed to run:\n{error_output}'
+            )
+        self._logger.info('System info section is finished')
+        return 0, final_output, ''
 
     @command_decorator(
         'install_package',
@@ -958,6 +840,161 @@ class BaseRunner(object):
             timeout=CONFIG.tests_exec_timeout,
         )
 
+    @staticmethod
+    def prepare_gerrit_repo_url(url: str) -> str:
+        parsed = urllib.parse.urlparse(url)
+        if CONFIG.gerrit_username:
+            netloc = f'{CONFIG.gerrit_username}@{parsed.netloc}'
+        else:
+            netloc = parsed.netloc
+        return urllib.parse.urlunparse(
+            (
+                parsed.scheme,
+                netloc,
+                parsed.path,
+                parsed.params,
+                parsed.query,
+                parsed.fragment,
+            )
+        )
+
+    def clone_third_party_repo(
+        self,
+        repo_url: str,
+        git_ref: str,
+    ) -> Optional[Path]:
+        git_repo_path = None
+        if repo_url.endswith('.git'):
+            func = clone_git_repo
+        elif 'gerrit' in repo_url:
+            func = clone_gerrit_repo
+        else:
+            self._logger.debug('An unknown repository format, skipping')
+            return git_repo_path
+        repo_name = os.path.basename(repo_url)
+        repo_reference_dir = None
+        if CONFIG.git_reference_directory:
+            repo_reference_dir = os.path.join(
+                CONFIG.git_reference_directory, repo_name)
+        return func(
+            repo_url,
+            git_ref,
+            self._work_dir,
+            self._logger,
+            reference_directory=repo_reference_dir
+        )
+
+    def run_third_party_test(
+        self,
+        executor: Union[AnsibleExecutor, BatsExecutor, ShellExecutor],
+        cmd_args: List[str],
+        docker_args: Optional[List[str]] = None,
+        workdir: str = '',
+        artifacts_key: str = '',
+        additional_section_name: str = '',
+        env_vars: Optional[List[str]] = None,
+    ):
+        raise NotImplementedError
+
+    def sort_tests(self, tests_dir: Path) -> List[Path]:
+        tests_list = list(tests_dir.iterdir())
+        tests_list.sort()
+        organized_tests_list = []
+        init = None
+        install = None
+        for test in tests_list:
+            if test.is_dir():
+                # Usually ansible directory will contain 0_init.yml
+                if test.name == 'ansible':
+                    ansible_init = Path(test, '0_init.yml')
+                    if ansible_init.exists():
+                        init = ansible_init
+                continue
+            if test.name in self.INIT_TESTS:
+                init = test
+                continue
+            elif test.name == '0_install':
+                install = test
+                continue
+            else:
+                organized_tests_list.append(test)
+        # 0_init should be the first, 0_install should be the second
+        if install:
+            organized_tests_list.insert(0, install)
+        if init:
+            organized_tests_list.insert(0, init)
+        return organized_tests_list
+
+    def run_third_party_tests(self):
+        if not self._test_configuration:
+            return
+        executors_mapping = {
+            '.bats': BatsExecutor,
+            '.sh': ShellExecutor,
+            '.yml': AnsibleExecutor,
+            '.yaml': AnsibleExecutor,
+            '': ShellExecutor,
+        }
+        executor_params = self.get_test_executor_params()
+        executor_params['timeout'] = CONFIG.tests_exec_timeout
+        for test in self._test_configuration['tests']:
+            git_ref = test.get('git_ref', 'master')
+            repo_url = test['url']
+            test_dir = test['test_dir']
+            tests_to_run = test.get('tests_to_run', [])
+            repo_url = (
+                self.prepare_gerrit_repo_url(repo_url)
+                if 'gerrit' in repo_url
+                else repo_url
+            )
+            test_repo_path = self.clone_third_party_repo(repo_url, git_ref)
+            if not test_repo_path:
+                continue
+            workdir = os.path.join(
+                CONFIG.tests_base_dir,
+                test_repo_path.name,
+                test_dir,
+            )
+            tests_list = self.sort_tests(Path(test_repo_path, test_dir))
+            for test_file in tests_list:
+                if tests_to_run and test_file.name not in tests_to_run:
+                    continue
+                executor_class = executors_mapping.get(test_file.suffix)
+                if not executor_class:
+                    self._logger.warning(
+                        'Cannot get executor for test %s',
+                        test_file
+                    )
+                    continue
+                executor: Union[
+                    AnsibleExecutor,
+                    BatsExecutor,
+                    ShellExecutor,
+                ] = executor_class(**executor_params)
+                self._logger.debug(
+                    'Running the third party test %s on %s...',
+                    test_file.name,
+                    self.env_name,
+                )
+                try:
+                    key = f'{THIRD_PARTY_SECTION_NAME}_test_{test_file.name}'
+                    self.run_third_party_test(
+                        executor=executor,
+                        cmd_args=[test_file.name],
+                        docker_args=['--workdir', workdir],
+                        workdir=workdir,
+                        artifacts_key=key,
+                        additional_section_name=THIRD_PARTY_SECTION_NAME,
+                        env_vars=self._test_env.get('extra_env_vars', []),
+                    )
+                except ThirdPartyTestError:
+                    pass
+                except Exception:
+                    self._logger.exception(
+                        'An unknown error occurred during the test execution'
+                    )
+            git_reset_hard(test_repo_path, self._logger)
+
     def publish_artifacts_to_storage(self):
         # Should upload artifacts from artifacts directory to preferred
         # artifacts storage (S3, Minio, etc.)
@@ -1118,7 +1155,7 @@ class BaseRunner(object):
         logger.addHandler(handler)
         return logger
 
-    def reboot_target(self, reboot_timeout: int = 120) -> bool:
+    def reboot_target(self, reboot_timeout: int = 300) -> bool:
         ansible = local[self.ansible_binary]
         module_args = {
             'reboot_timeout': reboot_timeout,
@@ -1149,6 +1186,8 @@ class BaseRunner(object):
 
 
 class GenericVMRunner(BaseRunner):
+    VM_RESTART_OUTPUT_TRIGGER = '>>>VMRESTART<<<'
+
     def __init__(
         self,
         task_id: str,
@@ -1176,6 +1215,8 @@ class GenericVMRunner(BaseRunner):
         else:
             with open(ssh_key_path, 'rt') as f:
                 self._ssh_public_key = f.read().strip()
+        self._tests_dir = CONFIG.tests_base_dir
+        self._ssh_client: Optional[AsyncSSHClient] = None
 
     @property
     def ssh_public_key(self):
@@ -1238,3 +1279,70 @@ class GenericVMRunner(BaseRunner):
         else:
             self._logger.info('Machine is available for SSH connection')
         return exit_code, stdout, stderr
+
+    def setup(self, skip_provision: bool = False):
+        super().setup(skip_provision=skip_provision)
+        self._ssh_client = AsyncSSHClient(**self.default_ssh_params)
+
+    def clone_third_party_repo(
+            self,
+            repo_url: str,
+            git_ref: str,
+    ) -> Optional[Path]:
+        git_repo_path = super().clone_third_party_repo(repo_url, git_ref)
+        if not git_repo_path:
+            return
+        if self._ssh_client:
+            repo_path = Path(
+                self._tests_dir,
+                Path(repo_url).name.replace('.git', ''),
+            )
+            cmd = (f'[ if -e {repo_path} ] then; cd {repo_path} && git pull; '
+                   f'else cd {self._tests_dir} && git clone {repo_url}; fi')
+            self._ssh_client.sync_run_command(cmd)
+            repo_path = Path(
+                self._tests_dir,
+                Path(repo_url).name.replace('.git', ''),
+            )
+            command = f'git fetch origin && git checkout {git_ref}'
+            if 'gerrit' in repo_url:
+                command = prepare_gerrit_command(git_ref)
+            result = self._ssh_client.sync_run_command(
+                f'cd {repo_path} && {command}',
+            )
+            if not result.is_successful():
+                self._logger.error(
+                    'Cannot prepare git repository:\n%s',
+                    result.stderr,
+                )
+                return
+        return git_repo_path
+
+    @command_decorator(
+        '',
+        'Third party tests failed',
+        exception_class=ThirdPartyTestError,
+    )
+    def run_third_party_test(
+            self,
+            executor: Union[AnsibleExecutor, BatsExecutor, ShellExecutor],
+            cmd_args: List[str],
+            docker_args: Optional[List[str]] = None,
+            workdir: str = '',
+            artifacts_key: str = '',
+            additional_section_name: str = '',
+            env_vars: Optional[List[str]] = None,
+    ):
+        result = executor.run_ssh_command(
+            cmd_args=cmd_args,
+            workdir=workdir,
+            env_vars=env_vars,
+        )
+        if (self.VM_RESTART_OUTPUT_TRIGGER in result.stdout
+                or self.VM_RESTART_OUTPUT_TRIGGER in result.stderr):
+            reboot_result = self.reboot_target()
+            if not reboot_result:
+                exit_code = 1
+                stderr = result.stderr + '\n\nReboot failed'
+                return exit_code, result.stdout, stderr
+        return result.model_dump().values()
