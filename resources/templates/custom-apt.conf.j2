@@ -2,6 +2,7 @@ APT::Get::AllowUnauthenticated "true";
 Acquire::AllowInsecureRepositories "true";
 Acquire::ForceIPv4 "true";
 Acquire::Check-Valid-Until "false";
+Acquire::Languages=none;
 {% if development_mode %}
 Acquire::https {
     Verify-Peer "false";
