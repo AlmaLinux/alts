@@ -10,6 +10,7 @@ import signal
 import urllib.parse
 from threading import Event
 
+from celery.contrib.abortable import AbortableAsyncResult
 from celery.exceptions import TimeoutError
 from celery.states import READY_STATES, RECEIVED, STARTED
 from fastapi import (
@@ -58,9 +59,9 @@ def get_celery_task_result(task_id: str, timeout: int = 1) -> dict:
 
     """
     result = {}
-    task_data = celery_app.AsyncResult(task_id)
+    task = AbortableAsyncResult(task_id, app=celery_app)
     try:
-        result['result'] = task_data.get(timeout=timeout)
+        result['result'] = task.get(timeout=timeout)
     except TimeoutError:
         pass
     except ALTSBaseError as e:
@@ -73,8 +74,8 @@ def get_celery_task_result(task_id: str, timeout: int = 1) -> dict:
         logging.exception(
             'Unknown exception while getting results from Celery',
         )
-    result['state'] = task_data.state
-    return result
+    result['state'] = task.state
+    return task, result
 
 
 @app.on_event('startup')
@@ -94,7 +95,7 @@ async def startup():
         with session.begin():
             tasks_for_update = []
             for task in session.query(Task).filter(Task.status == 'STARTED'):
-                task_result = celery_app.AsyncResult(task.task_id)
+                task_result = AbortableAsyncResult(task.task_id, app=celery_app)
                 if task.status != task_result.state:
                     task.status = task_result.state
                     tasks_for_update.append(task)
@@ -200,7 +201,7 @@ async def get_task_result(
     JSON
         JSON-encoded response with task result.
     """
-    task_result = get_celery_task_result(task_id)
+    _, task_result = get_celery_task_result(task_id)
     task_result['api_version'] = API_VERSION
     return JSONResponse(content=task_result)
 
@@ -226,7 +227,7 @@ async def cancel_task(
         JSON-encoded response with task result.
     """
     with Session() as session, session.begin():
-        tasks = (
+        db_tasks = (
             session.execute(
                 select(Task).where(
                     Task.status.notin_(READY_STATES),
@@ -234,7 +235,10 @@ async def cancel_task(
                 )
             )
         ).scalars().all()
-        task_ids = {task.albs_task_id:task.task_id for task in tasks}
+        task_ids = {
+            db_task.albs_task_id:db_task.task_id
+            for db_task in db_tasks
+        }
 
         logging.info(f'cancel_tests have been called - {payload=}')
         logging.info(f'Current tasks in db - {task_ids=}')
@@ -243,17 +247,18 @@ async def cancel_task(
         #    # Terminating only works on eventlet and prefork Celery pools
         #    terminate=True,
         )
-        for task in tasks:
-            result = get_celery_task_result(task.task_id)
+        for db_task in db_tasks:
+            task, _ = get_celery_task_result(db_task.task_id)
             # Here we only post revoked test results that are still
             # waiting to be enqueued/processed by workers.
             # The rest of the tests results are posted by the workers.
-            if result.get('state') in (RECEIVED, STARTED):
+            if task.state in (RECEIVED, STARTED):
+                task.abort()
                 continue
 
             full_url = urllib.parse.urljoin(
                 CONFIG.bs_host,
-                f'/api/v1/tests/{task.albs_task_id}/result/',
+                f'/api/v1/tests/{db_task.albs_task_id}/result/',
             )
             payload = {
                 'api_version': API_VERSION,
