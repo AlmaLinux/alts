@@ -79,7 +79,7 @@ def run_tests(task_params: dict):
     """
 
     def is_success(stage_data_: dict):
-        tap_result = are_tap_tests_success(stage_data_['stdout'])
+        tap_result = are_tap_tests_success(stage_data_.get('stdout', ''))
         if tap_result is not None:
             return tap_result
         return stage_data_['exit_code'] == 0
