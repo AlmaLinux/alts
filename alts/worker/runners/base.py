@@ -8,7 +8,6 @@ import re
 import shutil
 import tempfile
 import time
-import traceback
 import urllib.parse
 from functools import wraps
 from pathlib import Path
@@ -82,12 +81,7 @@ def command_decorator(
             if not self._work_dir or not os.path.exists(self._work_dir):
                 return
             start = datetime.datetime.utcnow()
-            try:
-                exit_code, stdout, stderr = fn(self, *args, **kwargs)
-            except Exception:
-                exit_code = 1
-                stdout = ''
-                stderr = traceback.format_exc()
+            exit_code, stdout, stderr = fn(self, *args, **kwargs)
             finish = datetime.datetime.utcnow()
             add_to = self._artifacts
             key = kwargs.get('artifacts_key', artifacts_key)
@@ -594,13 +588,10 @@ class BaseRunner(object):
             'integrity_tests_dir': self._integrity_tests_dir,
             'connection_type': self.ansible_connection_type,
             'pytest_is_needed': self.pytest_is_needed,
+            'development_mode': CONFIG.development_mode,
+            'centos_6_epel_release_url': CONFIG.centos_6_epel_release_url,
+            'package_proxy': CONFIG.package_proxy,
         }
-        if self.dist_name in CONFIG.rhel_flavors and self.dist_version.startswith('6'):
-            var_dict['centos_6_epel_release_url'] = CONFIG.centos_6_epel_release_url
-        if CONFIG.package_proxy:
-            var_dict['package_proxy'] = CONFIG.package_proxy
-        if CONFIG.development_mode:
-            var_dict['development_mode'] = CONFIG.development_mode
         cmd_args = [
             '-i',
             self.ANSIBLE_INVENTORY_FILE,
