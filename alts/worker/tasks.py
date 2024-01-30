@@ -85,7 +85,6 @@ def run_tests(self, task_params: dict):
         Result summary of a test execution.
     """
     revoked = False
-    celery_inspect = celery.current_app.control.inspect()
     def is_revoked():
         nonlocal revoked
         revoked = self.is_aborted()
