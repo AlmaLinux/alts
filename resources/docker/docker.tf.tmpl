@@ -7,6 +7,9 @@ resource "docker_container" "${container_name}" {
   name = "${container_name}"
   must_run = true
   command = ["sleep", "21600"]
+  capabilities {
+    add = ["CAP_LINUX_IMMUTABLE"]
+  }
 % if external_network:
   networks_advanced {
     name = "${external_network}"
