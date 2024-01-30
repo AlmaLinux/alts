@@ -322,7 +322,9 @@ class BaseRunner(object):
             if '-br' not in repo['name']:
                 continue
             parsed = urllib.parse.urlparse(repo['url'])
-            netloc = f'alts:{CONFIG.bs_token}@{parsed.netloc}'
+            netloc = parsed.netloc
+            if CONFIG.bs_token:
+                netloc = f'alts:{CONFIG.bs_token}@{parsed.netloc}'
             url = urllib.parse.urlunparse((
                 parsed.scheme,
                 netloc,
@@ -582,6 +584,7 @@ class BaseRunner(object):
         # variables itself as a dictionary thus doing this weird
         # temporary dictionary
         var_dict = {
+            'architecture': self.dist_arch,
             'repositories': self._repositories,
             'integrity_tests_dir': self._integrity_tests_dir,
             'connection_type': self.ansible_connection_type,
