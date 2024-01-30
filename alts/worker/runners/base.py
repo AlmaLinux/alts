@@ -1,7 +1,6 @@
 import datetime
 import fcntl
 import gzip
-import json
 import logging
 import os
 import random
@@ -9,6 +8,7 @@ import re
 import shutil
 import tempfile
 import time
+import traceback
 import urllib.parse
 from functools import wraps
 from pathlib import Path
@@ -82,7 +82,12 @@ def command_decorator(
             if not self._work_dir or not os.path.exists(self._work_dir):
                 return
             start = datetime.datetime.utcnow()
-            exit_code, stdout, stderr = fn(self, *args, **kwargs)
+            try:
+                exit_code, stdout, stderr = fn(self, *args, **kwargs)
+            except Exception:
+                exit_code = 1
+                stdout = ''
+                stderr = traceback.format_exc()
             finish = datetime.datetime.utcnow()
             add_to = self._artifacts
             key = kwargs.get('artifacts_key', artifacts_key)
@@ -589,9 +594,13 @@ class BaseRunner(object):
             'integrity_tests_dir': self._integrity_tests_dir,
             'connection_type': self.ansible_connection_type,
             'pytest_is_needed': self.pytest_is_needed,
-            'development_mode': CONFIG.development_mode,
-            'centos_6_epel_release_url': CONFIG.centos_6_epel_release_url,
         }
+        if self.dist_name in CONFIG.rhel_flavors and self.dist_version.startswith('6'):
+            var_dict['centos_6_epel_release_url'] = CONFIG.centos_6_epel_release_url
+        if CONFIG.package_proxy:
+            var_dict['package_proxy'] = CONFIG.package_proxy
+        if CONFIG.development_mode:
+            var_dict['development_mode'] = CONFIG.development_mode
         cmd_args = [
             '-i',
             self.ANSIBLE_INVENTORY_FILE,
@@ -1199,20 +1208,8 @@ class GenericVMRunner(BaseRunner):
             test_configuration=test_configuration,
             verbose=verbose,
         )
-        ssh_key_path = os.path.abspath(
-            os.path.expanduser(CONFIG.ssh_public_key_path)
-        )
-        if not os.path.exists(ssh_key_path):
-            self._logger.error('SSH key is missing')
-        else:
-            with open(ssh_key_path, 'rt') as f:
-                self._ssh_public_key = f.read().strip()
         self._tests_dir = CONFIG.tests_base_dir
         self._ssh_client: Optional[AsyncSSHClient] = None
-
-    @property
-    def ssh_public_key(self):
-        return self._ssh_public_key
 
     def _wait_for_ssh(self, retries=60):
         ansible = local[self.ansible_binary]

@@ -20,6 +20,14 @@
             - "updates"
           when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version == '6'"
 
+        - name: Add YUM proxy
+          ini_file:
+            path: /etc/yum.conf
+            section: main
+            option: proxy
+            value: "{{ package_proxy }}"
+          when: "package_proxy is defined and package_proxy"
+
         - name: Install epel-release
           yum:
             name: epel-release

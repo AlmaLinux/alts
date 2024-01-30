@@ -1,4 +1,9 @@
+{% if architecture %}
 APT::Architecture="{{ architecture }}";
+{% endif %}
+{% if package_proxy %}
+Acquire::http::Proxy {{ package_proxy }};
+{% endif %}
 APT::Get::AllowUnauthenticated "true";
 Acquire::AllowInsecureRepositories "true";
 Acquire::ForceIPv4 "true";

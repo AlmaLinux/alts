@@ -272,8 +272,6 @@ class CeleryConfig(BaseModel):
     allowed_channel_names: List[str] = constants.ALLOWED_CHANNELS
     enable_integrity_tests: bool = True
     gerrit_username: str = ''
-    # SSH section
-    ssh_public_key_path: str = '~/.ssh/id_rsa.pub'
     # Build system settings
     bs_host: Optional[str] = None
     bs_tasks_endpoint: str = '/api/v1/tests/get_test_tasks/'
@@ -297,6 +295,7 @@ class CeleryConfig(BaseModel):
     )
     git_reference_directory: Optional[str] = None
     tests_base_dir: str = '/tests'
+    package_proxy: Optional[str] = None
     development_mode: bool = False
 
     @property
