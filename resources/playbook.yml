@@ -3,7 +3,7 @@
   hosts: all
   remote_user: root
   vars:
-    procps_pkg: "procps-ng"
+    procps_pkg: "procps"
   tasks:
     - name: Initial provision (RedHat-like distros)
       block:
@@ -42,8 +42,8 @@
 
         - name: Re-define procps package name
           set_fact:
-            procps_pkg: "procps"
-          when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version == '6'"
+            procps_pkg: "procps-ng"
+          when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version > '6'"
 
         - name: Update all packages
           package:
@@ -101,6 +101,8 @@
               - apt-transport-https
               - bats
               - python3-pip
+              - ca-certificates
+              - "{{ procps_pkg }}"
             state: present
 
         - name: Install custom apt.conf
