@@ -70,7 +70,7 @@ class TestConfiguration(BaseModel):
 
 
 class TaskRequestPayload(BaseModel):
-    albs_task_id: int
+    bs_task_id: int
     runner_type: Literal['any', 'docker', 'opennebula'] = 'any'
     dist_name: str
     dist_version: Union[str, int]

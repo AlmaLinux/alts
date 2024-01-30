@@ -231,12 +231,12 @@ async def cancel_task(
             session.execute(
                 select(Task).where(
                     Task.status.notin_(READY_STATES),
-                    Task.albs_task_id.in_(payload['albs_task_ids'])
+                    Task.bs_task_id.in_(payload['bs_task_ids'])
                 )
             )
         ).scalars().all()
         task_ids = {
-            db_task.albs_task_id:db_task.task_id
+            db_task.bs_task_id:db_task.task_id
             for db_task in db_tasks
         }
 
@@ -258,7 +258,7 @@ async def cancel_task(
 
             full_url = urllib.parse.urljoin(
                 CONFIG.bs_host,
-                f'/api/v1/tests/{db_task.albs_task_id}/result/',
+                db_task.callback_href,
             )
             payload = {
                 'api_version': API_VERSION,

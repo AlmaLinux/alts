@@ -140,8 +140,9 @@ class TestsScheduler(threading.Thread):
         with Session() as session, session.begin():
             try:
                 task_record = Task(
-                    albs_task_id=payload.albs_task_id,
                     task_id=task_id,
+                    bs_task_id=payload.bs_task_id,
+                    callback_href=payload.callback_href,
                     queue_name=queue_name,
                     status='NEW',
                 )
