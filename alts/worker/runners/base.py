@@ -79,7 +79,7 @@ def command_decorator(
         @wraps(fn)
         def inner_wrapper(*args, **kwargs):
             self, *args = args
-            if not self._already_aborted:
+            if not self.already_aborted:
                 self._raise_if_aborted()
             if not self._work_dir or not os.path.exists(self._work_dir):
                 return
@@ -147,6 +147,8 @@ class BaseRunner(object):
     TEMPFILE_PREFIX = 'base_test_runner_'
     INTEGRITY_TESTS_DIR = 'package_tests'
 
+    already_aborted: bool = False
+
     def __init__(
         self,
         task_id: str,
@@ -210,7 +212,6 @@ class BaseRunner(object):
         self._artifacts = {}
         self._uploaded_logs = None
         self._stats = {}
-        self._already_aborted = False
 
     @property
     def artifacts(self):
@@ -521,7 +522,6 @@ class BaseRunner(object):
         }
         executor_params = self.get_test_executor_params()
         for test in self._test_configuration['tests']:
-            self._raise_if_aborted()
             git_ref = test.get('git_ref', 'master')
             repo_url = test['url']
             test_dir = test['test_dir']
@@ -536,6 +536,7 @@ class BaseRunner(object):
                 continue
             workdir = f'/tests/{test_repo_path.name}/{test_dir}'
             for file in Path(test_repo_path, test_dir).iterdir():
+                self._raise_if_aborted()
                 if tests_to_run and file.name not in tests_to_run:
                     continue
                 executor_class = executors_mapping.get(file.suffix)
@@ -1088,7 +1089,7 @@ class BaseRunner(object):
 
     def _raise_if_aborted(self):
         if self._task_is_aborted():
-            self._already_aborted = True
+            self.already_aborted = True
             raise AbortedTestTask
 
 
