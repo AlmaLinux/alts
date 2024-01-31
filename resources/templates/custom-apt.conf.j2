@@ -1,6 +1,3 @@
-{% if architecture %}
-APT::Architecture="{{ architecture }}";
-{% endif %}
 {% if package_proxy %}
 Acquire::http::Proxy "{{ package_proxy }}";
 Acquire::https::Proxy "{{ package_proxy }}";
@@ -9,7 +6,9 @@ APT::Get::AllowUnauthenticated "true";
 Acquire::AllowInsecureRepositories "true";
 Acquire::ForceIPv4 "true";
 Acquire::Check-Valid-Until "false";
-Acquire::Languages=none;
+Acquire::Languages none;
+Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled false;
+Acquire::IndexTargets::deb::CNF::DefaultEnabled false;
 {% if development_mode %}
 Acquire::https {
     Verify-Peer "false";

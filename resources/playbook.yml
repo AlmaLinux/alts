@@ -26,7 +26,7 @@
             section: main
             option: proxy
             value: "{{ package_proxy }}"
-          when: "package_proxy is defined and package_proxy"
+          when: "package_proxy is defined and package_proxy and package_proxy | lower != 'none'"
 
         - name: Install epel-release
           yum:
@@ -94,6 +94,17 @@
             name: "*"
             state: latest
 
+        - name: Install custom apt.conf
+          template:
+            src: custom-apt.conf.j2
+            dest: /etc/apt/apt.conf.d/test-system-conf
+            mode: 0644
+            owner: root
+            group: root
+
+        - name: Update apt metadata
+          shell: apt update
+
         - name: Install additional packages
           apt:
             name:
@@ -104,14 +115,6 @@
               - ca-certificates
               - "{{ procps_pkg }}"
             state: present
-
-        - name: Install custom apt.conf
-          template:
-            src: custom-apt.conf.j2
-            dest: /etc/apt/apt.conf.d/test-system-conf
-            mode: 0644
-            owner: root
-            group: root
 
         - name: Add required repositories
           apt_repository:

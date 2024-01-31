@@ -316,6 +316,17 @@ class BaseRunner(object):
             'logging_level': 'DEBUG' if self._verbose else 'INFO'
         }
 
+    def prepare_repositories(self, repositories: List[dict]) -> List[dict]:
+        if self.dist_name in CONFIG.rhel_flavors:
+            return repositories
+        for repo in repositories:
+            url_parts = repo['url'].split(' ')
+            if url_parts[1].startswith('['):
+                continue
+            url_parts.insert(1, f'[arch={self.dist_arch}]')
+            repo['url'] = ' '.join(url_parts)
+        return repositories
+
     def add_credentials_to_build_repos(self):
         for repo in self._repositories:
             if '-br' not in repo['name']:
@@ -583,7 +594,6 @@ class BaseRunner(object):
         # variables itself as a dictionary thus doing this weird
         # temporary dictionary
         var_dict = {
-            'architecture': self.dist_arch,
             'repositories': self._repositories,
             'integrity_tests_dir': self._integrity_tests_dir,
             'connection_type': self.ansible_connection_type,
