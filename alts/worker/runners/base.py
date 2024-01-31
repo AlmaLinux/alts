@@ -12,7 +12,7 @@ import time
 import urllib.parse
 from functools import wraps
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 from mako.lookup import TemplateLookup
 from plumbum import local
@@ -32,6 +32,7 @@ from alts.shared.exceptions import (
 from alts.shared.types import ImmutableDict
 from alts.shared.uploaders.base import BaseLogsUploader, UploadError
 from alts.shared.uploaders.pulp import PulpLogsUploader
+from alts.shared.exceptions import AbortedTestTask
 from alts.shared.utils.git_utils import (
     clone_gerrit_repo,
     clone_git_repo,
@@ -78,6 +79,8 @@ def command_decorator(
         @wraps(fn)
         def inner_wrapper(*args, **kwargs):
             self, *args = args
+            if not self._already_aborted:
+                self._raise_if_aborted()
             if not self._work_dir or not os.path.exists(self._work_dir):
                 return
             start = datetime.datetime.utcnow()
@@ -147,6 +150,7 @@ class BaseRunner(object):
     def __init__(
         self,
         task_id: str,
+        task_is_aborted: Callable,
         dist_name: str,
         dist_version: Union[str, int],
         repositories: Optional[List[dict]] = None,
@@ -156,6 +160,7 @@ class BaseRunner(object):
     ):
         # Environment ID and working directory preparation
         self._task_id = task_id
+        self._task_is_aborted = task_is_aborted
         self._vm_ip = None
         if test_configuration is None:
             test_configuration = {}
@@ -205,6 +210,7 @@ class BaseRunner(object):
         self._artifacts = {}
         self._uploaded_logs = None
         self._stats = {}
+        self._already_aborted = False
 
     @property
     def artifacts(self):
@@ -515,6 +521,7 @@ class BaseRunner(object):
         }
         executor_params = self.get_test_executor_params()
         for test in self._test_configuration['tests']:
+            self._raise_if_aborted()
             git_ref = test.get('git_ref', 'master')
             repo_url = test['url']
             test_dir = test['test_dir']
@@ -1078,6 +1085,11 @@ class BaseRunner(object):
             stderr,
         )
         return False
+
+    def _raise_if_aborted(self):
+        if self._task_is_aborted():
+            self._already_aborted = True
+            raise AbortedTestTask
 
 
 class GenericVMRunner(BaseRunner):

@@ -20,6 +20,7 @@ __all__ = [
     'PackageIntegrityTestsError',
     'UninstallPackageError',
     'VMImageNotFound',
+    'AbortedTestTask',
 ]
 
 
@@ -80,4 +81,9 @@ class ThirdPartyTestError(ALTSBaseError):
 
 
 class SystemInfoCmdError(ALTSBaseError):
+    pass
+
+
+class AbortedTestTask(ALTSBaseError):
+    """A test task has been aborted"""
     pass

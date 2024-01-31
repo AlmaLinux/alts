@@ -25,6 +25,7 @@ from alts.shared.exceptions import (
     StopEnvironmentError,
     TerraformInitializationError,
     UninstallPackageError,
+    AbortedTestTask,
 )
 from alts.worker import CONFIG
 from alts.worker.app import celery_app
@@ -34,10 +35,6 @@ from alts.worker.runners.docker import DockerRunner
 from alts.worker.runners.opennebula import OpennebulaRunner
 
 __all__ = ['run_tests']
-
-
-class RevokedTask(Exception):
-    pass
 
 
 def are_tap_tests_success(tests_output: str):
@@ -84,12 +81,7 @@ def run_tests(self, task_params: dict):
     dict
         Result summary of a test execution.
     """
-    revoked = False
-    def is_revoked():
-        nonlocal revoked
-        revoked = self.is_aborted()
-        if revoked:
-            raise RevokedTask
+    aborted = False
 
     def is_success(stage_data_: dict):
         tap_result = are_tap_tests_success(stage_data_['stdout'])
@@ -127,6 +119,7 @@ def run_tests(self, task_params: dict):
 
     runner_args = (
         task_params['task_id'],
+        self.is_aborted,
         task_params['dist_name'],
         task_params['dist_version'],
     )
@@ -149,7 +142,6 @@ def run_tests(self, task_params: dict):
         package_name = task_params['package_name']
         package_version = task_params.get('package_version')
         runner.setup()
-        is_revoked()
         runner.run_system_info_commands()
         runner.install_package(
             package_name,
@@ -158,12 +150,9 @@ def run_tests(self, task_params: dict):
             module_stream=module_stream,
             module_version=module_version,
         )
-        is_revoked()
         if CONFIG.enable_integrity_tests:
             runner.run_package_integrity_tests(package_name, package_version)
-        is_revoked()
         runner.run_third_party_tests()
-        is_revoked()
         runner.uninstall_package(
             package_name,
             package_version,
@@ -185,11 +174,12 @@ def run_tests(self, task_params: dict):
         logging.exception('Cannot uninstall package: %s', exc)
     except StopEnvironmentError as exc:
         logging.exception('Cannot stop environment: %s', exc)
-    except RevokedTask:
+    except AbortedTestTask:
         logging.warning(
-            'Task %s has been revoked. Gracefully stopping test.',
+            'Task %s has been aborted. Gracefully stopping tests.',
             task_params['task_id']
         )
+        aborted = True
 
     except Exception as exc:
         logging.exception('Unexpected exception: %s', exc)
@@ -201,7 +191,7 @@ def run_tests(self, task_params: dict):
     finally:
         runner.teardown()
         summary = defaultdict(dict)
-        if revoked:
+        if aborted:
             summary['revoked'] = True
         else:
             for stage, stage_data in runner.artifacts.items():
