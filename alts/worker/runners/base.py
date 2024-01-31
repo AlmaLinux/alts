@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 from mako.lookup import TemplateLookup
-from plumbum import local
+from plumbum import local, ProcessExecutionError, ProcessTimedOut
 
 from alts.shared.exceptions import (
     InstallPackageError,
@@ -888,13 +888,16 @@ class BaseRunner(object):
         if CONFIG.git_reference_directory:
             repo_reference_dir = os.path.join(
                 CONFIG.git_reference_directory, repo_name)
-        return func(
-            repo_url,
-            git_ref,
-            self._work_dir,
-            self._logger,
-            reference_directory=repo_reference_dir
-        )
+        try:
+            return func(
+                repo_url,
+                git_ref,
+                self._work_dir,
+                self._logger,
+                reference_directory=repo_reference_dir
+            )
+        except (ProcessExecutionError, ProcessTimedOut):
+            return None
 
     def run_third_party_test(
         self,
@@ -1276,7 +1279,9 @@ class GenericVMRunner(BaseRunner):
 
     def setup(self, skip_provision: bool = False):
         super().setup(skip_provision=skip_provision)
-        self._ssh_client = AsyncSSHClient(**self.default_ssh_params)
+        params = self.default_ssh_params
+        params['timeout'] = CONFIG.provision_timeout
+        self._ssh_client = AsyncSSHClient(**params)
 
     def clone_third_party_repo(
             self,
