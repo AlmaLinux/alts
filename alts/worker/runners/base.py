@@ -206,7 +206,8 @@ class BaseRunner(object):
         )
 
         # Package installation and test stuff
-        self._repositories = repositories or []
+        repos = repositories or []
+        self._repositories = self.prepare_repositories(repos)
         self.add_credentials_to_build_repos()
 
         self._artifacts = {}
