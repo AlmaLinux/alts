@@ -322,7 +322,7 @@ class BaseRunner(object):
             return repositories
         for repo in repositories:
             self._logger.debug('Repository initial state: %s', repo)
-            if not repo['url'].starstwith('deb'):
+            if not repo['url'].startswith('deb'):
                 continue
             url_parts = repo['url'].split(' ')
             if url_parts[1].startswith('['):
