@@ -1026,12 +1026,12 @@ class BaseRunner(object):
                 f'{file_base_name}_{self._task_id}.log',
             )
             with open(log_file_path, 'wb') as fd:
-                stdout = replace_host_name(artifacts_section["stdout"])
+                stdout_ = replace_host_name(artifacts_section["stdout"])
                 file_content = (
                     f'\nTask ID: {self._task_id}\n'
                     f'Time: {datetime.datetime.utcnow().isoformat()}\n'
                     f'Exit code: {artifacts_section["exit_code"]}\n'
-                    f'Stdout:\n\n{stdout}'
+                    f'Stdout:\n\n{stdout_}'
                 )
                 if artifacts_section.get('stderr'):
                     stderr = replace_host_name(artifacts_section["stderr"])

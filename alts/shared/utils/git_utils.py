@@ -34,7 +34,8 @@ def clone_git_repo(
     git_ref: str,
     work_dir: Path,
     logger: Logger,
-    reference_directory: Optional[str] = None
+    reference_directory: Optional[str] = None,
+    cmd_timeout: int = 300,
 ) -> Optional[Path]:
     git_repo_path = Path(
         work_dir,
@@ -54,6 +55,7 @@ def clone_git_repo(
         args,
         retcode=None,
         cwd=work_dir,
+        timeout=cmd_timeout,
     )
     if exit_code != 0:
         logger.error(
@@ -92,7 +94,8 @@ def clone_gerrit_repo(
     git_ref: str,
     work_dir: Path,
     logger: Logger,
-    reference_directory: Optional[str] = None
+    reference_directory: Optional[str] = None,
+    cmd_timeout: int = 300,
 ) -> Optional[Path]:
     # ssh://gerrit.test.com:00000/repo
     git_repo_path = Path(work_dir, Path(repo_url).name)
@@ -107,6 +110,7 @@ def clone_gerrit_repo(
             args,
             retcode=None,
             cwd=work_dir,
+            timeout=cmd_timeout,
         )
         if exit_code != 0:
             logger.error('Cannot clone the git repo: %s\n%s', repo_url, stderr)
