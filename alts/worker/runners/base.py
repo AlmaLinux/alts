@@ -321,11 +321,15 @@ class BaseRunner(object):
         if self.dist_name in CONFIG.rhel_flavors:
             return repositories
         for repo in repositories:
+            self._logger.debug('Repository initial state: %s', repo)
+            if not repo['url'].starstwith('deb'):
+                continue
             url_parts = repo['url'].split(' ')
             if url_parts[1].startswith('['):
                 continue
             url_parts.insert(1, f'[arch={self.dist_arch}]')
             repo['url'] = ' '.join(url_parts)
+            self._logger.debug('Repository modified state: %s', repo)
         return repositories
 
     def add_credentials_to_build_repos(self):
