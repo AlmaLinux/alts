@@ -74,12 +74,13 @@ def command_decorator(
     error_message,
     exception_class=None,
     additional_section_name=None,
+    is_abortable=True,
 ):
     def method_wrapper(fn):
         @wraps(fn)
         def inner_wrapper(*args, **kwargs):
             self, *args = args
-            if not self.already_aborted:
+            if is_abortable and not self.already_aborted:
                 self._raise_if_aborted()
             if not self._work_dir or not os.path.exists(self._work_dir):
                 return
@@ -682,6 +683,7 @@ class BaseRunner(object):
         'start_environment',
         'Cannot start environment',
         exception_class=StartEnvironmentError,
+        is_abortable=False,
     )
     def start_env(self):
         self._logger.info(
@@ -965,6 +967,7 @@ class BaseRunner(object):
         'stop_environment',
         'Cannot destroy environment',
         exception_class=StopEnvironmentError,
+        is_abortable=False,
     )
     def stop_env(self):
         if os.path.exists(self._work_dir):
@@ -1151,6 +1154,7 @@ class GenericVMRunner(BaseRunner):
         'start_environment',
         'Cannot start environment',
         exception_class=StartEnvironmentError,
+        is_abortable=False,
     )
     def start_env(self):
         super().start_env()
