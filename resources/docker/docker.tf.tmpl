@@ -19,3 +19,7 @@ resource "docker_image" "${dist_name}" {
   name         = "${image_name}"
   keep_locally = true
 }
+
+output "container_id" {
+  value = docker_container.${container_name}.id
+}
