@@ -28,6 +28,13 @@
             value: "{{ package_proxy }}"
           when: "package_proxy is defined and package_proxy and package_proxy | lower != 'none'"
 
+        - name: Remove nodocs param from YUM config
+          ini_file:
+            path: /etc/yum.conf
+            section: main
+            option: tsflags
+            state: absent
+
         - name: Install epel-release
           yum:
             name: epel-release
