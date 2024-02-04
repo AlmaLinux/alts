@@ -17,6 +17,7 @@ resource "docker_container" "${container_name}" {
 
 resource "docker_image" "${dist_name}" {
   name         = "${image_name}"
+  platform     = "${image_platform}"
   keep_locally = true
 }
 

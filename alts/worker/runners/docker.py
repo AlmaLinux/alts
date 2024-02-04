@@ -29,6 +29,20 @@ from alts.worker.runners.base import (
 __all__ = ['DockerRunner']
 
 
+ARCH_PLATFORM_MAPPING = {
+    'i386': 'linux/386',
+    'i486': 'linux/386',
+    'i586': 'linux/386',
+    'i686': 'linux/386',
+    'amd64': 'linux/amd64',
+    'x86_64': 'linux/amd64',
+    'arm64': 'linux/arm64/v8',
+    'aarch64': 'linux/arm64/v8',
+    'ppc64le': 'linux/ppc64le',
+    's390x': 'linux/s390x',
+}
+
+
 class DockerRunner(BaseRunner):
     """Docker environment runner for testing tasks."""
 
@@ -86,14 +100,16 @@ class DockerRunner(BaseRunner):
         docker_tf_file = os.path.join(self._work_dir, self.TF_MAIN_FILE)
         image_name = f'{self.dist_name}:{self.dist_version}'
         external_network = os.environ.get('EXTERNAL_NETWORK', None)
+        image_platform = ARCH_PLATFORM_MAPPING.get(self.dist_arch)
 
         self._render_template(
             f'{self.TF_MAIN_FILE}.tmpl',
             docker_tf_file,
-            dist_name=self.dist_name,
-            image_name=image_name,
             container_name=self.env_name,
             external_network=external_network,
+            dist_name=self.dist_name,
+            image_name=image_name,
+            image_platform=image_platform,
         )
 
     def _render_tf_variables_file(self):
