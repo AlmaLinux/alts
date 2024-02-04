@@ -1,4 +1,4 @@
-{% if package_proxy %}
+{% if package_proxy and package_proxy|lower != 'none' %}
 Acquire::http::Proxy "{{ package_proxy }}";
 Acquire::https::Proxy "{{ package_proxy }}";
 {% endif %}
