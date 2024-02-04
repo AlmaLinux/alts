@@ -308,13 +308,18 @@ class BaseRunner(object):
 
     @property
     def default_ssh_params(self) -> Dict[str, Any]:
+        max_keepalive_msgs = (
+            CONFIG.tests_exec_timeout // CONFIG.keepalive_interval
+        ) + 5
         return {
             'host': self.vm_ip or '',
             'username': 'root',
             'client_keys_files': ['~/.ssh/id_rsa.pub'],
             'disable_known_hosts_check': True,
             'ignore_encrypted_keys': True,
-            'logging_level': 'DEBUG' if self._verbose else 'INFO'
+            'logging_level': 'DEBUG' if self._verbose else 'INFO',
+            'keepalive_interval': CONFIG.keepalive_interval,
+            'keepalive_count_max': max_keepalive_msgs,
         }
 
     def prepare_repositories(self, repositories: List[dict]) -> List[dict]:

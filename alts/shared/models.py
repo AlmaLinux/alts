@@ -285,6 +285,7 @@ class CeleryConfig(BaseModel):
         'kernel',
         'dnf',
     ]
+    keepalive_interval: int = 30  # unit in seconds
     commands_exec_timeout: int = 30  # unit in seconds
     provision_timeout: int = 600  # 10 minutes in seconds
     tests_exec_timeout: int = 3600  # 1 hour in seconds
