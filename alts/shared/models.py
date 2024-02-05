@@ -7,11 +7,11 @@ from typing import (
     List,
     Literal,
     Optional,
-    Tuple,
     Union,
+    Set,
 )
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, computed_field
 
 from alts.shared import constants
 
@@ -48,7 +48,7 @@ class AsyncSSHParams(BaseModel):
     keepalive_count_max: int = 3
     logger: Optional[Logger] = None
     logger_name: str = 'asyncssh-client'
-    logging_level: Literal['DEBUG', 'INFO'] = 'DEBUG'
+    logging_level: Literal['DEBUG', 'INFO'] = 'INFO'
     preferred_auth: Union[
         str,
         List[str],
@@ -84,6 +84,7 @@ class TaskRequestPayload(BaseModel):
     module_stream: Optional[str] = None
     module_version: Optional[str] = None
     callback_href: Optional[str] = None
+    verbose: bool = False
 
 
 class TaskRequestResponse(BaseModel):
@@ -142,7 +143,7 @@ class OpennebulaConfig(BaseModel):
     password: Optional[str] = None
     vm_group: Optional[str] = None
     default_vm_disk_size: Optional[int] = 15000
-    default_vm_ram_size: Optional[int] = 1024
+    default_vm_ram_size: Optional[int] = 1536
     network: Optional[str] = None
 
 
@@ -191,9 +192,9 @@ class RedisBrokerConfig(BaseBrokerConfig):
 
 
 class AzureResultsConfig(BaseResultsConfig):
-    azureblockblob_container_name: str
+    azureblockblob_container_name: Optional[str] = None
     azureblockblob_base_path: str = 'celery_result_backend/'
-    azure_connection_string: str
+    azure_connection_string: Optional[str] = None
 
 
 class FilesystemResultsConfig(BaseResultsConfig):
@@ -214,13 +215,13 @@ class S3ResultsConfig(BaseResultsConfig):
 
 
 class AzureLogsConfig(BaseLogsConfig, AzureResultsConfig):
-    azure_logs_container: str
+    azure_logs_container: Optional[str] = None
 
 
 class PulpLogsConfig(BaseLogsConfig):
-    pulp_host: str
-    pulp_user: str
-    pulp_password: str
+    pulp_host: Optional[str] = None
+    pulp_user: Optional[str] = None
+    pulp_password: Optional[str] = None
 
 
 class CeleryConfig(BaseModel):
@@ -244,9 +245,9 @@ class CeleryConfig(BaseModel):
     broker_config: Union[RabbitmqBrokerConfig, RedisBrokerConfig]
     opennebula_config: Optional[OpennebulaConfig] = None
     results_backend_config: Union[
-        AzureResultsConfig,
-        FilesystemResultsConfig,
         RedisResultsConfig,
+        FilesystemResultsConfig,
+        AzureResultsConfig,
         S3ResultsConfig,
     ]
     result_backend_always_retry: bool = True
@@ -262,36 +263,46 @@ class CeleryConfig(BaseModel):
     azure_connection_string: Optional[str] = None
     task_default_queue: str = 'default'
     task_acks_late: bool = True
-    enable_integrity_tests: bool = True
     task_track_started: bool = True
     worker_prefetch_multiplier: int = 1
     broker_pool_limit: int = 20
     # Task track timeout
     task_tracking_timeout: int = 3600
+    # Application-level settings
     # Supported architectures and distributions
     supported_architectures: List[str] = constants.SUPPORTED_ARCHITECTURES
-    supported_distributions: List[str] = constants.SUPPORTED_DISTRIBUTIONS
     rhel_flavors: List[str] = constants.RHEL_FLAVORS
     debian_flavors: List[str] = constants.DEBIAN_FLAVORS
     supported_runners: Union[List[str], str] = 'all'
     allowed_channel_names: List[str] = constants.ALLOWED_CHANNELS
+    enable_integrity_tests: bool = True
     gerrit_username: str = ''
-    # SSH section
-    ssh_public_key_path: str = '~/.ssh/id_rsa.pub'
     # Build system settings
     bs_host: Optional[str] = None
     bs_tasks_endpoint: str = '/api/v1/tests/get_test_tasks/'
     bs_token: Optional[str] = None
     # Log uploader settings
     logs_uploader_config: Optional[
-        Union[AzureLogsConfig, PulpLogsConfig]
+        Union[PulpLogsConfig, AzureLogsConfig]
     ] = None
     uninstall_excluded_pkgs: List[str] = [
         'almalinux-release',
         'kernel',
         'dnf',
     ]
+    keepalive_interval: int = 30  # unit in seconds
     commands_exec_timeout: int = 30  # unit in seconds
+    provision_timeout: int = 600  # 10 minutes in seconds
+    tests_exec_timeout: int = 3600  # 1 hour in seconds
+    deprecated_ansible_venv: str = '/code/ansible_env'
+    centos_6_epel_release_url: str = (
+        'https://dl.fedoraproject.org/pub/archive/epel/6/x86_64/'
+        'epel-release-6-8.noarch.rpm'
+    )
+    git_reference_directory: Optional[str] = None
+    tests_base_dir: str = '/tests'
+    package_proxy: Optional[str] = None
+    development_mode: bool = False
 
     @property
     def result_backend(self) -> str:
@@ -309,6 +320,11 @@ class CeleryConfig(BaseModel):
     @property
     def broker_url(self) -> str:
         return self.broker_config.broker_url
+
+    @computed_field(return_type=Set[str])
+    @property
+    def supported_distributions(self):
+        return set(self.rhel_flavors + self.debian_flavors)
 
 
 class SchedulerConfig(CeleryConfig):

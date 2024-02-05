@@ -23,7 +23,7 @@ class TestDockerRunner:
             pytest.param(
                 ('test_id_2', task_is_aborted, 'centos', '7'),
                 'yum',
-                id='centos_8',
+                id='centos_7',
             ),
             pytest.param(
                 ('test_id_3', task_is_aborted, 'centos', '8'),

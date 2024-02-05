@@ -24,6 +24,7 @@ from alts.shared.exceptions import (
     StartEnvironmentError,
     StopEnvironmentError,
     TerraformInitializationError,
+    ThirdPartyTestError,
     UninstallPackageError,
     AbortedTestTask,
 )
@@ -84,7 +85,7 @@ def run_tests(self, task_params: dict):
     aborted = False
 
     def is_success(stage_data_: dict):
-        tap_result = are_tap_tests_success(stage_data_['stdout'])
+        tap_result = are_tap_tests_success(stage_data_.get('stdout', ''))
         if tap_result is not None:
             return tap_result
         return stage_data_['exit_code'] == 0
@@ -165,11 +166,13 @@ def run_tests(self, task_params: dict):
     except StartEnvironmentError as exc:
         logging.exception('Cannot start environment: %s', exc)
     except ProvisionError as exc:
-        logging.exception('Cannot initial provision: %s', exc)
+        logging.exception('Cannot run initial provision: %s', exc)
     except InstallPackageError as exc:
         logging.exception('Cannot install package: %s', exc)
     except PackageIntegrityTestsError as exc:
         logging.exception('Package integrity tests failed: %s', exc)
+    except ThirdPartyTestError as exc:
+        logging.exception('Third party tests failed: %s', exc)
     except UninstallPackageError as exc:
         logging.exception('Cannot uninstall package: %s', exc)
     except StopEnvironmentError as exc:
@@ -213,7 +216,8 @@ def run_tests(self, task_params: dict):
                     if CONFIG.logs_uploader_config.skip_artifacts_upload:
                         stage_info.update(inner_data)
                     summary[stage][inner_stage] = stage_info
-            summary['logs'] = runner.uploaded_logs
+            if runner.uploaded_logs:
+                summary['logs'] = runner.uploaded_logs
         if task_params.get('callback_href'):
             full_url = urllib.parse.urljoin(
                 CONFIG.bs_host,

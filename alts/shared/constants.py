@@ -11,6 +11,7 @@ __all__ = [
     'SUPPORTED_DISTRIBUTIONS',
     'DEFAULT_REQUEST_TIMEOUT',
     'DEFAULT_UPLOADER_CONCURRENCY',
+    'DEFAULT_SSH_AUTH_METHODS',
 ]
 
 
@@ -21,6 +22,7 @@ ARCHITECTURES = ('x86_64', 'aarch64', 'ppc64le', 's390x')
 DRIVERS = ('docker', 'opennebula')
 SUPPORTED_ARCHITECTURES = [
     'x86_64',
+    'i386',
     'i686',
     'amd64',
     'arm64',
@@ -29,7 +31,12 @@ SUPPORTED_ARCHITECTURES = [
     's390x',
 ]
 SUPPORTED_DISTRIBUTIONS = ['almalinux', 'centos', 'ubuntu', 'debian']
-RHEL_FLAVORS = ['rhel', 'fedora', 'centos', 'almalinux', 'cloudlinux']
+RHEL_FLAVORS = [
+    'rhel',
+    'fedora',
+    'centos',
+    'almalinux',
+]
 DEBIAN_FLAVORS = ['debian', 'ubuntu', 'raspbian']
 ALLOWED_CHANNELS = ['stable', 'beta']
 

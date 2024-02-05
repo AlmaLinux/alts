@@ -13,6 +13,7 @@ from plumbum import local
 from alts.shared.exceptions import (
     PackageIntegrityTestsError,
     ProvisionError,
+    StopEnvironmentError,
     ThirdPartyTestError,
 )
 from alts.worker import CONFIG
@@ -26,6 +27,20 @@ from alts.worker.runners.base import (
 )
 
 __all__ = ['DockerRunner']
+
+
+ARCH_PLATFORM_MAPPING = {
+    'i386': 'linux/386',
+    'i486': 'linux/386',
+    'i586': 'linux/386',
+    'i686': 'linux/386',
+    'amd64': 'linux/amd64',
+    'x86_64': 'linux/amd64',
+    'arm64': 'linux/arm64/v8',
+    'aarch64': 'linux/arm64/v8',
+    'ppc64le': 'linux/ppc64le',
+    's390x': 'linux/s390x',
+}
 
 
 class DockerRunner(BaseRunner):
@@ -44,6 +59,7 @@ class DockerRunner(BaseRunner):
         repositories: Optional[List[dict]] = None,
         dist_arch: str = 'x86_64',
         test_configuration: Optional[dict] = None,
+        verbose: bool = False,
     ):
         """
         Docker environment class initialization.
@@ -69,6 +85,7 @@ class DockerRunner(BaseRunner):
             repositories=repositories,
             dist_arch=dist_arch,
             test_configuration=test_configuration,
+            verbose=verbose,
         )
         self._ansible_connection_type = 'docker'
 
@@ -85,14 +102,16 @@ class DockerRunner(BaseRunner):
         docker_tf_file = os.path.join(self._work_dir, self.TF_MAIN_FILE)
         image_name = f'{self.dist_name}:{self.dist_version}'
         external_network = os.environ.get('EXTERNAL_NETWORK', None)
+        image_platform = ARCH_PLATFORM_MAPPING.get(self.dist_arch)
 
         self._render_template(
             f'{self.TF_MAIN_FILE}.tmpl',
             docker_tf_file,
-            dist_name=self.dist_name,
-            image_name=image_name,
             container_name=self.env_name,
             external_network=external_network,
+            dist_name=self.dist_name,
+            image_name=image_name,
+            image_platform=image_platform,
         )
 
     def _render_tf_variables_file(self):
@@ -125,10 +144,9 @@ class DockerRunner(BaseRunner):
             'Running "docker %s" command',
             ' '.join(cmd),
         )
-        return local['docker'].run(
+        return local['docker'].with_cwd(self._work_dir).run(
             args=tuple(cmd),
             retcode=None,
-            cwd=self._work_dir,
         )
 
     def _copy(self, copy_args: List[str]):
@@ -140,6 +158,11 @@ class DockerRunner(BaseRunner):
             retcode=None,
         )
 
+    @command_decorator(
+        'initial_provision',
+        'Cannot run initial provision',
+        exception_class=ProvisionError,
+    )
     def initial_provision(self, verbose=False):
         """
         Creates initial provision inside docker container.
@@ -160,20 +183,41 @@ class DockerRunner(BaseRunner):
             or installing.
         """
         # Installing python3 package before running Ansible
+        # This is needed because Debian/Ubuntu docker images
+        # may not have python as pre-installed package
         if self._dist_name in CONFIG.debian_flavors:
+            # Debian 9 has its repos in archive now + the archive
+            # does not contain updates repository, so hacking sources.list
+            if self.dist_name == 'debian' and self.dist_version.startswith('9'):
+                self._exec((
+                    'sed',
+                    '-E',
+                    '-i',
+                    r's/.*(stretch-updates).*//',
+                    '/etc/apt/sources.list',
+                ))
+                self._exec((
+                    'sed',
+                    '-E',
+                    '-i',
+                    r's/(deb|security)\.debian\.org/archive\.debian\.org/',
+                    '/etc/apt/sources.list',
+                ))
             self._logger.info('Installing python3 package...')
-            exit_code, _, stderr = self._exec(
+            exit_code, stdout, stderr = self._exec(
                 (self.pkg_manager, 'update'),
             )
             if exit_code != 0:
-                raise ProvisionError(f'Cannot update metadata: {stderr}')
+                return exit_code, stdout, stderr
             cmd_args = (self.pkg_manager, 'install', '-y', 'python3')
-            exit_code, _, stderr = self._exec(cmd_args)
+            exit_code, stdout, stderr = self._exec(cmd_args)
             if exit_code != 0:
-                raise ProvisionError(
-                    f'Cannot install package python3: {stderr}'
-                )
+                return exit_code, stdout, stderr
             self._logger.info('Installation is completed')
+        if self.dist_name in CONFIG.rhel_flavors and self.dist_version == '6':
+            self._logger.info('Removing old repositories')
+            self._exec(('find', '/etc/yum.repos.d', '-type', 'f', '-exec',
+                        'rm', '-f', '{}', '+'))
         return super().initial_provision(verbose=verbose)
 
     @command_decorator(
@@ -204,7 +248,10 @@ class DockerRunner(BaseRunner):
 
         """
         tests_dir_basename = os.path.basename(self._integrity_tests_dir)
-        remote_tests_path = os.path.join('/tests', tests_dir_basename)
+        remote_tests_path = os.path.join(
+            CONFIG.tests_base_dir,
+            tests_dir_basename,
+        )
         cmd_args = ['py.test', '--tap-stream', '--package-name', package_name]
         if package_version:
             full_pkg_name = f'{package_name}-{package_version}'
@@ -257,3 +304,21 @@ class DockerRunner(BaseRunner):
             f'{self.env_name}:/tests/{test_repo_path.name}',
         ])
         return test_repo_path
+
+    @command_decorator(
+        'stop_environment',
+        'Cannot destroy environment',
+        exception_class=StopEnvironmentError,
+    )
+    def stop_env(self):
+        _, container_id, _ = local['terraform'].with_cwd(
+            self._work_dir).run(
+            args=('output', '-raw', '-no-color', 'container_id'),
+            retcode=None,
+            timeout=CONFIG.provision_timeout,
+        )
+        try:
+            return super().stop_env()
+        except StopEnvironmentError:
+            # Attempt to delete environment via plain docker command
+            return self._exec(('rm', '-f', container_id))

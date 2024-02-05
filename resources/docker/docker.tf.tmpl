@@ -11,10 +11,16 @@ resource "docker_container" "${container_name}" {
   networks_advanced {
     name = "${external_network}"
   }
+  dns = ["1.1.1.1", "8.8.8.8"]
 % endif
 }
 
 resource "docker_image" "${dist_name}" {
   name         = "${image_name}"
+  platform     = "${image_platform}"
   keep_locally = true
+}
+
+output "container_id" {
+  value = docker_container.${container_name}.id
 }
