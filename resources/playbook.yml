@@ -2,18 +2,84 @@
 - name: Prepare environment
   hosts: all
   remote_user: root
+  vars:
+    procps_pkg: "procps"
   tasks:
     - name: Initial provision (RedHat-like distros)
       block:
-        - name: Update all packages
+        - name: Add os and updates repositories
+          yum_repository:
+            name: "centos-6-{{ item }}"
+            baseurl: "https://vault.centos.org/6.10/{{ item }}/$basearch/"
+            description: "CentOS 6 {{ item }} repository"
+            enabled: yes
+            gpgcheck: yes
+            gpgkey: https://vault.centos.org/6.10/os/$basearch/RPM-GPG-KEY-CentOS-6
+          with_items:
+            - "os"
+            - "updates"
+          when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version == '6'"
+
+        - name: Add YUM proxy
+          ini_file:
+            path: /etc/yum.conf
+            section: main
+            option: proxy
+            value: "{{ package_proxy }}"
+          when: "package_proxy is defined and package_proxy and package_proxy | lower != 'none'"
+
+        - name: Remove nodocs param from YUM config
+          ini_file:
+            path: /etc/yum.conf
+            section: main
+            option: tsflags
+            state: absent
+
+        - name: Install epel-release
           yum:
+            name: epel-release
+            state: present
+          when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version != '6'"
+
+        - name: Install epel-release
+          yum:
+            name: "{{ centos_6_epel_release_url }}"
+            state: present
+          when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version == '6'"
+
+        - name: Re-define procps package name
+          set_fact:
+            procps_pkg: "procps-ng"
+          when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version > '6'"
+
+        - name: Update all packages
+          package:
             name: "*"
             state: latest
 
-        - name: Install file package
+        - name: Install additional packages
           yum:
-            name: ["file", "python3-pip", "iproute"]
+            name:
+              - ansible
+              - bats
+              - file
+              - iproute
+              - "{{ procps_pkg }}"
+            enablerepo: epel
             state: present
+
+        - name: Install pip package (8 and higher)
+          dnf:
+            name: ["python3-pip", "python3-setuptools"]
+            state: present
+          when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version >= '8'"
+
+        - name: Install pip package (7 and less)
+          yum:
+            name: [ "python-pip", "python-setuptools" ]
+            state: present
+            enablerepo: epel
+          when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version < '8'"
 
         - name: Add required repositories
           yum_repository:
@@ -35,15 +101,33 @@
             name: "*"
             state: latest
 
+        - name: Install custom apt.conf
+          template:
+            src: custom-apt.conf.j2
+            dest: /etc/apt/apt.conf.d/99test-system-conf
+            mode: 0644
+            owner: root
+            group: root
+
+        - name: Update apt metadata
+          shell: apt update
+
         - name: Install additional packages
           apt:
-            name: "python3-pip"
-            state: latest
+            name:
+              - ansible
+              - apt-transport-https
+              - bats
+              - python3-pip
+              - ca-certificates
+              - "{{ procps_pkg }}"
+            state: present
 
         - name: Add required repositories
           apt_repository:
             repo: "{{ item.url }}"
             filename: 'test_repos'
+            update_cache: yes
           with_items: "{{ repositories }}"
           when: repositories is defined and (repositories | length > 0)
       when: ansible_distribution_file_variety == 'Debian'
@@ -65,42 +149,6 @@
           - pytest-check
           - pytest-tap
       when: pytest_is_needed | bool
-      tags:
-        - initial_provision
-
-    - name: Install binaries for test executors
-      yum:
-        name:
-          - epel-release
-          - git
-        state: latest
-      when: ansible_distribution_file_variety == 'RedHat'
-      ignore_errors: true
-      tags:
-        - initial_provision
-
-    - name: Install ansible
-      yum:
-        name:
-          - ansible-core
-        state: latest
-      when: ansible_distribution_file_variety == 'RedHat' and connection_type == 'ssh'
-      ignore_errors: true
-      tags:
-        - initial_provision
-
-    - name: Install bats
-      block:
-        - name: Gather the package facts
-          package_facts:
-            manager: auto
-        - name: Install missing bats
-          shell: |
-            git clone https://github.com/bats-core/bats-core.git
-            cd bats-core
-            sh ./install.sh /usr/local
-          ignore_errors: true
-          when: "'bats' not in ansible_facts.packages"
       tags:
         - initial_provision
 

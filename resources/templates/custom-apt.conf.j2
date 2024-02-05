@@ -1,0 +1,17 @@
+{% if package_proxy and package_proxy|lower != 'none' %}
+Acquire::http::Proxy "{{ package_proxy }}";
+Acquire::https::Proxy "{{ package_proxy }}";
+{% endif %}
+APT::Get::AllowUnauthenticated "true";
+Acquire::AllowInsecureRepositories "true";
+Acquire::ForceIPv4 "true";
+Acquire::Check-Valid-Until "false";
+Acquire::Languages none;
+Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled false;
+Acquire::IndexTargets::deb::CNF::DefaultEnabled false;
+{% if development_mode %}
+Acquire::https {
+    Verify-Peer "false";
+    Verify-Host "false";
+}
+{% endif %}

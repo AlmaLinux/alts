@@ -5,6 +5,7 @@ from traceback import format_exc
 from typing import Any, Dict, List, Literal, Optional, Union
 
 from asyncssh import (
+    SSHClientConnectionOptions,
     SSHCompletedProcess,
     SSHKey,
     connect,
@@ -85,6 +86,7 @@ class AsyncSSHClient:
 
     @asynccontextmanager
     async def get_connection(self):
+        options = SSHClientConnectionOptions(agent_forwarding=True)
         async with connect(
             host=self.host,
             username=self.username,
@@ -96,6 +98,7 @@ class AsyncSSHClient:
             ignore_encrypted=self.ignore_encrypted_keys,
             keepalive_interval=self.keepalive_interval,
             keepalive_count_max=self.keepalive_count_max,
+            options=options,
         ) as conn:
             yield conn
 
@@ -119,14 +122,20 @@ class AsyncSSHClient:
                     result.stdout,
                     result.stderr,
                 )
-            except Exception:
-                self.logger.exception('Cannot execute SSH command:')
+            except TimeoutError:
+                self.logger.exception('Cannot execute SSH command due to timeout:')
                 exit_code, stdout, stderr = 1, '', format_exc()
-            return CommandResult(
-                exit_code=1 if exit_code is None else exit_code,
-                stdout=stdout,
-                stderr=stderr,
-            )
+            except Exception:
+                self.logger.exception(
+                    'Cannot execute SSH command due to unexpected exception:'
+                )
+                exit_code, stdout, stderr = 1, '', format_exc()
+            finally:
+                return CommandResult(
+                    exit_code=1 if exit_code is None else exit_code,
+                    stdout=stdout,
+                    stderr=stderr,
+                )
 
     def sync_run_command(
         self,

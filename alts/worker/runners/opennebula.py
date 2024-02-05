@@ -6,19 +6,13 @@
 
 import os
 import re
-from pathlib import Path
 from typing import List, Optional, Union
 
 import pyone
 
-from alts.shared.exceptions import ThirdPartyTestError, VMImageNotFound
-from alts.shared.utils.asyncssh import AsyncSSHClient
-from alts.shared.utils.git_utils import prepare_gerrit_command
+from alts.shared.exceptions import VMImageNotFound
 from alts.worker import CONFIG
-from alts.worker.executors.ansible import AnsibleExecutor
-from alts.worker.executors.bats import BatsExecutor
-from alts.worker.executors.shell import ShellExecutor
-from alts.worker.runners.base import GenericVMRunner, command_decorator
+from alts.worker.runners.base import GenericVMRunner
 
 __all__ = ['OpennebulaRunner']
 
@@ -40,6 +34,7 @@ class OpennebulaRunner(GenericVMRunner):
         dist_arch: str = 'x86_64',
         package_channel: Optional[str] = None,
         test_configuration: Optional[dict] = None,
+        verbose: bool = False,
     ):
         super().__init__(
             task_id,
@@ -48,6 +43,7 @@ class OpennebulaRunner(GenericVMRunner):
             repositories=repositories,
             dist_arch=dist_arch,
             test_configuration=test_configuration,
+            verbose=verbose,
         )
         self.package_channel = package_channel
         user = CONFIG.opennebula_config.username
@@ -56,8 +52,6 @@ class OpennebulaRunner(GenericVMRunner):
             uri=CONFIG.opennebula_config.rpc_endpoint,
             session=f'{user}:{password}',
         )
-        self._tests_dir = '/tests/'
-        self._ssh_client: Optional[AsyncSSHClient] = None
 
     def find_template_and_image_ids(
         self,
@@ -161,67 +155,3 @@ class OpennebulaRunner(GenericVMRunner):
             opennebula_username=CONFIG.opennebula_config.username,
             opennebula_password=CONFIG.opennebula_config.password,
         )
-
-    def setup(self):
-        super().setup()
-        self._ssh_client = AsyncSSHClient(**self.default_ssh_params)
-
-    def clone_third_party_repo(
-        self,
-        repo_url: str,
-        git_ref: str,
-    ) -> Optional[Path]:
-        git_repo_path = super().clone_third_party_repo(repo_url, git_ref)
-        if not git_repo_path:
-            return
-        if self._ssh_client:
-            self._ssh_client.sync_run_command(
-                f'cd {self._tests_dir} && git clone {repo_url}'
-            )
-            repo_path = Path(
-                self._tests_dir,
-                Path(repo_url).name.replace('.git', ''),
-            )
-            command = f'git fetch origin && git checkout {git_ref}'
-            if 'gerrit' in repo_url:
-                command = prepare_gerrit_command(git_ref)
-            result = self._ssh_client.sync_run_command(
-                f'cd {repo_path} && {command}',
-            )
-            if not result.is_successful():
-                self._logger.error(
-                    'Cannot prepare git repository:\n%s',
-                    result.stderr,
-                )
-                return
-        return git_repo_path
-
-    @command_decorator(
-        '',
-        'Third party tests failed',
-        exception_class=ThirdPartyTestError,
-    )
-    def run_third_party_test(
-        self,
-        executor: Union[AnsibleExecutor, BatsExecutor, ShellExecutor],
-        cmd_args: List[str],
-        docker_args: Optional[List[str]] = None,
-        workdir: str = '',
-        artifacts_key: str = '',
-        additional_section_name: str = '',
-        env_vars: Optional[List[str]] = None,
-    ):
-        return (
-            executor.run_ssh_command(
-                cmd_args=cmd_args,
-                workdir=workdir,
-                env_vars=env_vars,
-            )
-            .model_dump()
-            .values()
-        )
-
-    def run_third_party_tests(self):
-        if self._ssh_client:
-            self._ssh_client.sync_run_command(f'mkdir -p {self._tests_dir}')
-        return super().run_third_party_tests()

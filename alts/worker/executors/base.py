@@ -41,7 +41,7 @@ class BaseExecutor:
         timeout: Optional[int] = None,
         logger: Optional[logging.Logger] = None,
         logger_name: str = 'base-executor',
-        logging_level: Literal['DEBUG', 'INFO'] = 'DEBUG',
+        logging_level: Literal['DEBUG', 'INFO'] = 'INFO',
         connection_type: Literal['local', 'ssh', 'docker'] = 'local',
         container_name: str = '',
     ) -> None:
@@ -94,10 +94,22 @@ class BaseExecutor:
             self.logger.exception('Cannot check binary existence:')
             raise exc
         if not result.is_successful():
-            raise FileNotFoundError(
-                f'Binary "{self.binary_name}" is not found in PATH '
-                f'on the machine\n{result.stderr}',
-            )
+            # Some commands do not have --version option, try --help instead
+            try:
+                result = func(['--help'])
+            except Exception as exc:
+                self.logger.exception('Cannot check binary existence:')
+                raise exc
+            # Special case: 'ip' command returns 255 status when asking for help
+            if ((self.binary_name == 'ip' or self.binary_name.endswith('/ip'))
+                    and result.exit_code == 255):
+                return
+            if not result.is_successful():
+                raise FileNotFoundError(
+                    f'Binary "{self.binary_name}" is not found '
+                    f'or cannot be executed '
+                    f'on the machine:\n{result.stderr}',
+                )
 
     @measure_stage('run_local_command')
     def run_local_command(
