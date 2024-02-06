@@ -251,6 +251,7 @@ class CeleryConfig(BaseModel):
         S3ResultsConfig,
     ]
     result_backend_always_retry: bool = True
+    result_expires: int = 3600  # 1 hour in seconds
     result_backend_max_retries: int = 10
     s3_access_key_id: Optional[str] = None
     s3_secret_access_key: Optional[str] = None
