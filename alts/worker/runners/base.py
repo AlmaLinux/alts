@@ -951,9 +951,15 @@ class BaseRunner(object):
             organized_tests_list.insert(0, init)
         return organized_tests_list
 
+    @command_decorator(
+        f'{THIRD_PARTY_SECTION_NAME}_tests_wrapper',
+        'Preparation/running third party tests has failed',
+        ThirdPartyTestError,
+    )
     def run_third_party_tests(self):
         if not self._test_configuration:
-            return
+            return 0, 'Nothing to run', ''
+        errors = []
         executors_mapping = {
             '.bats': BatsExecutor,
             '.sh': ShellExecutor,
@@ -975,6 +981,7 @@ class BaseRunner(object):
             )
             test_repo_path = self.clone_third_party_repo(repo_url, git_ref)
             if not test_repo_path:
+                errors.append(f'Cannot clone test repository {repo_url}')
                 continue
             workdir = os.path.join(
                 CONFIG.tests_base_dir,
@@ -1014,12 +1021,15 @@ class BaseRunner(object):
                         env_vars=self._test_env.get('extra_env_vars', []),
                     )
                 except ThirdPartyTestError:
-                    pass
+                    errors.append(f'Test {test_file.name} has failed')
                 except Exception:
                     self._logger.exception(
                         'An unknown error occurred during the test execution'
                     )
             git_reset_hard(test_repo_path, self._logger)
+        if errors:
+            return 1, '', '\n'.join(errors)
+        return 0, 'Third-party tests have passed', ''
 
     def publish_artifacts_to_storage(self):
         # Should upload artifacts from artifacts directory to preferred

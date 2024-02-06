@@ -81,7 +81,7 @@ def prepare_gerrit_command(git_ref: str) -> str:
         review, patchset = git_ref.split('/')
         sm = review[-2:]
         command = (
-            'git pull && '
+            'git checkout master && git pull && '
             f"git fetch origin 'refs/changes/{sm}/{review}/{patchset}' "
             '--force --update-head-ok --progress && '
             'git checkout FETCH_HEAD'
