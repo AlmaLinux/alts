@@ -2,13 +2,14 @@ FROM almalinux:9
 
 RUN mkdir -p /code ~/.terraform.d/plugin-cache ~/.ssh /srv/celery_results \
     && echo "plugin_cache_dir = \"\$HOME/.terraform.d/plugin-cache\"" > ~/.terraformrc \
+    && echo "plugin_cache_may_break_dependency_lock_file = true" >> ~/.terraformrc \
     && sed -i 's/enabled=0/enabled=1/' /etc/yum.repos.d/almalinux-crb.repo \
     && dnf update -y \
     && dnf install -y epel-release \
     && dnf install -y python3-virtualenv python39 wget unzip yum-utils openssh-clients \
     && yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo \
     && yum-config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo \
-    && dnf install -y docker-ce docker-ce-cli containerd.io ansible-core terraform --enablerepo=epel \
+    && dnf install -y docker-ce docker-ce-cli containerd.io ansible terraform --enablerepo=epel \
     && dnf clean all \
     && cat /dev/zero | ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -q -N ""
 COPY requirements/ /tmp/requirements
@@ -18,7 +19,8 @@ RUN cd /code \
     && pip3 install --no-cache -U pip setuptools \
     && pip3 install --no-cache -r /tmp/requirements/celery.txt \
     && deactivate \
-    && ansible-galaxy collection install community.docker
+    && ansible-galaxy collection install community.docker \
+    && ansible-galaxy collection install community.general
 RUN cd /code \
     && python3.9 -m venv ansible_env \
     && source ansible_env/bin/activate \

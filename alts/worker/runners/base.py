@@ -168,10 +168,8 @@ class BaseRunner(object):
         self._task_id = task_id
         self._task_is_aborted = task_is_aborted
         self._vm_ip = None
-        if test_configuration is None:
-            test_configuration = {}
-        self._test_configuration = test_configuration
-        self._test_env = self._test_configuration.get('test_env', {})
+        self._test_configuration = test_configuration or {}
+        self._test_env = self._test_configuration.get('test_env') or {}
         self._logger = self.init_test_task_logger(
             task_id,
             dist_arch,
