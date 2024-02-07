@@ -81,6 +81,20 @@ FILE_TYPE_REGEXES_MAPPING = {
     r'.*(Bourne-Again shell).*': (ShellExecutor, None),
     r'.*(python).*': (CommandExecutor, 'python'),
 }
+EXECUTORS_MAPPING = {
+    '.bash': ShellExecutor,
+    '.bats': BatsExecutor,
+    '.sh': ShellExecutor,
+    '.yml': AnsibleExecutor,
+    '.yaml': AnsibleExecutor,
+}
+
+DetectExecutorResult = Tuple[Optional[Union[
+    AnsibleExecutor,
+    BatsExecutor,
+    CommandExecutor,
+    ShellExecutor,
+]], Optional[str]]
 
 
 def command_decorator(
@@ -965,6 +979,18 @@ class BaseRunner(object):
             organized_tests_list.insert(0, init)
         return organized_tests_list
 
+    @staticmethod
+    def detect_executor(test_path: Path) -> DetectExecutorResult:
+        extension = test_path.suffix
+        if extension in EXECUTORS_MAPPING:
+            return EXECUTORS_MAPPING[extension], None
+        # Try to detect file format with magic
+        magic_out = magic.from_file(str(test_path))
+        for regex, (executor_class_, command_) in FILE_TYPE_REGEXES_MAPPING.items():
+            if re.search(regex, magic_out, re.IGNORECASE):
+                return executor_class_, command_
+        return None, None
+
     @command_decorator(
         f'{THIRD_PARTY_SECTION_NAME}_tests_wrapper',
         'Preparation/running third party tests has failed',
@@ -974,31 +1000,6 @@ class BaseRunner(object):
         if not self._test_configuration:
             return 0, 'Nothing to run', ''
         errors = []
-        executors_mapping = {
-            '.bash': ShellExecutor,
-            '.bats': BatsExecutor,
-            '.sh': ShellExecutor,
-            '.yml': AnsibleExecutor,
-            '.yaml': AnsibleExecutor,
-        }
-
-        def detect_executor(test_path: Path) -> Tuple[Optional[
-            Union[
-                AnsibleExecutor,
-                BatsExecutor,
-                CommandExecutor,
-                ShellExecutor,
-            ]
-        ], Optional[str]]:
-            extension = test_path.suffix
-            if extension in executors_mapping:
-                return executors_mapping[extension], None
-            # Try to detect file format with magic
-            magic_out = magic.from_file(str(test_path))
-            for regex, (executor_class_, command_) in FILE_TYPE_REGEXES_MAPPING.items():
-                if re.search(regex, magic_out, re.IGNORECASE):
-                    return executor_class_, command_
-            return None, None
 
         executor_params = self.get_test_executor_params()
         executor_params['timeout'] = CONFIG.tests_exec_timeout
@@ -1025,7 +1026,7 @@ class BaseRunner(object):
             for test_file in tests_list:
                 if tests_to_run and test_file.name not in tests_to_run:
                     continue
-                executor_class, command = detect_executor(test_file)
+                executor_class, command = self.detect_executor(test_file)
                 if not executor_class:
                     self._logger.warning(
                         'Cannot get executor for test %s',
@@ -1038,7 +1039,7 @@ class BaseRunner(object):
                     'Executor: %s, command: %s',
                     executor_class.__name__, command,
                 )
-                if isinstance(executor_class, CommandExecutor) and command:
+                if executor_class == CommandExecutor and command:
                     executor = CommandExecutor(command, **executor_params)
                 else:
                     executor: Union[
