@@ -4,8 +4,8 @@
 
 """AlmaLinux Test System tasks scheduler application."""
 
+import aiohttp
 import logging
-import requests
 import signal
 import urllib.parse
 from threading import Event
@@ -76,6 +76,46 @@ def get_celery_task_result(task_id: str, timeout: int = 1) -> dict:
         )
     result['state'] = task.state
     return task, result
+
+
+async def post_revoked_test_task_result(task_id, task_callback_href):
+    """Post revoked test task result to web server.
+
+    Parameters
+    ----------
+    task_id : str
+        Build System test task identifier.
+    task_callback_href : str
+        Test task callback URL.
+
+    """
+    headers = {'Authorization': f'Bearer {CONFIG.bs_token}'}
+    full_url = urllib.parse.urljoin(
+        CONFIG.bs_host,
+        task_callback_href,
+    )
+    payload = {
+        'api_version': API_VERSION,
+        'result': {
+            'revoked': True
+        },
+        'stats': {}
+    }
+    async with aiohttp.ClientSession(headers=headers) as session:
+        async with session.post(
+            full_url,
+            json=payload,
+            timeout=DEFAULT_REQUEST_TIMEOUT,
+        ) as response:
+            resp_json = None
+            try:
+                resp_json = await response.json()
+            except Exception as e:
+                logging.error(
+                    'Could not post test task result of %s to web_server: %s',
+                    task_id, str(e)
+                )
+            response.raise_for_status()
 
 
 @app.on_event('startup')
@@ -256,23 +296,9 @@ async def cancel_task(
                 task.abort()
                 continue
 
-            full_url = urllib.parse.urljoin(
-                CONFIG.bs_host,
+            await post_revoked_test_task_result(
+                db_task.task_id,
                 db_task.callback_href,
             )
-            payload = {
-                'api_version': API_VERSION,
-                'result': {
-                    'revoked': True
-                },
-                'stats': {}
-            }
-            response = requests.post(
-                full_url,
-                json=payload,
-                headers={'Authorization': f'Bearer {CONFIG.bs_token}'},
-                timeout=DEFAULT_REQUEST_TIMEOUT,
-            )
-            response.raise_for_status()
     result = { 'success': True }
     return JSONResponse(content=result)
