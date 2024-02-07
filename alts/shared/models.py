@@ -302,7 +302,7 @@ class CeleryConfig(BaseModel):
     )
     git_reference_directory: Optional[str] = None
     tests_base_dir: str = '/tests'
-    package_proxy: Optional[str] = None
+    package_proxy: str = ''
     development_mode: bool = False
 
     @property
@@ -326,6 +326,40 @@ class CeleryConfig(BaseModel):
     @property
     def supported_distributions(self):
         return set(self.rhel_flavors + self.debian_flavors)
+
+    def get_celery_config_dict(self) -> Dict[str, Any]:
+        config_dict = {
+            'broker_url': self.broker_config.broker_url,
+            'broker_pool_limit': self.broker_pool_limit,
+            'result_backend': self.result_backend,
+            'result_backend_always_retry': True,
+            'result_expires': self.result_expires,  # 1 hour in seconds
+            'result_backend_max_retries': 10,
+            'task_default_queue': 'default',
+            'task_acks_late': True,
+            'task_track_started': True,
+            # Task track timeout
+            'task_tracking_timeout': 3600,
+            'worker_prefetch_multiplier': 1,
+        }
+        if isinstance(self.results_backend_config, AzureResultsConfig):
+            for key in (
+                'azureblockblob_container_name',
+                'azureblockblob_base_path',
+                'azure_connection_string'
+            ):
+                config_dict[key] = getattr(self.results_backend_config, key)
+        elif isinstance(self.results_backend_config, S3ResultsConfig):
+            for key in (
+                's3_access_key_id',
+                's3_secret_access_key',
+                's3_bucket',
+                's3_base_path',
+                's3_region',
+                's3_endpoint_url',
+            ):
+                config_dict[key] = getattr(self.results_backend_config, key)
+        return config_dict
 
 
 class SchedulerConfig(CeleryConfig):

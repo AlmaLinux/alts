@@ -11,8 +11,17 @@ import time
 import urllib.parse
 from functools import wraps
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Union,
+    Tuple,
+)
 
+import magic
 from mako.lookup import TemplateLookup
 from plumbum import local, ProcessExecutionError, ProcessTimedOut
 
@@ -66,6 +75,11 @@ BASE_SYSTEM_INFO_COMMANDS = {
     'Kernel version': 'uname -a',
     'Environment IP': 'ip a',
     'Environment uptime': 'uptime',
+}
+FILE_TYPE_REGEXES_MAPPING = {
+    r'.*(bats).*': (BatsExecutor, None),
+    r'.*(Bourne-Again shell).*': (ShellExecutor, None),
+    r'.*(python).*': (CommandExecutor, 'python'),
 }
 
 
@@ -961,12 +975,30 @@ class BaseRunner(object):
             return 0, 'Nothing to run', ''
         errors = []
         executors_mapping = {
+            '.bash': ShellExecutor,
             '.bats': BatsExecutor,
             '.sh': ShellExecutor,
             '.yml': AnsibleExecutor,
             '.yaml': AnsibleExecutor,
-            '': ShellExecutor,
         }
+
+        def detect_executor(test_path: Path) -> Tuple[Optional[
+            Union[
+                AnsibleExecutor,
+                BatsExecutor,
+                CommandExecutor,
+                ShellExecutor,
+            ]], Optional[str]]:
+            extension = test_path.suffix
+            if extension in executors_mapping:
+                return executors_mapping[extension], None
+            # Try to detect file format with magic
+            magic_out = magic.from_file(str(test_path))
+            for regex, (executor_class_, command_) in FILE_TYPE_REGEXES_MAPPING.items():
+                if re.search(regex, magic_out, re.IGNORECASE):
+                    return executor_class_, command_
+            return None, None
+
         executor_params = self.get_test_executor_params()
         executor_params['timeout'] = CONFIG.tests_exec_timeout
         for test in self._test_configuration['tests']:
@@ -992,18 +1024,23 @@ class BaseRunner(object):
             for test_file in tests_list:
                 if tests_to_run and test_file.name not in tests_to_run:
                     continue
-                executor_class = executors_mapping.get(test_file.suffix)
+                executor_class, command = detect_executor(tests_to_run)
                 if not executor_class:
                     self._logger.warning(
                         'Cannot get executor for test %s',
                         test_file
                     )
+                    errors.append(f'Cannot get executor for test {test_file}')
                     continue
-                executor: Union[
-                    AnsibleExecutor,
-                    BatsExecutor,
-                    ShellExecutor,
-                ] = executor_class(**executor_params)
+                if isinstance(executor_class, CommandExecutor) and command:
+                    executor = CommandExecutor(command, **executor_params)
+                else:
+                    executor: Union[
+                        AnsibleExecutor,
+                        BatsExecutor,
+                        ShellExecutor,
+                        CommandExecutor,
+                    ] = executor_class(**executor_params)
                 self._logger.debug(
                     'Running the third party test %s on %s...',
                     test_file.name,
