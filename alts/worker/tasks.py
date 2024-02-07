@@ -85,9 +85,7 @@ class RetryableTask(AbortableTask):
     autoretry_for = AUTO_RETRY_EXCEPTIONS
     max_retries = 5
     default_retry_delay = 10
-    retry_backoff = True
-    retry_jitter = True
-    retry_backoff_max = 300
+    retry_backoff = 5
 
 
 @celery_app.task(bind=True, base=RetryableTask)
