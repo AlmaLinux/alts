@@ -109,7 +109,7 @@ def run_tests(self, task_params: dict):
         tap_result = are_tap_tests_success(stage_data_.get('stdout', ''))
         if tap_result is not None:
             return tap_result
-        if not stage_data_.get('exit_code'):
+        if stage_data_.get('exit_code') is None:
             stage_data_['exit_code'] = 255
             return False
         return stage_data_['exit_code'] == 0
