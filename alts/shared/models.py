@@ -269,7 +269,7 @@ class CeleryConfig(BaseModel):
     broker_pool_limit: int = 20
     # Task track timeout
     task_tracking_timeout: int = 3600
-    task_soft_time_limit = 7200  # 2 hours
+    task_soft_time_limit: int = 7200  # 2 hours
     # Application-level settings
     # Supported architectures and distributions
     supported_architectures: List[str] = constants.SUPPORTED_ARCHITECTURES
