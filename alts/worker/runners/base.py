@@ -1024,7 +1024,7 @@ class BaseRunner(object):
             for test_file in tests_list:
                 if tests_to_run and test_file.name not in tests_to_run:
                     continue
-                executor_class, command = detect_executor(tests_to_run)
+                executor_class, command = detect_executor(test_file)
                 if not executor_class:
                     self._logger.warning(
                         'Cannot get executor for test %s',
