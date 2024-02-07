@@ -18,7 +18,6 @@ from typing import (
     List,
     Optional,
     Union,
-    Tuple,
 )
 
 import magic
@@ -52,6 +51,7 @@ from alts.worker import CONFIG, RESOURCES_DIR
 from alts.worker.executors.ansible import AnsibleExecutor
 from alts.worker.executors.bats import BatsExecutor
 from alts.worker.executors.command import CommandExecutor
+from alts.worker.executors.python import PythonExecutor
 from alts.worker.executors.shell import ShellExecutor
 
 __all__ = [
@@ -77,24 +77,26 @@ BASE_SYSTEM_INFO_COMMANDS = {
     'Environment uptime': 'uptime',
 }
 FILE_TYPE_REGEXES_MAPPING = {
-    r'.*(bats).*': (BatsExecutor, None),
-    r'.*(Bourne-Again shell).*': (ShellExecutor, None),
-    r'.*(python).*': (CommandExecutor, 'python'),
+    r'.*(bats).*': BatsExecutor,
+    r'.*(Bourne-Again shell).*': ShellExecutor,
+    r'.*(python).*': PythonExecutor,
 }
 EXECUTORS_MAPPING = {
     '.bash': ShellExecutor,
     '.bats': BatsExecutor,
+    '.py': PythonExecutor,
     '.sh': ShellExecutor,
     '.yml': AnsibleExecutor,
     '.yaml': AnsibleExecutor,
 }
 
-DetectExecutorResult = Tuple[Optional[Union[
+DetectExecutorResult = Union[
     AnsibleExecutor,
     BatsExecutor,
     CommandExecutor,
+    PythonExecutor,
     ShellExecutor,
-]], Optional[str]]
+]
 
 
 def command_decorator(
@@ -983,13 +985,13 @@ class BaseRunner(object):
     def detect_executor(test_path: Path) -> DetectExecutorResult:
         extension = test_path.suffix
         if extension in EXECUTORS_MAPPING:
-            return EXECUTORS_MAPPING[extension], None
+            return EXECUTORS_MAPPING[extension]
         # Try to detect file format with magic
         magic_out = magic.from_file(str(test_path))
-        for regex, (executor_class_, command_) in FILE_TYPE_REGEXES_MAPPING.items():
+        for regex, executor_class_ in FILE_TYPE_REGEXES_MAPPING.items():
             if re.search(regex, magic_out, re.IGNORECASE):
-                return executor_class_, command_
-        return None, None
+                return executor_class_  # noqa
+        return ShellExecutor  # noqa
 
     @command_decorator(
         f'{THIRD_PARTY_SECTION_NAME}_tests_wrapper',
@@ -1026,7 +1028,7 @@ class BaseRunner(object):
             for test_file in tests_list:
                 if tests_to_run and test_file.name not in tests_to_run:
                     continue
-                executor_class, command = self.detect_executor(test_file)
+                executor_class = self.detect_executor(test_file)
                 if not executor_class:
                     self._logger.warning(
                         'Cannot get executor for test %s',
@@ -1036,18 +1038,14 @@ class BaseRunner(object):
                     continue
                 self._logger.info('Running %s', test_file)
                 self._logger.debug(
-                    'Executor: %s, command: %s',
-                    executor_class.__name__, command,
+                    'Executor: %s,',executor_class.__name__
                 )
-                if executor_class == CommandExecutor and command:
-                    executor = CommandExecutor(command, **executor_params)
-                else:
-                    executor: Union[
-                        AnsibleExecutor,
-                        BatsExecutor,
-                        ShellExecutor,
-                        CommandExecutor,
-                    ] = executor_class(**executor_params)
+                executor: Union[
+                    AnsibleExecutor,
+                    BatsExecutor,
+                    ShellExecutor,
+                    CommandExecutor,
+                ] = executor_class(**executor_params)
                 self._logger.debug(
                     'Running the third party test %s on %s...',
                     test_file.name,
