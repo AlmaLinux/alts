@@ -4,19 +4,23 @@
 
 """AlmaLinux Test System package testing tasks running."""
 
-import celery
 import logging
 import urllib.parse
 from celery.contrib.abortable import AbortableTask
-from celery.states import REVOKED
-from celery.exceptions import Ignore
 from collections import defaultdict
+from socket import timeout
 from typing import Union
 
 import requests
 import requests.adapters
 import tap.parser
+from requests.exceptions import (
+    HTTPError,
+    ReadTimeout,
+    ConnectTimeout,
+)
 from urllib3 import Retry
+from urllib3.exceptions import TimeoutError
 
 from alts.shared.constants import API_VERSION, DEFAULT_REQUEST_TIMEOUT
 from alts.shared.exceptions import (
@@ -38,6 +42,14 @@ from alts.worker.runners.docker import DockerRunner
 from alts.worker.runners.opennebula import OpennebulaRunner
 
 __all__ = ['run_tests']
+
+AUTO_RETRY_EXCEPTIONS = (
+    timeout,
+    HTTPError,
+    ReadTimeout,
+    ConnectTimeout,
+    TimeoutError,
+)
 
 
 def are_tap_tests_success(tests_output: str):
@@ -69,7 +81,16 @@ def are_tap_tests_success(tests_output: str):
     return errors == 0
 
 
-@celery_app.task(bind=True, base=AbortableTask)
+class RetryableTask(AbortableTask):
+    autoretry_for = AUTO_RETRY_EXCEPTIONS
+    max_retries = 5
+    default_retry_delay = 10
+    retry_backoff = True
+    retry_jitter = True
+    retry_backoff_max = 300
+
+
+@celery_app.task(bind=True, base=RetryableTask)
 def run_tests(self, task_params: dict):
     """
     Executes a package test in a specified environment.
