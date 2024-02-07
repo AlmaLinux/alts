@@ -988,7 +988,8 @@ class BaseRunner(object):
                 BatsExecutor,
                 CommandExecutor,
                 ShellExecutor,
-            ]], Optional[str]]:
+            ]
+        ], Optional[str]]:
             extension = test_path.suffix
             if extension in executors_mapping:
                 return executors_mapping[extension], None
@@ -1032,6 +1033,11 @@ class BaseRunner(object):
                     )
                     errors.append(f'Cannot get executor for test {test_file}')
                     continue
+                self._logger.info('Running %s', test_file)
+                self._logger.debug(
+                    'Executor: %s, command: %s',
+                    executor_class.__name__, command,
+                )
                 if isinstance(executor_class, CommandExecutor) and command:
                     executor = CommandExecutor(command, **executor_params)
                 else:
