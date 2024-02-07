@@ -14,7 +14,9 @@ from collections import defaultdict
 from typing import Union
 
 import requests
+import requests.adapters
 import tap.parser
+from urllib3 import Retry
 
 from alts.shared.constants import API_VERSION, DEFAULT_REQUEST_TIMEOUT
 from alts.shared.exceptions import (
@@ -228,7 +230,14 @@ def run_tests(self, task_params: dict):
                 'result': summary,
                 'stats': runner.stats,
             }
-            response = requests.post(
+            session = requests.Session()
+            retries = Retry(total=5, backoff_factor=3, status_forcelist=[502])
+            retry_adapter = requests.adapters.HTTPAdapter(
+                max_retries=retries
+            )
+            session.mount("http://", retry_adapter)
+            session.mount("https://", retry_adapter)
+            response = session.post(
                 full_url,
                 json=payload,
                 headers={'Authorization': f'Bearer {CONFIG.bs_token}'},
