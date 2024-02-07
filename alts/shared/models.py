@@ -269,6 +269,7 @@ class CeleryConfig(BaseModel):
     broker_pool_limit: int = 20
     # Task track timeout
     task_tracking_timeout: int = 3600
+    task_soft_time_limit = 7200  # 2 hours
     # Application-level settings
     # Supported architectures and distributions
     supported_architectures: List[str] = constants.SUPPORTED_ARCHITECTURES
@@ -294,7 +295,7 @@ class CeleryConfig(BaseModel):
     keepalive_interval: int = 30  # unit in seconds
     commands_exec_timeout: int = 30  # unit in seconds
     provision_timeout: int = 600  # 10 minutes in seconds
-    tests_exec_timeout: int = 3600  # 1 hour in seconds
+    tests_exec_timeout: int = 1200  # 20 minutes in seconds
     deprecated_ansible_venv: str = '/code/ansible_env'
     centos_6_epel_release_url: str = (
         'https://dl.fedoraproject.org/pub/archive/epel/6/x86_64/'
@@ -334,13 +335,14 @@ class CeleryConfig(BaseModel):
             'result_backend': self.result_backend,
             'result_backend_always_retry': True,
             'result_expires': self.result_expires,  # 1 hour in seconds
-            'result_backend_max_retries': 10,
+            'result_backend_max_retries': self.result_backend_max_retries,
             'task_default_queue': 'default',
             'task_acks_late': True,
             'task_track_started': True,
             # Task track timeout
-            'task_tracking_timeout': 3600,
-            'worker_prefetch_multiplier': 1,
+            'task_tracking_timeout': self.task_tracking_timeout,
+            'task_soft_time_limit': self.task_soft_time_limit,
+            'worker_prefetch_multiplier': self.worker_prefetch_multiplier,
         }
         if isinstance(self.results_backend_config, AzureResultsConfig):
             for key in (

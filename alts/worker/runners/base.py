@@ -18,6 +18,7 @@ from typing import (
     List,
     Optional,
     Union,
+    Type,
 )
 
 import magic
@@ -90,13 +91,13 @@ EXECUTORS_MAPPING = {
     '.yaml': AnsibleExecutor,
 }
 
-DetectExecutorResult = Union[
+DetectExecutorResult = Type[Union[
     AnsibleExecutor,
     BatsExecutor,
     CommandExecutor,
     PythonExecutor,
     ShellExecutor,
-]
+]]
 
 
 def command_decorator(
@@ -1043,8 +1044,9 @@ class BaseRunner(object):
                 executor: Union[
                     AnsibleExecutor,
                     BatsExecutor,
-                    ShellExecutor,
                     CommandExecutor,
+                    ShellExecutor,
+                    PythonExecutor,
                 ] = executor_class(**executor_params)
                 self._logger.debug(
                     'Running the third party test %s on %s...',
