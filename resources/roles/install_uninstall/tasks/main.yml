@@ -1,0 +1,40 @@
+---
+
+- name: Enable module
+  shell: dnf module enable -y "{{ module_name }}:{{ module_stream }}:{{ module_version }}"
+  when: ansible_distribution_file_variety == 'RedHat' and module_name is defined and module_stream is defined and module_version is defined
+  tags:
+    - install_package
+
+- name: Install package
+  yum:
+    name: "{{ pkg_name }}"
+    state: present
+  when: ansible_distribution_file_variety == 'RedHat'
+  tags:
+    - install_package
+
+- name: Install package
+  apt:
+    name: "{{ pkg_name }}"
+    state: present
+    allow_unauthenticated: true
+  when: ansible_distribution_file_variety == 'Debian'
+  tags:
+    - install_package
+
+- name: Uninstall package
+  yum:
+    name: "{{ pkg_name }}"
+    state: absent
+  when: ansible_distribution_file_variety == 'RedHat'
+  tags:
+    - uninstall_package
+
+- name: Uninstall package
+  apt:
+    name: "{{ pkg_name }}"
+    state: absent
+  when: ansible_distribution_file_variety == 'Debian'
+  tags:
+    - uninstall_package

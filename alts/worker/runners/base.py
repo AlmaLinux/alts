@@ -176,8 +176,12 @@ class BaseRunner(object):
     TF_MAIN_FILE = None
     TF_VERSIONS_FILE = 'versions.tf'
     ANSIBLE_PLAYBOOK = 'playbook.yml'
-    ANSIBLE_CONFIG = 'ansible.cfg'
-    ANSIBLE_TEMPLATES_DIR = 'templates'
+    ANSIBLE_FILES = [
+        'ansible.cfg',
+        ANSIBLE_PLAYBOOK,
+        'roles',
+        'templates',
+    ]
     ANSIBLE_INVENTORY_FILE = 'hosts'
     TEMPFILE_PREFIX = 'base_test_runner_'
     INTEGRITY_TESTS_DIR = 'package_tests'
@@ -245,7 +249,7 @@ class BaseRunner(object):
         )
 
         # Package installation and test stuff
-        repos = repositories or []
+        repos = repositories.copy() or []
         self._repositories = self.prepare_repositories(repos)
         self.add_credentials_to_build_repos()
 
@@ -521,13 +525,8 @@ class BaseRunner(object):
             self._work_dir = self._create_work_dir()
             self._artifacts_dir = self._create_artifacts_dir()
         try:
-            copy_list = [
-                self.ANSIBLE_CONFIG,
-                self.ANSIBLE_PLAYBOOK,
-                self.ANSIBLE_TEMPLATES_DIR,
-            ]
             # Write resources that are not templated into working directory
-            for ansible_file in copy_list:
+            for ansible_file in self.ANSIBLE_FILES:
                 src_path = os.path.join(RESOURCES_DIR, ansible_file)
                 dst_path = os.path.join(self._work_dir, ansible_file)
                 if os.path.isdir(src_path):
@@ -648,9 +647,15 @@ class BaseRunner(object):
             'connection_type': self.ansible_connection_type,
             'pytest_is_needed': self.pytest_is_needed,
             'development_mode': CONFIG.development_mode,
-            'centos_6_epel_release_url': CONFIG.centos_6_epel_release_url,
             'package_proxy': CONFIG.package_proxy,
         }
+        dist_major_version = self.dist_version[0]
+        if self.dist_name in CONFIG.rhel_flavors and dist_major_version in ('6', '7'):
+            epel_release_url = CONFIG.epel_release_urls.get(dist_major_version)
+            if epel_release_url:
+                var_dict['epel_release_url'] = epel_release_url
+        if CONFIG.centos_baseurl:
+            var_dict['centos_repo_baseurl'] = CONFIG.centos_baseurl
         cmd_args = [
             '-i',
             self.ANSIBLE_INVENTORY_FILE,
@@ -747,6 +752,8 @@ class BaseRunner(object):
         module_name: Optional[str] = None,
         module_stream: Optional[str] = None,
         module_version: Optional[str] = None,
+        semi_verbose: bool = False,
+        verbose: bool = False,
     ):
         full_pkg_name = self._detect_full_package_name(
             package_name,
@@ -775,6 +782,13 @@ class BaseRunner(object):
                 f'module_version={module_version}',
             ])
         cmd_args.extend(['-t', 'install_package'])
+        verbosity = ''
+        if semi_verbose:
+            verbosity = '-vv'
+        if verbose:
+            verbosity = '-vvvv'
+        if verbosity:
+            cmd_args.append(verbosity)
         cmd_args_str = ' '.join(cmd_args)
         self._logger.debug(
             'Running "ansible-playbook %s" command',

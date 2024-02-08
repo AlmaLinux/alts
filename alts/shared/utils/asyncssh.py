@@ -33,7 +33,7 @@ class AsyncSSHClient:
         keepalive_count_max: int = 3,
         logger: Optional[logging.Logger] = None,
         logger_name: str = 'asyncssh-client',
-        logging_level: Literal['DEBUG', 'INFO'] = 'DEBUG',
+        logging_level: Literal['DEBUG', 'INFO'] = 'INFO',
         preferred_auth: Optional[Union[str, List[str]]] = None,
     ):
         self.username = username

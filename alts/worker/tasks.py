@@ -174,6 +174,7 @@ def run_tests(self, task_params: dict):
             module_name=module_name,
             module_stream=module_stream,
             module_version=module_version,
+            semi_verbose=True,
         )
         if CONFIG.enable_integrity_tests:
             runner.run_package_integrity_tests(package_name, package_version)

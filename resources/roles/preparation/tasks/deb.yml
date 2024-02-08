@@ -1,0 +1,52 @@
+---
+
+- name: Update all packages
+  apt:
+    name: "*"
+    state: latest
+
+- name: Install custom apt.conf
+  template:
+    src: custom-apt.conf.j2
+    dest: /etc/apt/apt.conf.d/99test-system-conf
+    mode: 0644
+    owner: root
+    group: root
+
+- name: Check /etc/dpkg/dpkg.cfg.d/excludes presence
+  stat:
+    path: /etc/dpkg/dpkg.cfg.d/excludes
+  register: excludes_exists
+
+- name: Allow man pages and documentation to be installed
+  lineinfile:
+    path: /etc/dpkg/dpkg.cfg.d/excludes
+    regexp: "{{ item.initial }}"
+    line: "{{ item.desired }}"
+  with_items:
+    - { initial: "^path-exclude=/usr/share/man", desired: "#path-exclude=/usr/share/man" }
+    - { initial: "^path-exclude=/usr/share/doc", desired: "#path-exclude=/usr/share/doc" }
+    - { initial: "^path-exclude=/usr/share/locale", desired: "#path-exclude=/usr/share/locale/*/LC_MESSAGES/*.mo" }
+  when: excludes_exists.stat.exists
+
+- name: Update apt metadata
+  shell: apt update
+
+- name: Install additional packages
+  apt:
+    name:
+      - ansible
+      - apt-transport-https
+      - bats
+      - python3-pip
+      - ca-certificates
+      - "{{ procps_pkg }}"
+    state: present
+
+- name: Add required repositories
+  apt_repository:
+    repo: "{{ item.url }}"
+    filename: 'test_repos'
+    update_cache: yes
+  with_items: "{{ repositories }}"
+  when: repositories is defined and (repositories | length > 0)
