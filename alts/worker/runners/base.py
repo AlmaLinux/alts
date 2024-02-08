@@ -249,7 +249,7 @@ class BaseRunner(object):
         )
 
         # Package installation and test stuff
-        repos = repositories.copy() or []
+        repos = repositories or []
         self._repositories = self.prepare_repositories(repos)
         self.add_credentials_to_build_repos()
 

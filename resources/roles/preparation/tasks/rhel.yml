@@ -1,32 +1,17 @@
 ---
 
-- set_fact:
-    install_ansible_from_pip: false
+- name: Initial fact set
+  set_fact:
     centos_7_x32: false
     bats_package: bats
 
-- set_fact:
-    install_ansible_from_pip: true
-  when: >
-    ansible_facts.distribution_major_version == '8' and
-    ansible_facts.distribution_major_version < '8'
-
-- set_fact:
+- name: Set fast about CentOS 7 x32 arch
+  set_fact:
     centos_7_x32: true
     bats_package: "http://ftp.icm.edu.pl/pub/Linux/dist/epel/7/x86_64/Packages/b/bats-0.4.0-1.20141016git3b33a5a.el7.noarch.rpm"
   when: >
     ansible_facts.distribution_major_version == '7' and
     ansible_facts.userspace_architecture in ('i386', 'i486', 'i586', 'i686')
-
-- name: Detect PowerTools (CRB) repository name
-  set_fact:
-    powertools_repository_name: powertools
-  when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version == '8'"
-
-- name: Detect PowerTools (CRB) repository name
-  set_fact:
-    powertools_repository_name: crb
-  when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version == '9'"
 
 - name: Re-define procps package name
   set_fact:
@@ -44,15 +29,13 @@
     pip_packages:
       - python3-pip
       - python3-setuptools
-    when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version >= '8'"
+  when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version >= '8'"
 
 - set_fact:
     pip_packages:
       - python-pip
       - python-setuptools
-    when: >
-      ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version < '8' and
-      centos_7_x32 | bool is false
+  when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version < '8'"
 
 - name: Add os and updates repositories for version 6
   yum_repository:
@@ -125,20 +108,12 @@
     state: present
   when: centos_7_x32 | bool
 
-- name: Install ansible as package
+- name: Install ansible
   yum:
     name: ansible
     state: present
-    enablerepo:
-      - epel
-      - "{{ powertools_repository_name }}"
-  when: install_ansible_from_pip | bool is false and centos_7_x32 | bool is false
-
-- name: Install ansible from pip
-  pip:
-    name: ansible
-    state: present
-  when: install_ansible_from_pip | bool and centos_7_x32 | bool is false
+    enablerepo: epel
+  when: pytest_is_needed | bool
 
 - name: Add required repositories
   yum_repository:
