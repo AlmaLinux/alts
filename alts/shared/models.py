@@ -266,6 +266,7 @@ class CeleryConfig(BaseModel):
     task_acks_late: bool = True
     task_track_started: bool = True
     worker_prefetch_multiplier: int = 1
+    worker_deduplicate_successful_tasks: bool = True
     broker_pool_limit: int = 20
     # Task track timeout
     task_tracking_timeout: int = 3600
@@ -343,6 +344,8 @@ class CeleryConfig(BaseModel):
             'task_tracking_timeout': self.task_tracking_timeout,
             'task_soft_time_limit': self.task_soft_time_limit,
             'worker_prefetch_multiplier': self.worker_prefetch_multiplier,
+            'worker_deduplicate_successful_tasks': self.worker_deduplicate_successful_tasks,
+            'broker_transport_options': {'visibility_timeout': 36000}
         }
         if isinstance(self.results_backend_config, AzureResultsConfig):
             for key in (
