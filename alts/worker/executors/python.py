@@ -1,4 +1,5 @@
 import logging
+import os.path
 import re
 from typing import Any, Dict, List, Literal, Optional, Union, Tuple
 
@@ -42,13 +43,17 @@ class PythonExecutor(BaseExecutor):
             self.binary_name = 'python3'
             super().check_binary_existence()
 
-    def detect_python_binary(self, cmd_args: List[str]) -> Tuple[str, str]:
+    def detect_python_binary(
+        self,
+        cmd_args: List[str],
+        workdir: str,
+    ) -> Tuple[str, str]:
         if '--version' in cmd_args:
             return self.binary_name, ''
         if not cmd_args:
             return self.binary_name, ''
         script_name = cmd_args[0]
-        with open(script_name, 'rt') as f:
+        with open(os.path.join(workdir, script_name), 'rt') as f:
             shebang = f.readline()
             result = INTERPRETER_REGEX.search(shebang)
             if not result:
@@ -68,7 +73,7 @@ class PythonExecutor(BaseExecutor):
         cmd_args: List[str],
         workdir: str = '',
     ) -> CommandResult:
-        interpreter, options = self.detect_python_binary(cmd_args)
+        interpreter, options = self.detect_python_binary(cmd_args, workdir)
         self.binary_name = interpreter
         if options:
             cmd_args.insert(0, options)
@@ -81,7 +86,7 @@ class PythonExecutor(BaseExecutor):
             workdir: str = '',
             env_vars: Optional[List[str]] = None,
     ) -> CommandResult:
-        interpreter, options = self.detect_python_binary(cmd_args)
+        interpreter, options = self.detect_python_binary(cmd_args, workdir)
         self.binary_name = interpreter
         if options:
             cmd_args.insert(0, options)
@@ -99,7 +104,7 @@ class PythonExecutor(BaseExecutor):
             docker_args: Optional[List[str]] = None,
             env_vars: Optional[List[str]] = None,
     ) -> CommandResult:
-        interpreter, options = self.detect_python_binary(cmd_args)
+        interpreter, options = self.detect_python_binary(cmd_args, workdir)
         self.binary_name = interpreter
         if options:
             cmd_args.insert(0, options)
