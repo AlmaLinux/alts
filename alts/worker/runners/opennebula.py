@@ -10,7 +10,6 @@ from typing import Callable, List, Optional, Union
 
 import pyone
 
-from alts.shared.constants import X32_ARCHITECTURES
 from alts.shared.exceptions import VMImageNotFound
 from alts.worker import CONFIG
 from alts.worker.runners.base import GenericVMRunner

@@ -5,6 +5,7 @@
 """AlmaLinux Test System package testing tasks running."""
 
 import logging
+import traceback
 import urllib.parse
 from celery.contrib.abortable import AbortableTask
 from collections import defaultdict
@@ -33,6 +34,7 @@ from alts.shared.exceptions import (
     ThirdPartyTestError,
     UninstallPackageError,
     AbortedTestTask,
+    VMImageNotFound,
 )
 from alts.worker import CONFIG
 from alts.worker.app import celery_app
@@ -186,8 +188,10 @@ def run_tests(self, task_params: dict):
             module_stream=module_stream,
             module_version=module_version,
         )
+    except VMImageNotFound as exc:
+        logging.exception('Cannot find VM image: %s', exc)
     except TerraformInitializationError as exc:
-        logging.exception('Cannot initial terraform: %s', exc)
+        logging.exception('Cannot initialize terraform: %s', exc)
     except StartEnvironmentError as exc:
         logging.exception('Cannot start environment: %s', exc)
     except ProvisionError as exc:
@@ -213,7 +217,7 @@ def run_tests(self, task_params: dict):
         logging.exception('Unexpected exception: %s', exc)
         set_artifacts_when_stage_has_unexpected_exception(
             _artifacts=runner.artifacts,
-            error_message=f'Unexpected exception: {exc}',
+            error_message=f'Unexpected exception: {traceback.format_exc()}',
             section_name='Unexpected errors during tests',
         )
     finally:

@@ -519,7 +519,7 @@ class BaseRunner(object):
         return full_pkg_name
 
     # First step
-    def prepare_work_dir_files(self, create_ansible_inventory=False):
+    def prepare_work_dir_files(self):
         # In case if you've removed worker folder, recreate one
         if not self._work_dir or not os.path.exists(self._work_dir):
             self._work_dir = self._create_work_dir()
