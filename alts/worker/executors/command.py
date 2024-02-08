@@ -45,7 +45,11 @@ class CommandExecutor(BaseExecutor):
         workdir: str = '',
         env_vars: Optional[List[str]] = None,
     ) -> CommandResult:
-        return super().run_ssh_command(cmd_args)
+        return super().run_ssh_command(
+            cmd_args,
+            workdir=workdir,
+            env_vars=env_vars,
+        )
 
     @measure_stage('run_single_docker_command')
     def run_docker_command(
@@ -53,8 +57,10 @@ class CommandExecutor(BaseExecutor):
         cmd_args: List[str],
         workdir: str = '',
         docker_args: Optional[List[str]] = None,
+        env_vars: Optional[List[str]] = None,
     ) -> CommandResult:
         return super().run_docker_command(
             cmd_args=cmd_args,
             docker_args=docker_args,
+            env_vars=env_vars,
         )
