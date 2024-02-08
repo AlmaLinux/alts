@@ -14,12 +14,8 @@ from alts.shared.exceptions import (
     PackageIntegrityTestsError,
     ProvisionError,
     StopEnvironmentError,
-    ThirdPartyTestError,
 )
 from alts.worker import CONFIG
-from alts.worker.executors.ansible import AnsibleExecutor
-from alts.worker.executors.bats import BatsExecutor
-from alts.worker.executors.shell import ShellExecutor
 from alts.worker.runners.base import (
     TESTS_SECTION_NAME,
     BaseRunner,
@@ -265,31 +261,6 @@ class DockerRunner(BaseRunner):
             self.env_name,
         )
         return self._exec(cmd_args, workdir=remote_tests_path)
-
-    @command_decorator(
-        '',
-        'Third party tests failed',
-        exception_class=ThirdPartyTestError,
-    )
-    def run_third_party_test(
-        self,
-        executor: Union[AnsibleExecutor, BatsExecutor, ShellExecutor],
-        cmd_args: List[str],
-        docker_args: Optional[List[str]] = None,
-        workdir: str = '',
-        artifacts_key: str = '',
-        additional_section_name: str = '',
-        env_vars: Optional[List[str]] = None,
-    ):
-        return (
-            executor.run_docker_command(
-                cmd_args=cmd_args,
-                docker_args=docker_args,
-                env_vars=env_vars,
-            )
-            .model_dump()
-            .values()
-        )
 
     def clone_third_party_repo(
         self,

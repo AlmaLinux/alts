@@ -1,8 +1,13 @@
 import logging
-from typing import Any, Dict, List, Literal, Optional, Union
+import re
+from typing import Any, Dict, List, Literal, Optional, Union, Tuple
 
 from alts.shared.models import AsyncSSHParams, CommandResult
 from alts.worker.executors.base import BaseExecutor, measure_stage
+
+INTERPRETER_REGEX = re.compile(
+    r'^#!(?P<python_interpreter>.*(python[2-4]?))(?P<options> .*)?'
+)
 
 
 class PythonExecutor(BaseExecutor):
@@ -30,12 +35,34 @@ class PythonExecutor(BaseExecutor):
             container_name=container_name,
         )
 
+    def detect_python_binary(self, cmd_args: List[str]) -> Tuple[str, str]:
+        if not cmd_args:
+            return self.binary_name, ''
+        script_name = cmd_args[0]
+        with open(script_name, 'rt') as f:
+            shebang = f.readline()
+            result = INTERPRETER_REGEX.search(shebang)
+            if not result:
+                return self.binary_name, ''
+            result_dict = result.groupdict()
+            if 'python_interpreter' not in result_dict:
+                return self.binary_name, ''
+            interpreter = result_dict['python_interpreter']
+            options = ''
+            if 'options' in result_dict:
+                options = result_dict['options'].strip()
+            return interpreter, options
+
     @measure_stage('run_local_python')
     def run_local_command(
         self,
         cmd_args: List[str],
         workdir: str = '',
     ) -> CommandResult:
+        interpreter, options = self.detect_python_binary(cmd_args)
+        self.binary_name = interpreter
+        if options:
+            cmd_args.insert(0, options)
         return super().run_local_command(cmd_args)
 
     @measure_stage('run_ssh_python')
@@ -45,6 +72,10 @@ class PythonExecutor(BaseExecutor):
             workdir: str = '',
             env_vars: Optional[List[str]] = None,
     ) -> CommandResult:
+        interpreter, options = self.detect_python_binary(cmd_args)
+        self.binary_name = interpreter
+        if options:
+            cmd_args.insert(0, options)
         return super().run_ssh_command(
             cmd_args,
             workdir=workdir,
@@ -59,6 +90,10 @@ class PythonExecutor(BaseExecutor):
             docker_args: Optional[List[str]] = None,
             env_vars: Optional[List[str]] = None,
     ) -> CommandResult:
+        interpreter, options = self.detect_python_binary(cmd_args)
+        self.binary_name = interpreter
+        if options:
+            cmd_args.insert(0, options)
         return super().run_docker_command(
             cmd_args=cmd_args,
             docker_args=docker_args,

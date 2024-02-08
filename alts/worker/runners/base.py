@@ -943,7 +943,7 @@ class BaseRunner(object):
 
     def run_third_party_test(
         self,
-        executor: Union[AnsibleExecutor, BatsExecutor, ShellExecutor],
+        executor: Union[AnsibleExecutor, BatsExecutor, ShellExecutor, PythonExecutor],
         cmd_args: List[str],
         docker_args: Optional[List[str]] = None,
         workdir: str = '',
@@ -951,7 +951,15 @@ class BaseRunner(object):
         additional_section_name: str = '',
         env_vars: Optional[List[str]] = None,
     ):
-        raise NotImplementedError
+        return (
+            executor.run(
+                cmd_args=cmd_args,
+                docker_args=docker_args,
+                env_vars=env_vars,
+            )
+            .model_dump()
+            .values()
+        )
 
     def sort_tests(self, tests_dir: Path) -> List[Path]:
         tests_list = list(tests_dir.iterdir())
@@ -1396,7 +1404,7 @@ class GenericVMRunner(BaseRunner):
     )
     def run_third_party_test(
             self,
-            executor: Union[AnsibleExecutor, BatsExecutor, ShellExecutor],
+            executor: Union[AnsibleExecutor, BatsExecutor, PythonExecutor, ShellExecutor],
             cmd_args: List[str],
             docker_args: Optional[List[str]] = None,
             workdir: str = '',
@@ -1404,7 +1412,7 @@ class GenericVMRunner(BaseRunner):
             additional_section_name: str = '',
             env_vars: Optional[List[str]] = None,
     ):
-        result = executor.run_ssh_command(
+        result = executor.run(
             cmd_args=cmd_args,
             workdir=workdir,
             env_vars=env_vars,
