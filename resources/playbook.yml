@@ -122,6 +122,7 @@
           with_items:
             - { initial: "^path-exclude=/usr/share/man", desired: "#path-exclude=/usr/share/man" }
             - { initial: "^path-exclude=/usr/share/doc", desired: "#path-exclude=/usr/share/doc" }
+            - { initial: "^path-exclude=/usr/share/locale", desired: "#path-exclude=/usr/share/locale/*/LC_MESSAGES/*.mo" }
           when: excludes_exists.stat.exists
 
         - name: Update apt metadata
