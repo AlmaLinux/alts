@@ -70,26 +70,25 @@ class OpennebulaRunner(GenericVMRunner):
             regex_str += f'.({channels})'
         # Filter images to leave only those that are related to the particular
         # platform
-        # Note: newer OS don't have 32-bit images usually, so we need to map
-        # them to correct 64-bit
-        filter_arch = self.dist_arch
-        if (self.dist_name in CONFIG.rhel_flavors
-                and self.dist_version.startswith(('8', '9', '10'))
-                and self.dist_arch in X32_ARCHITECTURES):
-            filter_arch = 'x86_64'
-        elif self.dist_arch == 'i686':
-            filter_arch = 'i386'
+        # Note: newer OS don't have 32-bit images usually, so we need to try
+        # to find correct 64-bit replacement
+        if self.dist_version == 'i686':
+            arches_to_try = ['i386', 'i686', 'x86_64']
+        else:
+            arches_to_try = [self.dist_arch]
         filtered_templates = []
         for template in templates.VMTEMPLATE:
-            conditions = [
-                bool(re.search(regex_str, template.NAME)),
-                template.NAME.startswith(platform_name_version),
-                filter_arch in template.NAME,
-            ]
-            if self.package_channel is not None:
-                conditions.append(self.package_channel in template.NAME)
-            if all(conditions):
-                filtered_templates.append(template)
+            for arch in arches_to_try:
+                conditions = [
+                    bool(re.search(regex_str, template.NAME)),
+                    template.NAME.startswith(platform_name_version),
+                    arch in template.NAME,
+                ]
+                if self.package_channel is not None:
+                    conditions.append(self.package_channel in template.NAME)
+                if all(conditions):
+                    filtered_templates.append(template)
+                    break
         template_params = (
             f'distribution: {self.dist_name}, '
             f'dist version: {self.dist_version}, '
