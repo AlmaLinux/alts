@@ -102,6 +102,7 @@
   yum:
     name: "{{ additional_packages + pip_packages }}"
     state: present
+    enablerepo: epel
   when: centos_7_x32 | bool is false
 
 - name: Install additional packages on CentOS 7 i686
