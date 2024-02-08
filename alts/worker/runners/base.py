@@ -1426,7 +1426,7 @@ class GenericVMRunner(BaseRunner):
     )
     def run_third_party_test(
             self,
-            executor: Union[AnsibleExecutor, BatsExecutor, PythonExecutor, ShellExecutor],
+            executor: Union[AnsibleExecutor, BatsExecutor, CommandExecutor, ShellExecutor],
             cmd_args: List[str],
             docker_args: Optional[List[str]] = None,
             workdir: str = '',
