@@ -5,7 +5,7 @@
     centos_7_x32: false
     bats_package: bats
 
-- name: Set fast about CentOS 7 x32 arch
+- name: Set fact about CentOS 7 x32 arch
   set_fact:
     centos_7_x32: true
     bats_package: "http://ftp.icm.edu.pl/pub/Linux/dist/epel/7/x86_64/Packages/b/bats-0.4.0-1.20141016git3b33a5a.el7.noarch.rpm"
