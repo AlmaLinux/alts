@@ -18,6 +18,7 @@ from typing import (
     List,
     Optional,
     Union,
+    Tuple,
     Type,
 )
 
@@ -52,7 +53,6 @@ from alts.worker import CONFIG, RESOURCES_DIR
 from alts.worker.executors.ansible import AnsibleExecutor
 from alts.worker.executors.bats import BatsExecutor
 from alts.worker.executors.command import CommandExecutor
-from alts.worker.executors.python import PythonExecutor
 from alts.worker.executors.shell import ShellExecutor
 
 __all__ = [
@@ -80,12 +80,15 @@ BASE_SYSTEM_INFO_COMMANDS = {
 FILE_TYPE_REGEXES_MAPPING = {
     r'.*(bats).*': BatsExecutor,
     r'.*(Bourne-Again shell).*': ShellExecutor,
-    r'.*(python).*': PythonExecutor,
+    r'.*(python).*': CommandExecutor,
 }
+INTERPRETER_REGEX = re.compile(
+    r'^#!(?P<python_interpreter>.*(python[2-4]?))(?P<options> .*)?'
+)
 EXECUTORS_MAPPING = {
     '.bash': ShellExecutor,
     '.bats': BatsExecutor,
-    '.py': PythonExecutor,
+    '.py': CommandExecutor,
     '.sh': ShellExecutor,
     '.yml': AnsibleExecutor,
     '.yaml': AnsibleExecutor,
@@ -95,7 +98,6 @@ DetectExecutorResult = Type[Union[
     AnsibleExecutor,
     BatsExecutor,
     CommandExecutor,
-    PythonExecutor,
     ShellExecutor,
 ]]
 
@@ -943,7 +945,7 @@ class BaseRunner(object):
 
     def run_third_party_test(
         self,
-        executor: Union[AnsibleExecutor, BatsExecutor, ShellExecutor, PythonExecutor],
+        executor: Union[AnsibleExecutor, BatsExecutor, CommandExecutor, ShellExecutor],
         cmd_args: List[str],
         docker_args: Optional[List[str]] = None,
         workdir: str = '',
@@ -994,6 +996,28 @@ class BaseRunner(object):
                 return executor_class_  # noqa
         return ShellExecutor  # noqa
 
+    def detect_python_binary(
+        self,
+        test_path: Union[Path, str]
+    ) -> Tuple[str, str]:
+        default_python = 'python3'
+        if (self.dist_name in CONFIG.rhel_flavors
+                and self.dist_version.startswith(('6', '7'))):
+            default_python = 'python'
+        with open(test_path, 'rt') as f:
+            shebang = f.readline()
+            result = INTERPRETER_REGEX.search(shebang)
+            if not result:
+                return default_python, ''
+            result_dict = result.groupdict()
+            if 'python_interpreter' not in result_dict:
+                return default_python, ''
+            interpreter = result_dict['python_interpreter']
+            options = ''
+            if 'options' in result_dict:
+                options = result_dict['options'].strip()
+            return interpreter, options
+
     @command_decorator(
         f'{THIRD_PARTY_SECTION_NAME}_tests_wrapper',
         'Preparation/running third party tests has failed',
@@ -1039,15 +1063,21 @@ class BaseRunner(object):
                     continue
                 self._logger.info('Running %s', test_file)
                 self._logger.debug(
-                    'Executor: %s,',executor_class.__name__
+                    'Executor: %s,', executor_class.__name__
                 )
-                executor: Union[
-                    AnsibleExecutor,
-                    BatsExecutor,
-                    CommandExecutor,
-                    ShellExecutor,
-                    PythonExecutor,
-                ] = executor_class(**executor_params)
+                cmd_args = [test_file.name]
+                if executor_class == CommandExecutor:
+                    python, options = self.detect_python_binary(test_file)
+                    if options:
+                        cmd_args.insert(0, options)
+                    executor = CommandExecutor(python, **executor_params)
+                else:
+                    executor: Union[
+                        AnsibleExecutor,
+                        BatsExecutor,
+                        CommandExecutor,
+                        ShellExecutor,
+                    ] = executor_class(**executor_params)
                 self._logger.debug(
                     'Running the third party test %s on %s...',
                     test_file.name,
@@ -1057,7 +1087,7 @@ class BaseRunner(object):
                     key = f'{THIRD_PARTY_SECTION_NAME}_test_{test_file.name}'
                     self.run_third_party_test(
                         executor=executor,
-                        cmd_args=[test_file.name],
+                        cmd_args=cmd_args,
                         docker_args=['--workdir', workdir],
                         workdir=workdir,
                         artifacts_key=key,

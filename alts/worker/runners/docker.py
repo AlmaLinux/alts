@@ -17,15 +17,15 @@ from alts.shared.exceptions import (
     ThirdPartyTestError,
 )
 from alts.worker import CONFIG
+from alts.worker.executors.ansible import AnsibleExecutor
+from alts.worker.executors.bats import BatsExecutor
+from alts.worker.executors.command import CommandExecutor
+from alts.worker.executors.shell import ShellExecutor
 from alts.worker.runners.base import (
     TESTS_SECTION_NAME,
     BaseRunner,
     command_decorator,
 )
-from alts.worker.executors.ansible import AnsibleExecutor
-from alts.worker.executors.bats import BatsExecutor
-from alts.worker.executors.python import PythonExecutor
-from alts.worker.executors.shell import ShellExecutor
 
 __all__ = ['DockerRunner']
 
@@ -274,7 +274,7 @@ class DockerRunner(BaseRunner):
     )
     def run_third_party_test(
         self,
-        executor: Union[AnsibleExecutor, BatsExecutor, ShellExecutor, PythonExecutor],
+        executor: Union[AnsibleExecutor, BatsExecutor, CommandExecutor, ShellExecutor],
         cmd_args: List[str],
         docker_args: Optional[List[str]] = None,
         workdir: str = '',
