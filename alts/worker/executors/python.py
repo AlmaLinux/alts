@@ -35,7 +35,16 @@ class PythonExecutor(BaseExecutor):
             container_name=container_name,
         )
 
+    def check_binary_existence(self):
+        try:
+            super().check_binary_existence()
+        except FileNotFoundError:
+            self.binary_name = 'python3'
+            super().check_binary_existence()
+
     def detect_python_binary(self, cmd_args: List[str]) -> Tuple[str, str]:
+        if '--version' in cmd_args:
+            return self.binary_name, ''
         if not cmd_args:
             return self.binary_name, ''
         script_name = cmd_args[0]

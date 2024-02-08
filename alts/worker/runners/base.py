@@ -951,15 +951,7 @@ class BaseRunner(object):
         additional_section_name: str = '',
         env_vars: Optional[List[str]] = None,
     ):
-        return (
-            executor.run(
-                cmd_args=cmd_args,
-                docker_args=docker_args,
-                env_vars=env_vars,
-            )
-            .model_dump()
-            .values()
-        )
+        raise NotImplementedError
 
     def sort_tests(self, tests_dir: Path) -> List[Path]:
         tests_list = list(tests_dir.iterdir())
