@@ -71,7 +71,7 @@ class OpennebulaRunner(GenericVMRunner):
         # platform
         # Note: newer OS don't have 32-bit images usually, so we need to try
         # to find correct 64-bit replacement
-        if self.dist_version == 'i686':
+        if self.dist_arch == 'i686':
             arches_to_try = ['i386', 'i686', 'x86_64']
         else:
             arches_to_try = [self.dist_arch]
