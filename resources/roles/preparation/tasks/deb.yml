@@ -32,6 +32,27 @@
 - name: Update apt metadata
   shell: apt update
 
+- name: Add buster-backports repository
+  apt_repository:
+    repo: "deb http://ftp.debian.org/debian buster-backports main"
+    filename: "buster-backports"
+    update_cache: yes
+  when: "ansible_facts.distribution == 'Debian' and ansible_facts.distribution_release == 'buster'"
+
+- name: Install newer iptables for Debian 10
+  shell:
+    cmd: apt-get -y -t buster-backports install iptables
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+  when: "ansible_facts.distribution == 'Debian' and ansible_facts.distribution_release == 'buster'"
+
+- name: Delete buster-backports repository
+  apt_repository:
+    repo: "deb http://ftp.debian.org/debian buster-backports main"
+    filename: "buster-backports"
+    state: absent
+  when: "ansible_facts.distribution == 'Debian' and ansible_facts.distribution_release == 'buster'"
+
 - name: Install additional packages
   apt:
     name:
