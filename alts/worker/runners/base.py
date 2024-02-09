@@ -941,6 +941,7 @@ class BaseRunner(object):
         else:
             self._logger.debug('An unknown repository format, skipping')
             return git_repo_path
+        self._logger.info('Cloning %s to %s', repo_url, self._work_dir)
         repo_name = os.path.basename(repo_url)
         repo_reference_dir = None
         if CONFIG.git_reference_directory:

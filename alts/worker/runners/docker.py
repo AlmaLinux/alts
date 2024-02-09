@@ -296,9 +296,12 @@ class DockerRunner(BaseRunner):
         test_repo_path = super().clone_third_party_repo(repo_url, git_ref)
         if not test_repo_path:
             return
+        self._logger.info('Copying tests to container')
+        self._logger.debug('Repo path: %s', test_repo_path)
+        self._exec(('mkdir', '-p', CONFIG.tests_base_dir))
         self._copy([
             str(test_repo_path),
-            f'{self.env_name}:/tests/{test_repo_path.name}',
+            f'{self.env_name}:{CONFIG.tests_base_dir}/{test_repo_path.name}',
         ])
         return test_repo_path
 

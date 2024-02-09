@@ -64,7 +64,6 @@
     section: main
     option: tsflags
     state: absent
-  when: pytest_is_needed | bool
 
 - name: Delete /etc/rpm/macros.image-language-conf
   file:
