@@ -10,7 +10,7 @@
   yum:
     name: "{{ pkg_name }}"
     state: present
-  when: ansible_distribution_file_variety == 'RedHat'
+  when: ansible_distribution_file_variety in ('RedHat', 'OracleLinux')
   tags:
     - install_package
 
@@ -27,7 +27,7 @@
   yum:
     name: "{{ pkg_name }}"
     state: absent
-  when: ansible_distribution_file_variety == 'RedHat'
+  when: ansible_distribution_file_variety in ('RedHat', 'OracleLinux')
   tags:
     - uninstall_package
 
