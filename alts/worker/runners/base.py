@@ -1064,7 +1064,12 @@ class BaseRunner(object):
                 test_repo_path.name,
                 test_dir,
             )
-            tests_list = self.sort_tests(Path(test_repo_path, test_dir))
+            tests_path = Path(test_repo_path, test_dir)
+            if not tests_path.exists():
+                self._logger.warning('Directory %s does not exist', tests_path)
+                self._logger.warning('Skipping test configuration')
+                continue
+            tests_list = self.sort_tests(tests_path)
             for test_file in tests_list:
                 if tests_to_run and test_file.name not in tests_to_run:
                     continue
