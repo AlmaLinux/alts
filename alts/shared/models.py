@@ -299,7 +299,7 @@ class CeleryConfig(BaseModel):
     tests_exec_timeout: int = 1200  # 20 minutes in seconds
     deprecated_ansible_venv: str = '/code/ansible_env'
     epel_release_urls: Dict[str, str] = {
-        '6': 'https://dl.fedoraproject.org/pub/archive/epel/6/x86_64/'
+        '6': 'http://dl.fedoraproject.org/pub/archive/epel/6/x86_64/'
              'epel-release-6-8.noarch.rpm',
         '7': 'https://dl.fedoraproject.org/pub/archive/epel/7/x86_64/'
              'Packages/e/epel-release-7-12.noarch.rpm',

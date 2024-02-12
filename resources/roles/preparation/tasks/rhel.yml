@@ -48,7 +48,7 @@
   with_items:
     - "os"
     - "updates"
-  when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version == '6'"
+  when: "ansible_distribution_file_variety == 'RedHat' and ansible_facts.distribution_major_version == '6'"
 
 - name: Add YUM proxy
   ini_file:
@@ -84,8 +84,8 @@
   when: > 
     epel_release_url is defined and
     epel_release_url and
-    ansible_facts.os_family == 'RedHat' and
-    ansible_facts.distribution_major_version <= '7'
+    ansible_distribution_file_variety in ('RedHat', 'OracleLinux') and
+    ansible_facts.distribution_major_version in ('6', '7')
 
 - name: Disable epel on 7 version 32-bit
   shell:
