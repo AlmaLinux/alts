@@ -1322,6 +1322,7 @@ class GenericVMRunner(BaseRunner):
     def __init__(
         self,
         task_id: str,
+        task_is_aborted: Callable,
         dist_name: str,
         dist_version: Union[str, int],
         repositories: Optional[List[dict]] = None,
@@ -1331,6 +1332,7 @@ class GenericVMRunner(BaseRunner):
     ):
         super().__init__(
             task_id,
+            task_is_aborted,
             dist_name,
             dist_version,
             repositories=repositories,
