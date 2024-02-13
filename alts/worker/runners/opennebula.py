@@ -10,6 +10,7 @@ from typing import Callable, List, Optional, Union
 
 import pyone
 
+from alts.shared.constants import X32_ARCHITECTURES
 from alts.shared.exceptions import VMImageNotFound
 from alts.worker import CONFIG
 from alts.worker.runners.base import GenericVMRunner
@@ -72,12 +73,12 @@ class OpennebulaRunner(GenericVMRunner):
         # Note: newer OS don't have 32-bit images usually, so we need to try
         # to find correct 64-bit replacement
         if self.dist_arch == 'i686':
-            arches_to_try = ['i386', 'i686', 'x86_64']
+            arches_to_try = X32_ARCHITECTURES
         else:
             arches_to_try = [self.dist_arch]
         filtered_templates = []
-        for template in templates.VMTEMPLATE:
-            for arch in arches_to_try:
+        for arch in arches_to_try:
+            for template in templates.VMTEMPLATE:
                 conditions = [
                     bool(re.search(regex_str, template.NAME)),
                     template.NAME.startswith(platform_name_version),
@@ -88,6 +89,10 @@ class OpennebulaRunner(GenericVMRunner):
                 if all(conditions):
                     filtered_templates.append(template)
                     break
+        self._logger.debug(
+            'Filtered templates: %s',
+            [i.NAME for i in filtered_templates],
+        )
         template_params = (
             f'distribution: {self.dist_name}, '
             f'dist version: {self.dist_version}, '
