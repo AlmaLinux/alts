@@ -3,6 +3,7 @@ import random
 import threading
 import time
 
+from celery.contrib.abortable import AbortableAsyncResult
 from celery.exceptions import TimeoutError
 from celery.states import READY_STATES
 
@@ -33,13 +34,15 @@ class TasksMonitor(threading.Thread):
             updated_tasks = []
             with Session() as session, session.begin():
                 for task in session.query(Task).filter(
-                    Task.status.notin_(READY_STATES)
+                    Task.status.notin_(READY_STATES),
+                    Task.status != 'ABORTED',
                 ):
-                    task_result = self.__celery.AsyncResult(task.task_id)
+                    task_result = AbortableAsyncResult(task.task_id, app=self.__celery)
                     # Ensure that task state will be updated
                     # by getting task result
                     try:
                         _ = task_result.get(timeout=self.__get_result_timeout)
+                        self.logger.debug(f"Current status of {task.task_id} is {task_result.state}")
                     except TimeoutError:
                         pass
                     except Exception as e:

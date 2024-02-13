@@ -6,6 +6,7 @@
 
 __all__ = [
     'ALTSBaseError',
+    'AbortedTestTask',
     'ConfigNotFoundError',
     'DBUpdateError',
     'InstallPackageError',
@@ -25,6 +26,11 @@ __all__ = [
 
 class ALTSBaseError(Exception):
     """AlmaLinux Test System base error."""
+
+
+class AbortedTestTask(ALTSBaseError):
+    """A test task has been aborted"""
+    pass
 
 
 class DBUpdateError(ALTSBaseError):

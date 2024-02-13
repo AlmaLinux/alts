@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Callable, Tuple
 
 import pytest
 
@@ -6,38 +6,42 @@ from alts.worker.runners import DockerRunner
 
 # from pyfakefs.fake_filesystem_unittest import TestCase
 
+# This function is provided by worker and doesn't
+# affect this test.
+def task_is_aborted():
+    pass
 
 class TestDockerRunner:
     @pytest.mark.parametrize(
         'inputs, pkg_manager',
         [
             pytest.param(
-                ('test_id_1', 'fedora', '33'),
+                ('test_id_1', task_is_aborted, 'fedora', '33'),
                 'dnf',
                 id='fedora_33',
             ),
             pytest.param(
-                ('test_id_2', 'centos', '7'),
+                ('test_id_2', task_is_aborted, 'centos', '7'),
                 'yum',
                 id='centos_7',
             ),
             pytest.param(
-                ('test_id_3', 'centos', '8'),
+                ('test_id_3', task_is_aborted, 'centos', '8'),
                 'dnf',
                 id='centos_8',
             ),
             pytest.param(
-                ('test_id_4', 'ubuntu', '20.04'),
+                ('test_id_4', task_is_aborted, 'ubuntu', '20.04'),
                 'apt-get',
                 id='ubuntu_20.04',
             ),
             pytest.param(
-                ('test_id_5', 'debian', '11.0'),
+                ('test_id_5', task_is_aborted, 'debian', '11.0'),
                 'apt-get',
                 id='debian_11.0',
             ),
             pytest.param(
-                ('test_id_6', 'almalinux', '8.3'),
+                ('test_id_6', task_is_aborted, 'almalinux', '8.3'),
                 'dnf',
                 id='almalinux_8.3',
             ),
@@ -45,7 +49,7 @@ class TestDockerRunner:
     )
     def test_docker_runner_init(
         self,
-        inputs: Tuple[str, str, str],
+        inputs: Tuple[str, Callable, str, str],
         pkg_manager: str,
     ):
         expected = {

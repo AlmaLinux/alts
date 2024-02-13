@@ -6,7 +6,7 @@
 
 import os
 import re
-from typing import List, Optional, Union
+from typing import Callable, List, Optional, Union
 
 import pyone
 
@@ -28,6 +28,7 @@ class OpennebulaRunner(GenericVMRunner):
     def __init__(
         self,
         task_id: str,
+        task_is_aborted: Callable,
         dist_name: str,
         dist_version: Union[str, int],
         repositories: Optional[List[dict]] = None,
@@ -38,6 +39,7 @@ class OpennebulaRunner(GenericVMRunner):
     ):
         super().__init__(
             task_id,
+            task_is_aborted,
             dist_name,
             dist_version,
             repositories=repositories,

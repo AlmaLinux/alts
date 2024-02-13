@@ -44,7 +44,7 @@ class TestsScheduler(threading.Thread):
             response.raise_for_status()
             response_as_json = response.json()
             if not response_as_json:
-                self.logger.info('There is no available test tasks')
+                self.logger.info('There are no available test tasks')
         except Exception:
             self.logger.exception('Cannot get available test tasks:')
         return response_as_json
@@ -141,6 +141,8 @@ class TestsScheduler(threading.Thread):
             try:
                 task_record = Task(
                     task_id=task_id,
+                    bs_task_id=payload.bs_task_id,
+                    callback_href=payload.callback_href,
                     queue_name=queue_name,
                     status='NEW',
                 )

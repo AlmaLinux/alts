@@ -11,12 +11,13 @@ import time
 import urllib.parse
 from functools import wraps
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 from mako.lookup import TemplateLookup
 from plumbum import local, ProcessExecutionError, ProcessTimedOut
 
 from alts.shared.exceptions import (
+    AbortedTestTask,
     InstallPackageError,
     PackageIntegrityTestsError,
     ProvisionError,
@@ -73,11 +74,14 @@ def command_decorator(
     error_message,
     exception_class=None,
     additional_section_name=None,
+    is_abortable=True,
 ):
     def method_wrapper(fn):
         @wraps(fn)
         def inner_wrapper(*args, **kwargs):
             self, *args = args
+            if is_abortable and not self.already_aborted:
+                self._raise_if_aborted()
             if not self._work_dir or not os.path.exists(self._work_dir):
                 return
             start = datetime.datetime.utcnow()
@@ -146,9 +150,12 @@ class BaseRunner(object):
     INTEGRITY_TESTS_DIR = 'package_tests'
     INIT_TESTS = frozenset(['0_init', '0_init.yml'])
 
+    already_aborted: bool = False
+
     def __init__(
         self,
         task_id: str,
+        task_is_aborted: Callable,
         dist_name: str,
         dist_version: Union[str, int],
         repositories: Optional[List[dict]] = None,
@@ -159,6 +166,7 @@ class BaseRunner(object):
     ):
         # Environment ID and working directory preparation
         self._task_id = task_id
+        self._task_is_aborted = task_is_aborted
         self._vm_ip = None
         self._test_configuration = test_configuration or {}
         self._test_env = self._test_configuration.get('test_env') or {}
@@ -1076,6 +1084,7 @@ class BaseRunner(object):
         'stop_environment',
         'Cannot destroy environment',
         exception_class=StopEnvironmentError,
+        is_abortable=False,
     )
     def stop_env(self):
         if os.path.exists(self._work_dir):
@@ -1197,6 +1206,11 @@ class BaseRunner(object):
         )
         return False
 
+    def _raise_if_aborted(self):
+        if self._task_is_aborted():
+            self.already_aborted = True
+            raise AbortedTestTask
+
 
 class GenericVMRunner(BaseRunner):
     VM_RESTART_OUTPUT_TRIGGER = '>>>VMRESTART<<<'
@@ -1249,6 +1263,7 @@ class GenericVMRunner(BaseRunner):
         'start_environment',
         'Cannot start environment',
         exception_class=StartEnvironmentError,
+        is_abortable=False,
     )
     def start_env(self):
         super().start_env()

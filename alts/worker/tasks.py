@@ -4,8 +4,12 @@
 
 """AlmaLinux Test System package testing tasks running."""
 
+import celery
 import logging
 import urllib.parse
+from celery.contrib.abortable import AbortableTask
+from celery.states import REVOKED
+from celery.exceptions import Ignore
 from collections import defaultdict
 from typing import Union
 
@@ -22,6 +26,7 @@ from alts.shared.exceptions import (
     TerraformInitializationError,
     ThirdPartyTestError,
     UninstallPackageError,
+    AbortedTestTask,
 )
 from alts.worker import CONFIG
 from alts.worker.app import celery_app
@@ -62,8 +67,8 @@ def are_tap_tests_success(tests_output: str):
     return errors == 0
 
 
-@celery_app.task()
-def run_tests(task_params: dict):
+@celery_app.task(bind=True, base=AbortableTask)
+def run_tests(self, task_params: dict):
     """
     Executes a package test in a specified environment.
 
@@ -77,6 +82,7 @@ def run_tests(task_params: dict):
     dict
         Result summary of a test execution.
     """
+    aborted = False
 
     def is_success(stage_data_: dict):
         tap_result = are_tap_tests_success(stage_data_.get('stdout', ''))
@@ -114,6 +120,7 @@ def run_tests(task_params: dict):
 
     runner_args = (
         task_params['task_id'],
+        self.is_aborted,
         task_params['dist_name'],
         task_params['dist_version'],
     )
@@ -170,6 +177,13 @@ def run_tests(task_params: dict):
         logging.exception('Cannot uninstall package: %s', exc)
     except StopEnvironmentError as exc:
         logging.exception('Cannot stop environment: %s', exc)
+    except AbortedTestTask:
+        logging.warning(
+            'Task %s has been aborted. Gracefully stopping tests.',
+            task_params['task_id']
+        )
+        aborted = True
+
     except Exception as exc:
         logging.exception('Unexpected exception: %s', exc)
         set_artifacts_when_stage_has_unexpected_exception(
@@ -180,27 +194,30 @@ def run_tests(task_params: dict):
     finally:
         runner.teardown()
         summary = defaultdict(dict)
-        for stage, stage_data in runner.artifacts.items():
-            # FIXME: Temporary solution, needs to be removed when this
-            #  test system will be the only running one
-            if stage not in TESTS_SECTIONS_NAMES:
-                stage_info = {'success': is_success(stage_data)}
-                if CONFIG.logs_uploader_config.skip_artifacts_upload:
-                    stage_info.update(stage_data)
-                summary[stage] = stage_info
-                continue
-            if stage not in summary:
-                summary[stage] = {}
-            for inner_stage, inner_data in stage_data.items():
-                stage_info = {
-                    'success': is_success(inner_data),
-                    'output': inner_data['stdout'],
-                }
-                if CONFIG.logs_uploader_config.skip_artifacts_upload:
-                    stage_info.update(inner_data)
-                summary[stage][inner_stage] = stage_info
-        if runner.uploaded_logs:
-            summary['logs'] = runner.uploaded_logs
+        if aborted:
+            summary['revoked'] = True
+        else:
+            for stage, stage_data in runner.artifacts.items():
+                # FIXME: Temporary solution, needs to be removed when this
+                #  test system will be the only running one
+                if stage not in TESTS_SECTIONS_NAMES:
+                    stage_info = {'success': is_success(stage_data)}
+                    if CONFIG.logs_uploader_config.skip_artifacts_upload:
+                        stage_info.update(stage_data)
+                    summary[stage] = stage_info
+                    continue
+                if stage not in summary:
+                    summary[stage] = {}
+                for inner_stage, inner_data in stage_data.items():
+                    stage_info = {
+                        'success': is_success(inner_data),
+                        'output': inner_data['stdout'],
+                    }
+                    if CONFIG.logs_uploader_config.skip_artifacts_upload:
+                        stage_info.update(inner_data)
+                    summary[stage][inner_stage] = stage_info
+            if runner.uploaded_logs:
+                summary['logs'] = runner.uploaded_logs
         if task_params.get('callback_href'):
             full_url = urllib.parse.urljoin(
                 CONFIG.bs_host,

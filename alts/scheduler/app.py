@@ -4,11 +4,15 @@
 
 """AlmaLinux Test System tasks scheduler application."""
 
+import aiohttp
 import logging
 import signal
+import urllib.parse
 from threading import Event
 
+from celery.contrib.abortable import AbortableAsyncResult
 from celery.exceptions import TimeoutError
+from celery.states import READY_STATES, RECEIVED, STARTED
 from fastapi import (
     Depends,
     FastAPI,
@@ -18,14 +22,15 @@ from fastapi import (
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer
 from jose import JWTError, jwt
+from sqlalchemy import select
 
 from alts.scheduler import CONFIG
 from alts.scheduler.db import Session, Task, database
 from alts.scheduler.monitoring import TasksMonitor
 from alts.scheduler.scheduling import TestsScheduler
-from alts.shared.constants import API_VERSION
+from alts.shared.constants import API_VERSION, DEFAULT_REQUEST_TIMEOUT
 from alts.shared.exceptions import ALTSBaseError
-from alts.shared.models import TaskResultResponse
+from alts.shared.models import CancelTaskResponse, TaskResultResponse
 from alts.worker.app import celery_app
 
 app = FastAPI()
@@ -54,9 +59,9 @@ def get_celery_task_result(task_id: str, timeout: int = 1) -> dict:
 
     """
     result = {}
-    task_data = celery_app.AsyncResult(task_id)
+    task = AbortableAsyncResult(task_id, app=celery_app)
     try:
-        result['result'] = task_data.get(timeout=timeout)
+        result['result'] = task.get(timeout=timeout)
     except TimeoutError:
         pass
     except ALTSBaseError as e:
@@ -69,8 +74,48 @@ def get_celery_task_result(task_id: str, timeout: int = 1) -> dict:
         logging.exception(
             'Unknown exception while getting results from Celery',
         )
-    result['state'] = task_data.state
-    return result
+    result['state'] = task.state
+    return task, result
+
+
+async def post_revoked_test_task_result(task_id, task_callback_href):
+    """Post revoked test task result to web server.
+
+    Parameters
+    ----------
+    task_id : str
+        Build System test task identifier.
+    task_callback_href : str
+        Test task callback URL.
+
+    """
+    headers = {'Authorization': f'Bearer {CONFIG.bs_token}'}
+    full_url = urllib.parse.urljoin(
+        CONFIG.bs_host,
+        task_callback_href,
+    )
+    payload = {
+        'api_version': API_VERSION,
+        'result': {
+            'revoked': True
+        },
+        'stats': {}
+    }
+    async with aiohttp.ClientSession(headers=headers) as session:
+        async with session.post(
+            full_url,
+            json=payload,
+            timeout=DEFAULT_REQUEST_TIMEOUT,
+        ) as response:
+            resp_json = None
+            try:
+                resp_json = await response.json()
+            except Exception as e:
+                logging.error(
+                    'Could not post test task result of %s to web_server: %s',
+                    task_id, str(e)
+                )
+            response.raise_for_status()
 
 
 @app.on_event('startup')
@@ -90,7 +135,7 @@ async def startup():
         with session.begin():
             tasks_for_update = []
             for task in session.query(Task).filter(Task.status == 'STARTED'):
-                task_result = celery_app.AsyncResult(task.task_id)
+                task_result = AbortableAsyncResult(task.task_id, app=celery_app)
                 if task.status != task_result.state:
                     task.status = task_result.state
                     tasks_for_update.append(task)
@@ -196,6 +241,64 @@ async def get_task_result(
     JSON
         JSON-encoded response with task result.
     """
-    task_result = get_celery_task_result(task_id)
+    _, task_result = get_celery_task_result(task_id)
     task_result['api_version'] = API_VERSION
     return JSONResponse(content=task_result)
+
+
+@app.post('/cancel_tasks', response_model=CancelTaskResponse)
+async def cancel_task(
+    payload: dict,
+    _=Depends(authenticate_user),
+) -> JSONResponse:
+    """
+    Requests for cancelling tasks.
+
+    Parameters
+    ----------
+    task_id : list(str)
+        Test System task identifier.
+    _ : dict
+        Authenticated user's token.
+
+    Returns
+    -------
+    JSON
+        JSON-encoded response with task result.
+    """
+    with Session() as session, session.begin():
+        db_tasks = (
+            session.execute(
+                select(Task).where(
+                    Task.status.notin_(READY_STATES),
+                    Task.bs_task_id.in_(payload['bs_task_ids'])
+                )
+            )
+        ).scalars().all()
+        task_ids = {
+            db_task.bs_task_id:db_task.task_id
+            for db_task in db_tasks
+        }
+
+        logging.info(f'cancel_tests have been called - {payload=}')
+        logging.info(f'Current tasks in db - {task_ids=}')
+        celery_app.control.revoke(
+            list(task_ids.values()),
+        #    # Terminating only works on eventlet and prefork Celery pools
+        #    terminate=True,
+        )
+        for db_task in db_tasks:
+            task, _ = get_celery_task_result(db_task.task_id)
+            # Here we only post revoked test results that are still
+            # waiting to be enqueued/processed by workers.
+            # The rest of the tests results are posted by the workers.
+            if task.state in (RECEIVED, STARTED):
+                task.abort()
+                continue
+
+            await post_revoked_test_task_result(
+                db_task.task_id,
+                db_task.callback_href,
+            )
+    result = { 'success': True }
+    return JSONResponse(content=result)
