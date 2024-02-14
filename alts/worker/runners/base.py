@@ -1372,34 +1372,37 @@ class GenericVMRunner(BaseRunner):
         is_abortable=False,
     )
     def start_env(self):
-        super().start_env()
+        exit_code, stdout, stderr = super().start_env()
         # VM gets its IP address only after deploy.
         # To extract it, the `vm_ip` output should be defined
         # in Terraform main file.
-        exit_code, stdout, stderr = local['terraform'].with_cwd(
+        ip_exit_code, ip_stdout, ip_stderr = local['terraform'].with_cwd(
             self._work_dir).run(
             args=('output', '-raw',  '-no-color', 'vm_ip'),
             retcode=None,
             timeout=CONFIG.provision_timeout,
         )
-        if exit_code != 0:
-            error_message = f'Cannot get VM IP: {stderr}'
+        if ip_exit_code != 0:
+            error_message = f'Cannot get VM IP: {ip_stderr}'
             self._logger.error(error_message)
-            return exit_code, stdout, stderr
-        self._vm_ip = stdout
+            return ip_exit_code, ip_stdout, ip_stderr
+        self._vm_ip = ip_stdout
         # Because we don't know about a VM's IP before its creating
         # And get an IP after launch of terraform script
         self._create_ansible_inventory_file()
         self._logger.info('Waiting for SSH port to be available')
-        exit_code, stdout, stderr = self._wait_for_ssh()
-        if exit_code:
+        ssh_exit_code, ssh_stdout, ssh_stderr = self._wait_for_ssh()
+        if ssh_exit_code:
             self._logger.error(
                 'Machine %s is started, but SSH connection is not working',
                 self.env_name,
             )
         else:
             self._logger.info('Machine is available for SSH connection')
-        return exit_code, stdout, stderr
+        final_exit_code = exit_code or ssh_exit_code
+        final_stdout = f'{stdout}\n\n{ssh_stdout}'
+        final_stderr = f'{stderr}\n\n{ssh_stderr}'
+        return final_exit_code, final_stdout, final_stderr
 
     def setup(self, skip_provision: bool = False):
         super().setup(skip_provision=skip_provision)

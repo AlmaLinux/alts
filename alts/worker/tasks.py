@@ -35,6 +35,7 @@ from alts.shared.exceptions import (
     UninstallPackageError,
     AbortedTestTask,
     VMImageNotFound,
+    WorkDirPreparationError,
 )
 from alts.worker import CONFIG
 from alts.worker.app import celery_app
@@ -88,6 +89,7 @@ class RetryableTask(AbortableTask):
     max_retries = 5
     default_retry_delay = 10
     retry_backoff = 5
+    soft_time_limit = CONFIG.task_soft_time_limit
 
 
 @celery_app.task(bind=True, base=RetryableTask)
@@ -190,6 +192,12 @@ def run_tests(self, task_params: dict):
         )
     except VMImageNotFound as exc:
         logging.exception('Cannot find VM image: %s', exc)
+    except WorkDirPreparationError:
+        runner.artifacts['prepare_environment'] = {
+            'exit_code': 1,
+            'stdout': '',
+            'stderr': traceback.format_exc()
+        }
     except TerraformInitializationError as exc:
         logging.exception('Cannot initialize terraform: %s', exc)
     except StartEnvironmentError as exc:
