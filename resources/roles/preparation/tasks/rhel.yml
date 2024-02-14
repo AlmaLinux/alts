@@ -69,7 +69,6 @@
   file:
     path: /etc/rpm/macros.image-language-conf
     state: absent
-  when: pytest_is_needed | bool
 
 - name: Install epel-release (8 and higher)
   yum:
