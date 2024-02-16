@@ -1426,9 +1426,11 @@ class GenericVMRunner(BaseRunner):
                 self._tests_dir,
                 Path(repo_url).name.replace('.git', ''),
             )
-            cmd = (f'[ if -e {repo_path} ] then; cd {repo_path} && git pull; '
+            cmd = (f'if [ -e {repo_path} ]; then cd {repo_path} && git pull; '
                    f'else cd {self._tests_dir} && git clone {repo_url}; fi')
-            self._ssh_client.sync_run_command(cmd)
+            result = self._ssh_client.sync_run_command(cmd)
+            if not result.is_successful():
+                return
             repo_path = Path(
                 self._tests_dir,
                 Path(repo_url).name.replace('.git', ''),
