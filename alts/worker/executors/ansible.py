@@ -42,7 +42,14 @@ class AnsibleExecutor(BaseExecutor):
                 self._ansible_user = ssh_params.get('username') or 'root'
 
     def __construct_cmd_args(self, cmd_args: List[str]) -> List[str]:
-        args = ['-i', f'{self._ansible_host},', '-u', self._ansible_user]
+        args = [
+            '-i',
+            f'{self._ansible_host},',
+            '-u',
+            self._ansible_user,
+            '-c',
+            self.connection_type,
+        ]
         if self.env_vars:
             args += ['-e', f'{self.env_vars}']
         args += cmd_args
