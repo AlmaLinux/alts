@@ -559,7 +559,6 @@ class BaseRunner(object):
         return {
             'connection_type': self.ansible_connection_type,
             'container_name': str(self.env_name),
-            'logger': self._logger,
             'ssh_params': self.default_ssh_params,
         }
 
