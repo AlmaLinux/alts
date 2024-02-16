@@ -269,7 +269,7 @@ class CeleryConfig(BaseModel):
     worker_deduplicate_successful_tasks: bool = True
     broker_pool_limit: int = 20
     # Task track timeout
-    task_tracking_timeout: int = 3600
+    task_tracking_timeout: int = 7300
     task_soft_time_limit: int = 7200  # 2 hours
     # Application-level settings
     # Supported architectures and distributions
