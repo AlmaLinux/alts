@@ -17,6 +17,7 @@ class BatsExecutor(BaseExecutor):
         logging_level: Literal['DEBUG', 'INFO'] = 'INFO',
         connection_type: Literal['local', 'ssh', 'docker'] = 'local',
         container_name: str = '',
+        check_binary_existence: bool = True,
     ):
         super().__init__(
             binary_name=binary_name,
@@ -28,6 +29,7 @@ class BatsExecutor(BaseExecutor):
             logging_level=logging_level,
             connection_type=connection_type,
             container_name=container_name,
+            check_binary_existence=check_binary_existence,
         )
 
     @measure_stage('run_local_bats')

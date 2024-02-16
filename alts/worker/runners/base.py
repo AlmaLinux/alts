@@ -386,7 +386,7 @@ class BaseRunner(object):
                 continue
             parsed = urllib.parse.urlparse(repo['url'])
             netloc = parsed.netloc
-            if CONFIG.bs_token:
+            if CONFIG.bs_token and '@' not in netloc:
                 netloc = f'alts:{CONFIG.bs_token}@{parsed.netloc}'
             url = urllib.parse.urlunparse((
                 parsed.scheme,
@@ -1085,7 +1085,10 @@ class BaseRunner(object):
                 self._logger.debug(
                     'Executor: %s,', executor_class.__name__
                 )
-                cmd_args = [test_file.name]
+                if executor_class == AnsibleExecutor:
+                    cmd_args = [test_file]
+                else:
+                    cmd_args = [test_file.name]
                 if executor_class == CommandExecutor:
                     python, options = self.detect_python_binary(test_file)
                     if options:

@@ -44,6 +44,7 @@ class BaseExecutor:
         logging_level: Literal['DEBUG', 'INFO'] = 'INFO',
         connection_type: Literal['local', 'ssh', 'docker'] = 'local',
         container_name: str = '',
+        check_binary_existence: bool = True,
     ) -> None:
         self.ssh_client = None
         self.env_vars = {}
@@ -64,7 +65,8 @@ class BaseExecutor:
         self.logger = logger
         if not self.logger:
             self.logger = self.setup_logger(logger_name, logging_level)
-        self.check_binary_existence()
+        if check_binary_existence:
+            self.check_binary_existence()
 
     def setup_logger(
         self,
