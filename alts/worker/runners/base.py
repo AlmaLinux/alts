@@ -711,6 +711,11 @@ class BaseRunner(object):
         executor_params = self.get_test_executor_params()
         executor_params['timeout'] = CONFIG.commands_exec_timeout
         for section, cmd in self.get_system_info_commands_list().items():
+            start = datetime.datetime.utcnow()
+            self._logger.info(
+                'Running "%s" for env %s',
+                cmd, self.env_name
+            )
             try:
                 cmd_as_list = cmd.split(' ')
                 binary, *args = cmd_as_list
@@ -722,6 +727,11 @@ class BaseRunner(object):
                     errored_commands[section] = output
             except Exception as e:
                 errored_commands[section] = str(e)
+            finish = datetime.datetime.utcnow()
+            self._logger.info(
+                '"%s" for env %s took %s',
+                cmd, self.env_name, str(finish - start)
+            )
         success_output = '\n\n'.join((
             section + '\n' + section_out
             for section, section_out in successful_commands.items()
