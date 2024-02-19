@@ -8,6 +8,7 @@ import re
 import shutil
 import tempfile
 import time
+import traceback
 import urllib.parse
 from functools import wraps
 from pathlib import Path
@@ -1051,6 +1052,7 @@ class BaseRunner(object):
         if not self._test_configuration:
             return 0, 'Nothing to run', ''
         errors = []
+        executors_cache = {}
 
         executor_params = self.get_test_executor_params()
         executor_params['timeout'] = CONFIG.tests_exec_timeout
@@ -1104,12 +1106,16 @@ class BaseRunner(object):
                         cmd_args.insert(0, options)
                     executor = CommandExecutor(python, **executor_params)
                 else:
-                    executor: Union[
-                        AnsibleExecutor,
-                        BatsExecutor,
-                        CommandExecutor,
-                        ShellExecutor,
-                    ] = executor_class(**executor_params)
+                    if executor_class in executors_cache:
+                        executor = executors_cache[executor_class]
+                    else:
+                        executor: Union[
+                            AnsibleExecutor,
+                            BatsExecutor,
+                            CommandExecutor,
+                            ShellExecutor,
+                        ] = executor_class(**executor_params)
+                        executors_cache[executor_class] = executor
                 self._logger.debug(
                     'Running the third party test %s on %s...',
                     test_file.name,
@@ -1129,6 +1135,9 @@ class BaseRunner(object):
                 except ThirdPartyTestError:
                     errors.append(f'Test {test_file.name} has failed')
                 except Exception:
+                    errors.append(
+                        f'Test {test_file.name} failed:\n{traceback.format_exc()}'
+                    )
                     self._logger.exception(
                         'An unknown error occurred during the test execution'
                     )

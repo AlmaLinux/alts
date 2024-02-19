@@ -60,6 +60,7 @@ class AnsibleExecutor(BaseExecutor):
         self,
         cmd_args: List[str],
         workdir: str = '',
+        **kwargs: Any,
     ) -> CommandResult:
         args = self.__construct_cmd_args(cmd_args)
         return super().run_local_command(args)

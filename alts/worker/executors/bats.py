@@ -37,6 +37,7 @@ class BatsExecutor(BaseExecutor):
         self,
         cmd_args: List[str],
         workdir: str = '',
+        **kwargs: Any,
     ) -> CommandResult:
         return super().run_local_command(['--tap', *cmd_args])
 

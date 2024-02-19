@@ -118,6 +118,7 @@ class BaseExecutor:
         self,
         cmd_args: List[str],
         workdir: str = '',
+        **kwargs: Any,
     ) -> CommandResult:
         try:
             executable = local[self.binary_name].with_env(**self.env_vars)
