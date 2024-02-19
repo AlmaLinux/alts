@@ -37,9 +37,13 @@ class BatsExecutor(BaseExecutor):
         self,
         cmd_args: List[str],
         workdir: str = '',
-        **kwargs: Any,
+        env_vars: Optional[List[str]] = None,
     ) -> CommandResult:
-        return super().run_local_command(['--tap', *cmd_args])
+        return super().run_local_command(
+            ['--tap', *cmd_args],
+            workdir=workdir,
+            env_vars=env_vars,
+        )
 
     @measure_stage('run_ssh_bats')
     def run_ssh_command(

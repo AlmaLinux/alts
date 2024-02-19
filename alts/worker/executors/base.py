@@ -91,14 +91,14 @@ class BaseExecutor:
         if self.connection_type == 'docker':
             func = self.run_docker_command
         try:
-            result = func(['--version'])
+            result = func(['--version'])  # noqa
         except Exception as exc:
             self.logger.exception('Cannot check binary existence:')
             raise exc
         if not result.is_successful():
             # Some commands do not have --version option, try --help instead
             try:
-                result = func(['--help'])
+                result = func(['--help'])  # noqa
             except Exception as exc:
                 self.logger.exception('Cannot check binary existence:')
                 raise exc
@@ -118,10 +118,19 @@ class BaseExecutor:
         self,
         cmd_args: List[str],
         workdir: str = '',
-        **kwargs: Any,
+        env_vars: Optional[List[str]] = None,
     ) -> CommandResult:
+        all_env_vars = {}
+        if self.env_vars:
+            all_env_vars.update(self.env_vars)
+        if env_vars:
+            env_vars_dict = {}
+            for env_var in env_vars:
+                name, value = env_var.split('=')
+                env_vars_dict[name] = value
+            all_env_vars.update(**env_vars_dict)
         try:
-            executable = local[self.binary_name].with_env(**self.env_vars)
+            executable = local[self.binary_name].with_env(**all_env_vars)
             if workdir:
                 executable = executable.with_cwd(workdir)
             exit_code, stdout, stderr = executable.run(

@@ -41,7 +41,11 @@ class AnsibleExecutor(BaseExecutor):
                 self._ansible_host = ssh_params['host']
                 self._ansible_user = ssh_params.get('username') or 'root'
 
-    def __construct_cmd_args(self, cmd_args: List[str]) -> List[str]:
+    def __construct_cmd_args(
+        self,
+        cmd_args: List[str],
+        env_vars: Optional[List[str]] = None,
+    ) -> List[str]:
         args = [
             '-i',
             f'{self._ansible_host},',
@@ -50,8 +54,10 @@ class AnsibleExecutor(BaseExecutor):
             '-c',
             self.connection_type,
         ]
-        if self.env_vars:
-            args += ['-e', f'{self.env_vars}']
+        env_vars_parts = [f'{k}={v}' for k, v in self.env_vars.items()]
+        env_vars_parts.extend(env_vars)
+        if env_vars_parts:
+            args += ['-e', ' '.join(env_vars_parts)]
         args += cmd_args
         return args
 
@@ -60,10 +66,10 @@ class AnsibleExecutor(BaseExecutor):
         self,
         cmd_args: List[str],
         workdir: str = '',
-        **kwargs: Any,
+        env_vars: Optional[List[str]] = None,
     ) -> CommandResult:
         args = self.__construct_cmd_args(cmd_args)
-        return super().run_local_command(args)
+        return super().run_local_command(args, env_vars=env_vars)
 
     @measure_stage('run_remote_ansible')
     def run_ssh_command(
