@@ -205,7 +205,6 @@ class BaseRunner(object):
         # Environment ID and working directory preparation
         self._task_id = task_id
         self._task_is_aborted = task_is_aborted
-        self._vm_ip = None
         self._test_configuration = test_configuration or {}
         self._test_env = self._test_configuration.get('test_env') or {}
         self._logger = self.init_test_task_logger(
@@ -346,25 +345,8 @@ class BaseRunner(object):
     def stats(self):
         return self._stats
 
-    @property
-    def vm_ip(self):
-        return self._vm_ip
-
-    @property
-    def default_ssh_params(self) -> Dict[str, Any]:
-        max_keepalive_msgs = (
-            CONFIG.tests_exec_timeout // CONFIG.keepalive_interval
-        ) + 5
-        return {
-            'host': self.vm_ip or '',
-            'username': 'root',
-            'client_keys_files': ['~/.ssh/id_rsa.pub'],
-            'disable_known_hosts_check': True,
-            'ignore_encrypted_keys': True,
-            'logging_level': 'DEBUG' if self._verbose else 'INFO',
-            'keepalive_interval': CONFIG.keepalive_interval,
-            'keepalive_count_max': max_keepalive_msgs,
-        }
+    def exec_command(self, *args, **kwargs) -> Any:
+        raise NotImplementedError
 
     def prepare_repositories(self, repositories: List[dict]) -> List[dict]:
         if self.dist_name in CONFIG.rhel_flavors:
@@ -475,7 +457,7 @@ class BaseRunner(object):
             content = template.render(**kwargs)
             f.write(content)
 
-    def _create_ansible_inventory_file(self):
+    def _create_ansible_inventory_file(self, **kwargs):
         self._inventory_file_path = os.path.join(
             self._work_dir,
             self.ANSIBLE_INVENTORY_FILE,
@@ -484,8 +466,8 @@ class BaseRunner(object):
             f'{self.ANSIBLE_INVENTORY_FILE}.tmpl',
             self._inventory_file_path,
             env_name=self.env_name,
-            vm_ip=self.vm_ip,
             connection_type=self.ansible_connection_type,
+            **kwargs,
         )
 
     def _render_tf_main_file(self):
@@ -560,7 +542,6 @@ class BaseRunner(object):
         return {
             'connection_type': self.ansible_connection_type,
             'container_name': str(self.env_name),
-            'ssh_params': self.default_ssh_params,
         }
 
     def __terraform_init(self):
@@ -937,6 +918,8 @@ class BaseRunner(object):
             return git_repo_path
         self._logger.info('Cloning %s to %s', repo_url, self._work_dir)
         repo_name = os.path.basename(repo_url)
+        if not repo_name.endswith('.git'):
+            repo_name += '.git'
         repo_reference_dir = None
         if CONFIG.git_reference_directory:
             repo_reference_dir = os.path.join(
@@ -1050,10 +1033,14 @@ class BaseRunner(object):
                 if 'gerrit' in repo_url
                 else repo_url
             )
-            test_repo_path = self.clone_third_party_repo(repo_url, git_ref)
-            if not test_repo_path:
-                errors.append(f'Cannot clone test repository {repo_url}')
-                continue
+            repo_name = os.path.basename(repo_url)
+            file_lock_path = f'/tmp/alts_git_lock_{repo_name}'
+            with FileLock(file_lock_path, timeout=CONFIG.provision_timeout,
+                          thread_local=False):
+                test_repo_path = self.clone_third_party_repo(repo_url, git_ref)
+                if not test_repo_path:
+                    errors.append(f'Cannot clone test repository {repo_url}')
+                    continue
             workdir = os.path.join(
                 CONFIG.tests_base_dir,
                 test_repo_path.name,
@@ -1347,6 +1334,7 @@ class GenericVMRunner(BaseRunner):
         )
         self._tests_dir = CONFIG.tests_base_dir
         self._ssh_client: Optional[AsyncSSHClient] = None
+        self._vm_ip = None
 
     def _wait_for_ssh(self, retries=60):
         ansible = local[self.ansible_binary]
@@ -1369,6 +1357,31 @@ class GenericVMRunner(BaseRunner):
             stderr,
         )
         return exit_code, stdout, stderr
+
+    @property
+    def vm_ip(self):
+        return self._vm_ip
+
+    @property
+    def default_ssh_params(self) -> Dict[str, Any]:
+        max_keepalive_msgs = (
+            CONFIG.task_soft_time_limit // CONFIG.keepalive_interval
+        ) + 5
+        return {
+            'host': self.vm_ip or '',
+            'username': 'root',
+            'client_keys_files': ['~/.ssh/id_rsa.pub'],
+            'disable_known_hosts_check': True,
+            'ignore_encrypted_keys': True,
+            'logging_level': 'DEBUG' if self._verbose else 'INFO',
+            'keepalive_interval': CONFIG.keepalive_interval,
+            'keepalive_count_max': max_keepalive_msgs,
+        }
+
+    def get_test_executor_params(self) -> dict:
+        params = super().get_test_executor_params()
+        params['ssh_params'] = self.default_ssh_params
+        return params
 
     @command_decorator(
         'start_environment',
@@ -1394,7 +1407,7 @@ class GenericVMRunner(BaseRunner):
         self._vm_ip = ip_stdout
         # Because we don't know about a VM's IP before its creating
         # And get an IP after launch of terraform script
-        self._create_ansible_inventory_file()
+        self._create_ansible_inventory_file(vm_ip=self._vm_ip)
         self._logger.info('Waiting for SSH port to be available')
         ssh_exit_code, ssh_stdout, ssh_stderr = self._wait_for_ssh()
         if ssh_exit_code:
