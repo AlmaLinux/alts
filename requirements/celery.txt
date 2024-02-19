@@ -1,5 +1,4 @@
 -r base.txt
-filelock==3.13.1
 pytest==8.0.0
 pytest-cov==4.1.0
 pytest-check==2.3.1

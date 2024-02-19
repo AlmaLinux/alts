@@ -41,7 +41,7 @@ graceful_terminate_event = Event()
 http_bearer_scheme = HTTPBearer()
 
 
-def get_celery_task_result(task_id: str, timeout: int = 1) -> dict:
+def get_celery_task_result(task_id: str, timeout: int = 1) -> tuple:
     """
     Gets Test System task result info from Celery.
 
@@ -54,7 +54,7 @@ def get_celery_task_result(task_id: str, timeout: int = 1) -> dict:
         (in seconds).
     Returns
     -------
-    dict
+    tuple
         Test System task result.
 
     """
@@ -256,7 +256,7 @@ async def cancel_task(
 
     Parameters
     ----------
-    task_id : list(str)
+    payload : dict
         Test System task identifier.
     _ : dict
         Authenticated user's token.
@@ -282,8 +282,7 @@ async def cancel_task(
 
         logging.info(f'cancel_tests have been called - {payload=}')
         logging.info(f'Current tasks in db - {task_ids=}')
-        celery_app.control.revoke(
-            list(task_ids.values()),
+        celery_app.control.revoke(list(task_ids.values())
         #    # Terminating only works on eventlet and prefork Celery pools
         #    terminate=True,
         )
@@ -300,5 +299,5 @@ async def cancel_task(
                 db_task.task_id,
                 db_task.callback_href,
             )
-    result = { 'success': True }
+    result = {'success': True}
     return JSONResponse(content=result)
