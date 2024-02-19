@@ -58,7 +58,7 @@ def __clone_git_repo(
         )
     last_error = ''
     for attempt in range(1, 6):
-        with FileLock(file_lock_path):
+        with FileLock(file_lock_path, timeout=cmd_timeout, thread_local=False):
             exit_code, _, stderr = local['git'].with_cwd(work_dir).run(
                 args,
                 retcode=None,

@@ -564,7 +564,7 @@ class BaseRunner(object):
         }
 
     def __terraform_init(self):
-        with FileLock(TF_INIT_LOCK_PATH, timeout=60):
+        with FileLock(TF_INIT_LOCK_PATH, timeout=60, thread_local=False):
             return local['terraform'].with_cwd(self._work_dir).run(
                 ('init', '-no-color'),
                 timeout=CONFIG.provision_timeout,
