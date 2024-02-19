@@ -55,7 +55,8 @@ class AnsibleExecutor(BaseExecutor):
             self.connection_type,
         ]
         env_vars_parts = [f'{k}={v}' for k, v in self.env_vars.items()]
-        env_vars_parts.extend(env_vars)
+        if env_vars:
+            env_vars_parts.extend(env_vars)
         if env_vars_parts:
             args += ['-e', ' '.join(env_vars_parts)]
         args += cmd_args
@@ -68,8 +69,8 @@ class AnsibleExecutor(BaseExecutor):
         workdir: str = '',
         env_vars: Optional[List[str]] = None,
     ) -> CommandResult:
-        args = self.__construct_cmd_args(cmd_args)
-        return super().run_local_command(args, env_vars=env_vars)
+        args = self.__construct_cmd_args(cmd_args, env_vars=env_vars)
+        return super().run_local_command(args)
 
     @measure_stage('run_remote_ansible')
     def run_ssh_command(
