@@ -4,6 +4,7 @@ from random import randint
 from time import sleep
 from typing import Optional
 
+from filelock import FileLock
 from plumbum import local
 
 from alts.shared.utils.path_utils import get_abspath
@@ -48,6 +49,7 @@ def __clone_git_repo(
     )
     if git_repo_path.exists():
         return git_repo_path
+    file_lock_path = f'/tmp/alts_git_lock_{git_repo_path.name}'
     logger.debug('Cloning the git repo: %s', repo_url)
     args = ['clone', repo_url, '--depth', '1']
     if reference_directory:
@@ -56,11 +58,12 @@ def __clone_git_repo(
         )
     last_error = ''
     for attempt in range(1, 6):
-        exit_code, _, stderr = local['git'].with_cwd(work_dir).run(
-            args,
-            retcode=None,
-            timeout=cmd_timeout,
-        )
+        with FileLock(file_lock_path):
+            exit_code, _, stderr = local['git'].with_cwd(work_dir).run(
+                args,
+                retcode=None,
+                timeout=cmd_timeout,
+            )
         if exit_code == 0:
             return git_repo_path
         logger.warning(

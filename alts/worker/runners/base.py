@@ -1,5 +1,4 @@
 import datetime
-import fcntl
 import gzip
 import logging
 import os
@@ -24,6 +23,7 @@ from typing import (
 )
 
 import magic
+from filelock import FileLock
 from mako.lookup import TemplateLookup
 from plumbum import local, ProcessExecutionError, ProcessTimedOut
 
@@ -564,27 +564,11 @@ class BaseRunner(object):
         }
 
     def __terraform_init(self):
-        lock = None
-        lock_fileno = None
-        try:
-            lock = open(TF_INIT_LOCK_PATH, 'a+')
-            lock_fileno = lock.fileno()
-            while True:
-                try:
-                    fcntl.flock(lock_fileno, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                except BlockingIOError:
-                    time.sleep(1)
-                else:
-                    break
+        with FileLock(TF_INIT_LOCK_PATH, timeout=60):
             return local['terraform'].with_cwd(self._work_dir).run(
                 ('init', '-no-color'),
                 timeout=CONFIG.provision_timeout,
             )
-        finally:
-            if lock_fileno:
-                fcntl.flock(lock_fileno, fcntl.LOCK_UN)
-            if lock:
-                lock.close()
 
     # After: prepare_work_dir_files
     @command_decorator(
