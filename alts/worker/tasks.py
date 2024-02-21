@@ -182,7 +182,10 @@ def run_tests(self, task_params: dict):
         )
         if CONFIG.enable_integrity_tests:
             runner.run_package_integrity_tests(package_name, package_version)
-        runner.run_third_party_tests()
+        runner.run_third_party_tests(
+            package_name,
+            package_version=package_version,
+        )
         runner.uninstall_package(
             package_name,
             package_version,

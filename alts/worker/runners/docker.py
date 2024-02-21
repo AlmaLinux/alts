@@ -6,7 +6,13 @@
 
 import os
 from pathlib import Path
-from typing import Callable, List, Optional, Union
+from typing import (
+    Callable,
+    List,
+    Optional,
+    Union,
+    Tuple,
+)
 
 from plumbum import local
 
@@ -120,15 +126,15 @@ class DockerRunner(BaseRunner):
 
     def exec_command(
         self,
-        cmd_with_args: Union[tuple, list],
+        *args,
         workdir: Optional[str] = None,
-    ):
+    ) -> Tuple[int, str, str]:
         """
         Executes a command inside docker container.
 
         Parameters
         ----------
-        cmd_with_args : tuple
+        args : tuple
             Arguments to create a command and its arguments to execute
             inside the container.
         workdir : str, optional
@@ -142,7 +148,7 @@ class DockerRunner(BaseRunner):
         cmd = ['exec']
         if workdir:
             cmd.extend(['--workdir', workdir])
-        cmd.extend([str(self.env_name), *cmd_with_args])
+        cmd.extend([str(self.env_name), *args])
         self._logger.debug(
             'Running "docker %s" command',
             ' '.join(cmd),
@@ -193,35 +199,37 @@ class DockerRunner(BaseRunner):
             # Debian 9 has its repos in archive now + the archive
             # does not contain updates repository, so hacking sources.list
             if self.dist_name == 'debian' and self.dist_version.startswith('9'):
-                self.exec_command((
+                self.exec_command(
                     'sed',
                     '-E',
                     '-i',
                     r's/.*(stretch-updates).*//',
                     '/etc/apt/sources.list',
-                ))
-                self.exec_command((
+                )
+                self.exec_command(
                     'sed',
                     '-E',
                     '-i',
                     r's/(deb|security)\.debian\.org/archive\.debian\.org/',
                     '/etc/apt/sources.list',
-                ))
+                )
             self._logger.info('Installing python3 package...')
             exit_code, stdout, stderr = self.exec_command(
-                (self.pkg_manager, 'update'),
+                self.pkg_manager, 'update',
             )
             if exit_code != 0:
                 return exit_code, stdout, stderr
             cmd_args = (self.pkg_manager, 'install', '-y', 'python3')
-            exit_code, stdout, stderr = self.exec_command(cmd_args)
+            exit_code, stdout, stderr = self.exec_command(*cmd_args)
             if exit_code != 0:
                 return exit_code, stdout, stderr
             self._logger.info('Installation is completed')
         if self.dist_name in CONFIG.rhel_flavors and self.dist_version == '6':
             self._logger.info('Removing old repositories')
-            self.exec_command(('find', '/etc/yum.repos.d', '-type', 'f', '-exec',
-                        'rm', '-f', '{}', '+'))
+            self.exec_command(
+                'find', '/etc/yum.repos.d', '-type', 'f', '-exec',
+                'rm', '-f', '{}', '+',
+            )
         return super().initial_provision(verbose=verbose)
 
     @command_decorator(
@@ -268,7 +276,28 @@ class DockerRunner(BaseRunner):
             full_pkg_name,
             self.env_name,
         )
-        return self.exec_command(cmd_args, workdir=remote_tests_path)
+        return self.exec_command(*cmd_args, workdir=remote_tests_path)
+
+    @command_decorator(
+        '',
+        'Third party tests failed',
+        exception_class=ThirdPartyTestError,
+    )
+    def run_third_party_test(
+        self,
+        executor: Union[AnsibleExecutor, BatsExecutor, CommandExecutor, ShellExecutor],
+        cmd_args: List[str],
+        docker_args: Optional[List[str]] = None,
+        workdir: str = '',
+        artifacts_key: str = '',
+        additional_section_name: str = '',
+        env_vars: Optional[List[str]] = None,
+    ):
+        return executor.run_docker_command(
+            cmd_args=cmd_args,
+            docker_args=docker_args,
+            env_vars=env_vars,
+        ).model_dump().values()
 
     @command_decorator(
         '',
@@ -301,7 +330,7 @@ class DockerRunner(BaseRunner):
             return
         self._logger.info('Copying tests to container')
         self._logger.debug('Repo path: %s', test_repo_path)
-        self.exec_command(('mkdir', '-p', CONFIG.tests_base_dir))
+        self.exec_command('mkdir', '-p', CONFIG.tests_base_dir)
         self.copy([
             str(test_repo_path),
             f'{self.env_name}:{CONFIG.tests_base_dir}/{test_repo_path.name}',
@@ -324,4 +353,4 @@ class DockerRunner(BaseRunner):
             return super().stop_env()
         except StopEnvironmentError:
             # Attempt to delete environment via plain docker command
-            return self.exec_command(('rm', '-f', container_id))
+            return self.exec_command('rm', '-f', container_id)

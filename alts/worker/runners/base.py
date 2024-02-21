@@ -43,7 +43,7 @@ from alts.shared.exceptions import (
 from alts.shared.types import ImmutableDict
 from alts.shared.uploaders.base import BaseLogsUploader, UploadError
 from alts.shared.uploaders.pulp import PulpLogsUploader
-from alts.shared.utils.asyncssh import AsyncSSHClient
+from alts.shared.utils.asyncssh import AsyncSSHClient, LongRunSSHClient
 from alts.shared.utils.git_utils import (
     clone_gerrit_repo,
     clone_git_repo,
@@ -73,10 +73,10 @@ TESTS_SECTIONS_NAMES = (
 )
 TF_INIT_LOCK_PATH = '/tmp/tf_init_lock'
 BASE_SYSTEM_INFO_COMMANDS = {
-    'Current disk space usage': 'df -h',
-    'Kernel version': 'uname -a',
-    'Environment IP': 'ip a',
-    'Environment uptime': 'uptime',
+    'Current disk space usage': ('df', '-h'),
+    'Kernel version': ('uname', '-a'),
+    'Environment IP': ('ip', 'a'),
+    'Environment uptime': ('uptime',),
 }
 FILE_TYPE_REGEXES_MAPPING = {
     r'.*(bats).*': BatsExecutor,
@@ -345,7 +345,7 @@ class BaseRunner(object):
     def stats(self):
         return self._stats
 
-    def exec_command(self, *args, **kwargs) -> Any:
+    def exec_command(self, *args, **kwargs) -> Tuple[int, str, str]:
         raise NotImplementedError
 
     def prepare_repositories(self, repositories: List[dict]) -> List[dict]:
@@ -639,29 +639,36 @@ class BaseRunner(object):
             'Running "ansible-playbook %s" command',
             cmd_args_str,
         )
-        return local[self.ansible_playbook_binary].with_cwd(self._work_dir).run(
-            args=cmd_args,
-            retcode=None,
-            timeout=CONFIG.provision_timeout,
-        )
+        try:
+            return local[self.ansible_playbook_binary].with_cwd(
+                self._work_dir).run(
+                    args=cmd_args,
+                    retcode=None,
+                    timeout=CONFIG.provision_timeout,
+                )
+        except ProcessTimedOut as e:
+            return 1, '', f'Provision has timed out: {e}'
+        except ProcessExecutionError as e:
+            return 1, '', f'Provision exited abnormally: {e}'
 
-    def get_system_info_commands_list(self) -> Dict[str, str]:
+    def get_system_info_commands_list(self) -> Dict[str, tuple]:
         self._logger.debug('Returning default system info commands list')
         basic_commands = BASE_SYSTEM_INFO_COMMANDS.copy()
         if self._dist_name in CONFIG.rhel_flavors:
-            basic_commands['Installed packages'] = 'rpm -qa'
+            basic_commands['Installed packages'] = ('rpm', '-qa')
             basic_commands['Repositories list'] = (
-                f'{self.pkg_manager} repolist'
+                 self.pkg_manager, 'repolist'
             )
             basic_commands['Repositories details'] = (
-                'find /etc/yum.repos.d/ -type f -exec cat {} +'
+                'find', '/etc/yum.repos.d/', '-type', 'f',
+                '-exec', 'cat', '{}', '+'
             )
         else:
-            basic_commands['Installed packages'] = 'dpkg -l'
-            basic_commands['Repositories list'] = 'apt-cache policy'
+            basic_commands['Installed packages'] = ('dpkg', '-l')
+            basic_commands['Repositories list'] = ('apt-cache', 'policy')
             basic_commands['Repositories details'] = (
-                'find /etc/apt/ -type f -name *.list* -o -name *.sources* '
-                '-exec cat {} +'
+                'find', '/etc/apt/', '-type', 'f', '-name', '*.list*',
+                '-o', '-name', '*.sources*', '-exec', 'cat', '{}', '+'
             )
         return basic_commands
 
@@ -683,8 +690,7 @@ class BaseRunner(object):
                 cmd, self.env_name
             )
             try:
-                cmd_as_list = cmd.split(' ')
-                binary, *args = cmd_as_list
+                binary, *args = cmd
                 result = CommandExecutor(binary, **executor_params).run(args)
                 output = '\n'.join([result.stdout, result.stderr])
                 if result.is_successful():
@@ -924,16 +930,28 @@ class BaseRunner(object):
         if CONFIG.git_reference_directory:
             repo_reference_dir = os.path.join(
                 CONFIG.git_reference_directory, repo_name)
-        try:
-            return func(
-                repo_url,
-                git_ref,
-                self._work_dir,
-                self._logger,
-                reference_directory=repo_reference_dir
-            )
-        except (ProcessExecutionError, ProcessTimedOut):
-            return None
+        repo_path = None
+        for attempt in range(1, 6):
+            try:
+                repo_path = func(
+                    repo_url,
+                    git_ref,
+                    self._work_dir,
+                    self._logger,
+                    reference_directory=repo_reference_dir
+                )
+            except (ProcessExecutionError, ProcessTimedOut):
+                pass
+            if not repo_path:
+                self._logger.warning(
+                    'Attempt %d to clone %s locally has failed',
+                    attempt, repo_url
+                )
+                self._logger.debug('Sleeping before making another attempt')
+                time.sleep(random.randint(5, 10))
+            else:
+                break
+        return repo_path
 
     def run_third_party_test(
         self,
@@ -946,6 +964,39 @@ class BaseRunner(object):
         env_vars: Optional[List[str]] = None,
     ):
         raise NotImplementedError
+
+    def check_package_existence(
+        self,
+        package_name: str,
+        package_version: Optional[str] = None,
+    ) -> bool:
+        if self.dist_name in CONFIG.rhel_flavors:
+            cmd = ('rpm', '-q', package_name)
+        elif self.dist_name in CONFIG.debian_flavors:
+            cmd = ('dpkg', '-l', package_name)
+        else:
+            raise ValueError(f'Unknown distribution: {self.dist_name}')
+        exit_code, stdout, stderr = self.exec_command(*cmd)
+        installed = exit_code == 0
+        if installed and package_version:
+            return package_version in stdout
+        return installed
+
+    def ensure_package_is_installed(
+        self,
+        package_name: str,
+        package_version: Optional[str] = None,
+    ):
+        package_installed = self.check_package_existence(
+            package_name,
+            package_version=package_version,
+        )
+        if not package_installed:
+            self.install_package(
+                package_name,
+                package_version=package_version,
+                semi_verbose=True
+            )
 
     def sort_tests(self, tests_dir: Path) -> List[Path]:
         tests_list = list(tests_dir.iterdir())
@@ -1015,7 +1066,11 @@ class BaseRunner(object):
         'Preparation/running third party tests has failed',
         ThirdPartyTestError,
     )
-    def run_third_party_tests(self):
+    def run_third_party_tests(
+        self,
+        package_name: str,
+        package_version: Optional[str] = None,
+    ):
         if not self._test_configuration:
             return 0, 'Nothing to run', ''
         errors = []
@@ -1033,28 +1088,38 @@ class BaseRunner(object):
                 if 'gerrit' in repo_url
                 else repo_url
             )
-            repo_name = os.path.basename(repo_url)
-            file_lock_path = f'/tmp/alts_git_lock_{repo_name}'
-            with FileLock(file_lock_path, timeout=CONFIG.provision_timeout,
-                          thread_local=False):
-                test_repo_path = self.clone_third_party_repo(repo_url, git_ref)
-                if not test_repo_path:
-                    errors.append(f'Cannot clone test repository {repo_url}')
-                    continue
-            workdir = os.path.join(
+            test_repo_path = self.clone_third_party_repo(repo_url, git_ref)
+            if not test_repo_path:
+                errors.append(f'Cannot clone test repository {repo_url}')
+                continue
+            remote_workdir = os.path.join(
                 CONFIG.tests_base_dir,
                 test_repo_path.name,
                 test_dir,
             )
+            local_workdir = self._work_dir
             tests_path = Path(test_repo_path, test_dir)
             if not tests_path.exists():
                 self._logger.warning('Directory %s does not exist', tests_path)
                 self._logger.warning('Skipping test configuration')
                 continue
             tests_list = self.sort_tests(tests_path)
+            skip_installation_attempt = False
+            # Check if package has 0_init-like script
+            if tests_list and '0_init' in tests_list[0].name:
+                skip_installation_attempt = True
             for test_file in tests_list:
                 if tests_to_run and test_file.name not in tests_to_run:
                     continue
+                if (('0_init' not in test_file.name
+                     or '0_install' not in test_file.name)
+                        and not skip_installation_attempt):
+                    self.ensure_package_is_installed(
+                        package_name,
+                        package_version=package_version,
+                    )
+                    skip_installation_attempt = True
+                workdir = remote_workdir
                 executor_class = self.detect_executor(test_file)
                 if not executor_class:
                     self._logger.warning(
@@ -1069,6 +1134,7 @@ class BaseRunner(object):
                 )
                 if executor_class == AnsibleExecutor:
                     cmd_args = [test_file]
+                    workdir = local_workdir
                 else:
                     cmd_args = [test_file.name]
                 if executor_class == CommandExecutor:
@@ -1112,6 +1178,7 @@ class BaseRunner(object):
                     self._logger.exception(
                         'An unknown error occurred during the test execution'
                     )
+                skip_installation_attempt = True
             git_reset_hard(test_repo_path, self._logger)
         if errors:
             return 1, '', '\n'.join(errors)
@@ -1333,7 +1400,7 @@ class GenericVMRunner(BaseRunner):
             verbose=verbose,
         )
         self._tests_dir = CONFIG.tests_base_dir
-        self._ssh_client: Optional[AsyncSSHClient] = None
+        self._ssh_client: Optional[Union[AsyncSSHClient, LongRunSSHClient]] = None
         self._vm_ip = None
 
     def _wait_for_ssh(self, retries=60):
@@ -1380,7 +1447,7 @@ class GenericVMRunner(BaseRunner):
 
     def get_test_executor_params(self) -> dict:
         params = super().get_test_executor_params()
-        params['ssh_params'] = self.default_ssh_params
+        params['ssh_client'] = self._ssh_client
         return params
 
     @command_decorator(
@@ -1426,7 +1493,20 @@ class GenericVMRunner(BaseRunner):
         super().setup(skip_provision=skip_provision)
         params = self.default_ssh_params
         params['timeout'] = CONFIG.provision_timeout
-        self._ssh_client = AsyncSSHClient(**params)
+        self._ssh_client = LongRunSSHClient(**params)
+
+    def teardown(self, publish_artifacts: bool = True):
+        if self._ssh_client:
+            try:
+                self._ssh_client.close()
+            except:
+                pass
+        super().teardown(publish_artifacts=publish_artifacts)
+
+    def exec_command(self, *args, **kwargs) -> Tuple[int, str, str]:
+        command = ' '.join(args)
+        result = self._ssh_client.sync_run_command(command)
+        return result.exit_code, result.stdout, result.stderr
 
     def clone_third_party_repo(
             self,
@@ -1441,11 +1521,22 @@ class GenericVMRunner(BaseRunner):
                 self._tests_dir,
                 Path(repo_url).name.replace('.git', ''),
             )
-            cmd = (f'if [ -e {repo_path} ]; then cd {repo_path} && git pull; '
-                   f'else cd {self._tests_dir} && git clone {repo_url}; fi')
-            result = self._ssh_client.sync_run_command(cmd)
-            if not result.is_successful():
+            result = None
+            for attempt in range(1, 6):
+                cmd = (f'if [ -e {repo_path} ]; then cd {repo_path} && '
+                       f'git checkout master && git pull; '
+                       f'else cd {self._tests_dir} && git clone {repo_url}; fi')
+                result = self._ssh_client.sync_run_command(cmd)
+                if result.is_successful():
+                    break
+                self._logger.warning(
+                    'Attempt to clone repository on VM failed:\n%s\n%s',
+                    result.stdout, result.stderr,
+                )
+                time.sleep(random.randint(5, 10))
+            if not result or (result and not result.is_successful()):
                 return
+
             repo_path = Path(
                 self._tests_dir,
                 Path(repo_url).name.replace('.git', ''),
