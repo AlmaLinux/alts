@@ -5,6 +5,7 @@
 """AlmaLinux Test System package testing tasks running."""
 
 import logging
+import re
 import traceback
 import random
 import time
@@ -55,6 +56,7 @@ AUTO_RETRY_EXCEPTIONS = (
     ConnectTimeout,
     TimeoutError,
 )
+ALT_PKGS_REGEX = re.compile('^alt-(php|python|ruby|nodejs).*', re.IGNORECASE)
 
 
 def are_tap_tests_success(tests_output: str):
@@ -174,12 +176,17 @@ def run_tests(self, task_params: dict):
     module_name = task_params.get('module_name')
     module_stream = task_params.get('module_stream')
     module_version = task_params.get('module_version')
+    allow_install_fail = False
+    if package_name.startswith(('cl-MariaDB', 'cl-MySQL')):
+        allow_install_fail = True
     try:
         # Wait a bit to not spawn all environments at once when
         # a lot of tasks are coming to the machine
         time.sleep(random.randint(5, 10))
         runner.setup()
         runner.run_system_info_commands()
+        if bool(ALT_PKGS_REGEX.search(package_name)):
+            runner.ensure_package_is_installed('cloudlinux-linksafe')
         runner.install_package(
             package_name,
             package_version=package_version,
@@ -188,6 +195,7 @@ def run_tests(self, task_params: dict):
             module_stream=module_stream,
             module_version=module_version,
             semi_verbose=True,
+            allow_fail=allow_install_fail,
         )
         if CONFIG.enable_integrity_tests:
             runner.run_package_integrity_tests(package_name, package_version)
