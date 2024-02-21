@@ -4,17 +4,24 @@
 
 """AlmaLinux Test System package testing tasks running."""
 
-import celery
 import logging
+import traceback
 import urllib.parse
 from celery.contrib.abortable import AbortableTask
-from celery.states import REVOKED
-from celery.exceptions import Ignore
 from collections import defaultdict
+from socket import timeout
 from typing import Union
 
 import requests
+import requests.adapters
 import tap.parser
+from requests.exceptions import (
+    HTTPError,
+    ReadTimeout,
+    ConnectTimeout,
+)
+from urllib3 import Retry
+from urllib3.exceptions import TimeoutError
 
 from alts.shared.constants import API_VERSION, DEFAULT_REQUEST_TIMEOUT
 from alts.shared.exceptions import (
@@ -27,6 +34,8 @@ from alts.shared.exceptions import (
     ThirdPartyTestError,
     UninstallPackageError,
     AbortedTestTask,
+    VMImageNotFound,
+    WorkDirPreparationError,
 )
 from alts.worker import CONFIG
 from alts.worker.app import celery_app
@@ -36,6 +45,14 @@ from alts.worker.runners.docker import DockerRunner
 from alts.worker.runners.opennebula import OpennebulaRunner
 
 __all__ = ['run_tests']
+
+AUTO_RETRY_EXCEPTIONS = (
+    timeout,
+    HTTPError,
+    ReadTimeout,
+    ConnectTimeout,
+    TimeoutError,
+)
 
 
 def are_tap_tests_success(tests_output: str):
@@ -67,7 +84,15 @@ def are_tap_tests_success(tests_output: str):
     return errors == 0
 
 
-@celery_app.task(bind=True, base=AbortableTask)
+class RetryableTask(AbortableTask):
+    autoretry_for = AUTO_RETRY_EXCEPTIONS
+    max_retries = 5
+    default_retry_delay = 10
+    retry_backoff = 5
+    soft_time_limit = CONFIG.task_soft_time_limit
+
+
+@celery_app.task(bind=True, base=RetryableTask)
 def run_tests(self, task_params: dict):
     """
     Executes a package test in a specified environment.
@@ -88,6 +113,9 @@ def run_tests(self, task_params: dict):
         tap_result = are_tap_tests_success(stage_data_.get('stdout', ''))
         if tap_result is not None:
             return tap_result
+        if stage_data_.get('exit_code') is None:
+            stage_data_['exit_code'] = 255
+            return False
         return stage_data_['exit_code'] == 0
 
     def set_artifacts_when_stage_has_unexpected_exception(
@@ -150,6 +178,7 @@ def run_tests(self, task_params: dict):
             module_name=module_name,
             module_stream=module_stream,
             module_version=module_version,
+            semi_verbose=True,
         )
         if CONFIG.enable_integrity_tests:
             runner.run_package_integrity_tests(package_name, package_version)
@@ -161,8 +190,16 @@ def run_tests(self, task_params: dict):
             module_stream=module_stream,
             module_version=module_version,
         )
+    except VMImageNotFound as exc:
+        logging.exception('Cannot find VM image: %s', exc)
+    except WorkDirPreparationError:
+        runner.artifacts['prepare_environment'] = {
+            'exit_code': 1,
+            'stdout': '',
+            'stderr': traceback.format_exc()
+        }
     except TerraformInitializationError as exc:
-        logging.exception('Cannot initial terraform: %s', exc)
+        logging.exception('Cannot initialize terraform: %s', exc)
     except StartEnvironmentError as exc:
         logging.exception('Cannot start environment: %s', exc)
     except ProvisionError as exc:
@@ -188,7 +225,7 @@ def run_tests(self, task_params: dict):
         logging.exception('Unexpected exception: %s', exc)
         set_artifacts_when_stage_has_unexpected_exception(
             _artifacts=runner.artifacts,
-            error_message=f'Unexpected exception: {exc}',
+            error_message=f'Unexpected exception: {traceback.format_exc()}',
             section_name='Unexpected errors during tests',
         )
     finally:
@@ -228,7 +265,14 @@ def run_tests(self, task_params: dict):
                 'result': summary,
                 'stats': runner.stats,
             }
-            response = requests.post(
+            session = requests.Session()
+            retries = Retry(total=5, backoff_factor=3, status_forcelist=[502])
+            retry_adapter = requests.adapters.HTTPAdapter(
+                max_retries=retries
+            )
+            session.mount("http://", retry_adapter)
+            session.mount("https://", retry_adapter)
+            response = session.post(
                 full_url,
                 json=payload,
                 headers={'Authorization': f'Bearer {CONFIG.bs_token}'},

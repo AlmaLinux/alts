@@ -16,7 +16,7 @@ __all__ = ['celery_app']
 logging.getLogger('azure.core.pipeline.policies.http_logging_policy').setLevel(
     'WARNING')
 celery_app = Celery('alts', include=['alts.worker.tasks'])
-celery_app.config_from_object(CONFIG)
+celery_app.conf.update(CONFIG.get_celery_config_dict())
 celery_app.conf.update(result_accept_content=['json'])
 
 # Define all queues so client (scheduler) would be aware of all of them

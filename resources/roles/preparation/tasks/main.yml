@@ -1,0 +1,53 @@
+---
+
+- name: Initial provision for RPM distributions
+  include_tasks:
+    file: rhel.yml
+  when: ansible_distribution_file_variety in ('RedHat', 'OracleLinux')
+  tags:
+    - initial_provision
+
+- name: Initial provision for Debian-like distributions
+  include_tasks:
+    file: deb.yml
+  when: ansible_distribution_file_variety == 'Debian'
+  tags:
+    - initial_provision
+
+- name: Copy tests to test environment
+  copy:
+    src: "{{ integrity_tests_dir }}"
+    dest: /tests
+  when: pytest_is_needed | bool
+  tags:
+    - initial_provision
+
+- name: Install tools for running tests
+  pip:
+    name:
+      - pytest
+      - pytest-testinfra
+      - pytest-check
+      - pytest-tap
+  when: pytest_is_needed | bool
+  tags:
+    - initial_provision
+
+- name: Install custom ldconfig
+  lineinfile:
+    path: /etc/ld.so.conf.d/custom-ts.conf
+    line: "{{ item }}"
+    create: yes
+    owner: root
+    group: root
+    mode: 0644
+  with_items:
+    - "/usr/lib64/firefox"
+    - "/usr/lib64/thunderbird"
+  tags:
+    - initial_provision
+
+- name: Reload ldconfig
+  shell: ldconfig
+  tags:
+    - initial_provision

@@ -12,6 +12,8 @@ __all__ = [
     'DEFAULT_REQUEST_TIMEOUT',
     'DEFAULT_UPLOADER_CONCURRENCY',
     'DEFAULT_SSH_AUTH_METHODS',
+    'X32_ARCHITECTURES',
+    'X64_ARCHITECTURES',
 ]
 
 
@@ -20,16 +22,20 @@ API_VERSION = '20210512'
 COSTS = [str(i) for i in range(5)]
 ARCHITECTURES = ('x86_64', 'aarch64', 'ppc64le', 's390x')
 DRIVERS = ('docker', 'opennebula')
-SUPPORTED_ARCHITECTURES = [
-    'x86_64',
+X32_ARCHITECTURES = [
     'i386',
+    'i486',
+    'i586',
     'i686',
+]
+X64_ARCHITECTURES = [
+    'x86_64',
     'amd64',
     'arm64',
     'aarch64',
     'ppc64le',
-    's390x',
 ]
+SUPPORTED_ARCHITECTURES = X32_ARCHITECTURES + X64_ARCHITECTURES + ['s390x']
 SUPPORTED_DISTRIBUTIONS = ['almalinux', 'centos', 'ubuntu', 'debian']
 RHEL_FLAVORS = [
     'rhel',

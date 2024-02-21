@@ -1,5 +1,4 @@
 import datetime
-import fcntl
 import gzip
 import logging
 import os
@@ -8,11 +7,23 @@ import re
 import shutil
 import tempfile
 import time
+import traceback
 import urllib.parse
 from functools import wraps
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Union,
+    Tuple,
+    Type,
+)
 
+import magic
+from filelock import FileLock
 from mako.lookup import TemplateLookup
 from plumbum import local, ProcessExecutionError, ProcessTimedOut
 
@@ -67,6 +78,29 @@ BASE_SYSTEM_INFO_COMMANDS = {
     'Environment IP': 'ip a',
     'Environment uptime': 'uptime',
 }
+FILE_TYPE_REGEXES_MAPPING = {
+    r'.*(bats).*': BatsExecutor,
+    r'.*(Bourne-Again shell).*': ShellExecutor,
+    r'.*(python).*': CommandExecutor,
+}
+INTERPRETER_REGEX = re.compile(
+    r'^#!(?P<python_interpreter>.*(python[2-4]?))(?P<options> .*)?'
+)
+EXECUTORS_MAPPING = {
+    '.bash': ShellExecutor,
+    '.bats': BatsExecutor,
+    '.py': CommandExecutor,
+    '.sh': ShellExecutor,
+    '.yml': AnsibleExecutor,
+    '.yaml': AnsibleExecutor,
+}
+
+DetectExecutorResult = Type[Union[
+    AnsibleExecutor,
+    BatsExecutor,
+    CommandExecutor,
+    ShellExecutor,
+]]
 
 
 def command_decorator(
@@ -143,8 +177,12 @@ class BaseRunner(object):
     TF_MAIN_FILE = None
     TF_VERSIONS_FILE = 'versions.tf'
     ANSIBLE_PLAYBOOK = 'playbook.yml'
-    ANSIBLE_CONFIG = 'ansible.cfg'
-    ANSIBLE_TEMPLATES_DIR = 'templates'
+    ANSIBLE_FILES = [
+        'ansible.cfg',
+        ANSIBLE_PLAYBOOK,
+        'roles',
+        'templates',
+    ]
     ANSIBLE_INVENTORY_FILE = 'hosts'
     TEMPFILE_PREFIX = 'base_test_runner_'
     INTEGRITY_TESTS_DIR = 'package_tests'
@@ -167,7 +205,6 @@ class BaseRunner(object):
         # Environment ID and working directory preparation
         self._task_id = task_id
         self._task_is_aborted = task_is_aborted
-        self._vm_ip = None
         self._test_configuration = test_configuration or {}
         self._test_env = self._test_configuration.get('test_env') or {}
         self._logger = self.init_test_task_logger(
@@ -308,25 +345,8 @@ class BaseRunner(object):
     def stats(self):
         return self._stats
 
-    @property
-    def vm_ip(self):
-        return self._vm_ip
-
-    @property
-    def default_ssh_params(self) -> Dict[str, Any]:
-        max_keepalive_msgs = (
-            CONFIG.tests_exec_timeout // CONFIG.keepalive_interval
-        ) + 5
-        return {
-            'host': self.vm_ip or '',
-            'username': 'root',
-            'client_keys_files': ['~/.ssh/id_rsa.pub'],
-            'disable_known_hosts_check': True,
-            'ignore_encrypted_keys': True,
-            'logging_level': 'DEBUG' if self._verbose else 'INFO',
-            'keepalive_interval': CONFIG.keepalive_interval,
-            'keepalive_count_max': max_keepalive_msgs,
-        }
+    def exec_command(self, *args, **kwargs) -> Any:
+        raise NotImplementedError
 
     def prepare_repositories(self, repositories: List[dict]) -> List[dict]:
         if self.dist_name in CONFIG.rhel_flavors:
@@ -349,7 +369,7 @@ class BaseRunner(object):
                 continue
             parsed = urllib.parse.urlparse(repo['url'])
             netloc = parsed.netloc
-            if CONFIG.bs_token:
+            if CONFIG.bs_token and '@' not in netloc:
                 netloc = f'alts:{CONFIG.bs_token}@{parsed.netloc}'
             url = urllib.parse.urlunparse((
                 parsed.scheme,
@@ -437,7 +457,7 @@ class BaseRunner(object):
             content = template.render(**kwargs)
             f.write(content)
 
-    def _create_ansible_inventory_file(self):
+    def _create_ansible_inventory_file(self, **kwargs):
         self._inventory_file_path = os.path.join(
             self._work_dir,
             self.ANSIBLE_INVENTORY_FILE,
@@ -446,8 +466,8 @@ class BaseRunner(object):
             f'{self.ANSIBLE_INVENTORY_FILE}.tmpl',
             self._inventory_file_path,
             env_name=self.env_name,
-            vm_ip=self.vm_ip,
             connection_type=self.ansible_connection_type,
+            **kwargs,
         )
 
     def _render_tf_main_file(self):
@@ -482,19 +502,14 @@ class BaseRunner(object):
         return full_pkg_name
 
     # First step
-    def prepare_work_dir_files(self, create_ansible_inventory=False):
+    def prepare_work_dir_files(self):
         # In case if you've removed worker folder, recreate one
         if not self._work_dir or not os.path.exists(self._work_dir):
             self._work_dir = self._create_work_dir()
             self._artifacts_dir = self._create_artifacts_dir()
         try:
-            copy_list = [
-                self.ANSIBLE_CONFIG,
-                self.ANSIBLE_PLAYBOOK,
-                self.ANSIBLE_TEMPLATES_DIR,
-            ]
             # Write resources that are not templated into working directory
-            for ansible_file in copy_list:
+            for ansible_file in self.ANSIBLE_FILES:
                 src_path = os.path.join(RESOURCES_DIR, ansible_file)
                 dst_path = os.path.join(self._work_dir, ansible_file)
                 if os.path.isdir(src_path):
@@ -527,32 +542,14 @@ class BaseRunner(object):
         return {
             'connection_type': self.ansible_connection_type,
             'container_name': str(self.env_name),
-            'logger': self._logger,
-            'ssh_params': self.default_ssh_params,
         }
 
     def __terraform_init(self):
-        lock = None
-        lock_fileno = None
-        try:
-            lock = open(TF_INIT_LOCK_PATH, 'a+')
-            lock_fileno = lock.fileno()
-            while True:
-                try:
-                    fcntl.flock(lock_fileno, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                except BlockingIOError:
-                    time.sleep(1)
-                else:
-                    break
+        with FileLock(TF_INIT_LOCK_PATH, timeout=60, thread_local=False):
             return local['terraform'].with_cwd(self._work_dir).run(
                 ('init', '-no-color'),
                 timeout=CONFIG.provision_timeout,
             )
-        finally:
-            if lock_fileno:
-                fcntl.flock(lock_fileno, fcntl.LOCK_UN)
-            if lock:
-                lock.close()
 
     # After: prepare_work_dir_files
     @command_decorator(
@@ -615,9 +612,15 @@ class BaseRunner(object):
             'connection_type': self.ansible_connection_type,
             'pytest_is_needed': self.pytest_is_needed,
             'development_mode': CONFIG.development_mode,
-            'centos_6_epel_release_url': CONFIG.centos_6_epel_release_url,
             'package_proxy': CONFIG.package_proxy,
         }
+        dist_major_version = self.dist_version[0]
+        if self.dist_name in CONFIG.rhel_flavors and dist_major_version in ('6', '7'):
+            epel_release_url = CONFIG.epel_release_urls.get(dist_major_version)
+            if epel_release_url:
+                var_dict['epel_release_url'] = epel_release_url
+        if CONFIG.centos_baseurl:
+            var_dict['centos_repo_baseurl'] = CONFIG.centos_baseurl
         cmd_args = [
             '-i',
             self.ANSIBLE_INVENTORY_FILE,
@@ -674,6 +677,11 @@ class BaseRunner(object):
         executor_params = self.get_test_executor_params()
         executor_params['timeout'] = CONFIG.commands_exec_timeout
         for section, cmd in self.get_system_info_commands_list().items():
+            start = datetime.datetime.utcnow()
+            self._logger.info(
+                'Running "%s" for env %s',
+                cmd, self.env_name
+            )
             try:
                 cmd_as_list = cmd.split(' ')
                 binary, *args = cmd_as_list
@@ -685,6 +693,11 @@ class BaseRunner(object):
                     errored_commands[section] = output
             except Exception as e:
                 errored_commands[section] = str(e)
+            finish = datetime.datetime.utcnow()
+            self._logger.info(
+                '"%s" for env %s took %s',
+                cmd, self.env_name, str(finish - start)
+            )
         success_output = '\n\n'.join((
             section + '\n' + section_out
             for section, section_out in successful_commands.items()
@@ -714,6 +727,8 @@ class BaseRunner(object):
         module_name: Optional[str] = None,
         module_stream: Optional[str] = None,
         module_version: Optional[str] = None,
+        semi_verbose: bool = False,
+        verbose: bool = False,
     ):
         full_pkg_name = self._detect_full_package_name(
             package_name,
@@ -742,6 +757,13 @@ class BaseRunner(object):
                 f'module_version={module_version}',
             ])
         cmd_args.extend(['-t', 'install_package'])
+        verbosity = ''
+        if semi_verbose:
+            verbosity = '-vv'
+        if verbose:
+            verbosity = '-vvvv'
+        if verbosity:
+            cmd_args.append(verbosity)
         cmd_args_str = ' '.join(cmd_args)
         self._logger.debug(
             'Running "ansible-playbook %s" command',
@@ -894,7 +916,10 @@ class BaseRunner(object):
         else:
             self._logger.debug('An unknown repository format, skipping')
             return git_repo_path
+        self._logger.info('Cloning %s to %s', repo_url, self._work_dir)
         repo_name = os.path.basename(repo_url)
+        if not repo_name.endswith('.git'):
+            repo_name += '.git'
         repo_reference_dir = None
         if CONFIG.git_reference_directory:
             repo_reference_dir = os.path.join(
@@ -912,7 +937,7 @@ class BaseRunner(object):
 
     def run_third_party_test(
         self,
-        executor: Union[AnsibleExecutor, BatsExecutor, ShellExecutor],
+        executor: Union[AnsibleExecutor, BatsExecutor, CommandExecutor, ShellExecutor],
         cmd_args: List[str],
         docker_args: Optional[List[str]] = None,
         workdir: str = '',
@@ -951,16 +976,51 @@ class BaseRunner(object):
             organized_tests_list.insert(0, init)
         return organized_tests_list
 
+    @staticmethod
+    def detect_executor(test_path: Path) -> DetectExecutorResult:
+        extension = test_path.suffix
+        if extension in EXECUTORS_MAPPING:
+            return EXECUTORS_MAPPING[extension]
+        # Try to detect file format with magic
+        magic_out = magic.from_file(str(test_path))
+        for regex, executor_class_ in FILE_TYPE_REGEXES_MAPPING.items():
+            if re.search(regex, magic_out, re.IGNORECASE):
+                return executor_class_  # noqa
+        return ShellExecutor  # noqa
+
+    def detect_python_binary(
+        self,
+        test_path: Union[Path, str]
+    ) -> Tuple[str, str]:
+        default_python = 'python3'
+        if (self.dist_name in CONFIG.rhel_flavors
+                and self.dist_version.startswith(('6', '7'))):
+            default_python = 'python'
+        with open(test_path, 'rt') as f:
+            shebang = f.readline()
+            result = INTERPRETER_REGEX.search(shebang)
+            if not result:
+                return default_python, ''
+            result_dict = result.groupdict()
+            if 'python_interpreter' not in result_dict:
+                return default_python, ''
+            interpreter = result_dict['python_interpreter']
+            options = ''
+            if 'options' in result_dict:
+                options = result_dict['options'].strip()
+            return interpreter, options
+
+    @command_decorator(
+        f'{THIRD_PARTY_SECTION_NAME}_tests_wrapper',
+        'Preparation/running third party tests has failed',
+        ThirdPartyTestError,
+    )
     def run_third_party_tests(self):
         if not self._test_configuration:
-            return
-        executors_mapping = {
-            '.bats': BatsExecutor,
-            '.sh': ShellExecutor,
-            '.yml': AnsibleExecutor,
-            '.yaml': AnsibleExecutor,
-            '': ShellExecutor,
-        }
+            return 0, 'Nothing to run', ''
+        errors = []
+        executors_cache = {}
+
         executor_params = self.get_test_executor_params()
         executor_params['timeout'] = CONFIG.tests_exec_timeout
         for test in self._test_configuration['tests']:
@@ -973,30 +1033,60 @@ class BaseRunner(object):
                 if 'gerrit' in repo_url
                 else repo_url
             )
-            test_repo_path = self.clone_third_party_repo(repo_url, git_ref)
-            if not test_repo_path:
-                continue
+            repo_name = os.path.basename(repo_url)
+            file_lock_path = f'/tmp/alts_git_lock_{repo_name}'
+            with FileLock(file_lock_path, timeout=CONFIG.provision_timeout,
+                          thread_local=False):
+                test_repo_path = self.clone_third_party_repo(repo_url, git_ref)
+                if not test_repo_path:
+                    errors.append(f'Cannot clone test repository {repo_url}')
+                    continue
             workdir = os.path.join(
                 CONFIG.tests_base_dir,
                 test_repo_path.name,
                 test_dir,
             )
-            tests_list = self.sort_tests(Path(test_repo_path, test_dir))
+            tests_path = Path(test_repo_path, test_dir)
+            if not tests_path.exists():
+                self._logger.warning('Directory %s does not exist', tests_path)
+                self._logger.warning('Skipping test configuration')
+                continue
+            tests_list = self.sort_tests(tests_path)
             for test_file in tests_list:
                 if tests_to_run and test_file.name not in tests_to_run:
                     continue
-                executor_class = executors_mapping.get(test_file.suffix)
+                executor_class = self.detect_executor(test_file)
                 if not executor_class:
                     self._logger.warning(
                         'Cannot get executor for test %s',
                         test_file
                     )
+                    errors.append(f'Cannot get executor for test {test_file}')
                     continue
-                executor: Union[
-                    AnsibleExecutor,
-                    BatsExecutor,
-                    ShellExecutor,
-                ] = executor_class(**executor_params)
+                self._logger.info('Running %s', test_file)
+                self._logger.debug(
+                    'Executor: %s,', executor_class.__name__
+                )
+                if executor_class == AnsibleExecutor:
+                    cmd_args = [test_file]
+                else:
+                    cmd_args = [test_file.name]
+                if executor_class == CommandExecutor:
+                    python, options = self.detect_python_binary(test_file)
+                    if options:
+                        cmd_args.insert(0, options)
+                    executor = CommandExecutor(python, **executor_params)
+                else:
+                    if executor_class in executors_cache:
+                        executor = executors_cache[executor_class]
+                    else:
+                        executor: Union[
+                            AnsibleExecutor,
+                            BatsExecutor,
+                            CommandExecutor,
+                            ShellExecutor,
+                        ] = executor_class(**executor_params)
+                        executors_cache[executor_class] = executor
                 self._logger.debug(
                     'Running the third party test %s on %s...',
                     test_file.name,
@@ -1006,7 +1096,7 @@ class BaseRunner(object):
                     key = f'{THIRD_PARTY_SECTION_NAME}_test_{test_file.name}'
                     self.run_third_party_test(
                         executor=executor,
-                        cmd_args=[test_file.name],
+                        cmd_args=cmd_args,
                         docker_args=['--workdir', workdir],
                         workdir=workdir,
                         artifacts_key=key,
@@ -1014,12 +1104,18 @@ class BaseRunner(object):
                         env_vars=self._test_env.get('extra_env_vars', []),
                     )
                 except ThirdPartyTestError:
-                    pass
+                    errors.append(f'Test {test_file.name} has failed')
                 except Exception:
+                    errors.append(
+                        f'Test {test_file.name} failed:\n{traceback.format_exc()}'
+                    )
                     self._logger.exception(
                         'An unknown error occurred during the test execution'
                     )
             git_reset_hard(test_repo_path, self._logger)
+        if errors:
+            return 1, '', '\n'.join(errors)
+        return 0, 'Third-party tests have passed', ''
 
     def publish_artifacts_to_storage(self):
         # Should upload artifacts from artifacts directory to preferred
@@ -1218,6 +1314,7 @@ class GenericVMRunner(BaseRunner):
     def __init__(
         self,
         task_id: str,
+        task_is_aborted: Callable,
         dist_name: str,
         dist_version: Union[str, int],
         repositories: Optional[List[dict]] = None,
@@ -1227,6 +1324,7 @@ class GenericVMRunner(BaseRunner):
     ):
         super().__init__(
             task_id,
+            task_is_aborted,
             dist_name,
             dist_version,
             repositories=repositories,
@@ -1236,6 +1334,7 @@ class GenericVMRunner(BaseRunner):
         )
         self._tests_dir = CONFIG.tests_base_dir
         self._ssh_client: Optional[AsyncSSHClient] = None
+        self._vm_ip = None
 
     def _wait_for_ssh(self, retries=60):
         ansible = local[self.ansible_binary]
@@ -1259,6 +1358,31 @@ class GenericVMRunner(BaseRunner):
         )
         return exit_code, stdout, stderr
 
+    @property
+    def vm_ip(self):
+        return self._vm_ip
+
+    @property
+    def default_ssh_params(self) -> Dict[str, Any]:
+        max_keepalive_msgs = (
+            CONFIG.task_soft_time_limit // CONFIG.keepalive_interval
+        ) + 5
+        return {
+            'host': self.vm_ip or '',
+            'username': 'root',
+            'client_keys_files': ['~/.ssh/id_rsa.pub'],
+            'disable_known_hosts_check': True,
+            'ignore_encrypted_keys': True,
+            'logging_level': 'DEBUG' if self._verbose else 'INFO',
+            'keepalive_interval': CONFIG.keepalive_interval,
+            'keepalive_count_max': max_keepalive_msgs,
+        }
+
+    def get_test_executor_params(self) -> dict:
+        params = super().get_test_executor_params()
+        params['ssh_params'] = self.default_ssh_params
+        return params
+
     @command_decorator(
         'start_environment',
         'Cannot start environment',
@@ -1266,34 +1390,37 @@ class GenericVMRunner(BaseRunner):
         is_abortable=False,
     )
     def start_env(self):
-        super().start_env()
+        exit_code, stdout, stderr = super().start_env()
         # VM gets its IP address only after deploy.
         # To extract it, the `vm_ip` output should be defined
         # in Terraform main file.
-        exit_code, stdout, stderr = local['terraform'].with_cwd(
+        ip_exit_code, ip_stdout, ip_stderr = local['terraform'].with_cwd(
             self._work_dir).run(
             args=('output', '-raw',  '-no-color', 'vm_ip'),
             retcode=None,
             timeout=CONFIG.provision_timeout,
         )
-        if exit_code != 0:
-            error_message = f'Cannot get VM IP: {stderr}'
+        if ip_exit_code != 0:
+            error_message = f'Cannot get VM IP: {ip_stderr}'
             self._logger.error(error_message)
-            return exit_code, stdout, stderr
-        self._vm_ip = stdout
+            return ip_exit_code, ip_stdout, ip_stderr
+        self._vm_ip = ip_stdout
         # Because we don't know about a VM's IP before its creating
         # And get an IP after launch of terraform script
-        self._create_ansible_inventory_file()
+        self._create_ansible_inventory_file(vm_ip=self._vm_ip)
         self._logger.info('Waiting for SSH port to be available')
-        exit_code, stdout, stderr = self._wait_for_ssh()
-        if exit_code:
+        ssh_exit_code, ssh_stdout, ssh_stderr = self._wait_for_ssh()
+        if ssh_exit_code:
             self._logger.error(
                 'Machine %s is started, but SSH connection is not working',
                 self.env_name,
             )
         else:
             self._logger.info('Machine is available for SSH connection')
-        return exit_code, stdout, stderr
+        final_exit_code = exit_code or ssh_exit_code
+        final_stdout = f'{stdout}\n\n{ssh_stdout}'
+        final_stderr = f'{stderr}\n\n{ssh_stderr}'
+        return final_exit_code, final_stdout, final_stderr
 
     def setup(self, skip_provision: bool = False):
         super().setup(skip_provision=skip_provision)
@@ -1314,9 +1441,11 @@ class GenericVMRunner(BaseRunner):
                 self._tests_dir,
                 Path(repo_url).name.replace('.git', ''),
             )
-            cmd = (f'[ if -e {repo_path} ] then; cd {repo_path} && git pull; '
+            cmd = (f'if [ -e {repo_path} ]; then cd {repo_path} && git pull; '
                    f'else cd {self._tests_dir} && git clone {repo_url}; fi')
-            self._ssh_client.sync_run_command(cmd)
+            result = self._ssh_client.sync_run_command(cmd)
+            if not result.is_successful():
+                return
             repo_path = Path(
                 self._tests_dir,
                 Path(repo_url).name.replace('.git', ''),
@@ -1342,7 +1471,7 @@ class GenericVMRunner(BaseRunner):
     )
     def run_third_party_test(
             self,
-            executor: Union[AnsibleExecutor, BatsExecutor, ShellExecutor],
+            executor: Union[AnsibleExecutor, BatsExecutor, CommandExecutor, ShellExecutor],
             cmd_args: List[str],
             docker_args: Optional[List[str]] = None,
             workdir: str = '',
@@ -1350,7 +1479,7 @@ class GenericVMRunner(BaseRunner):
             additional_section_name: str = '',
             env_vars: Optional[List[str]] = None,
     ):
-        result = executor.run_ssh_command(
+        result = executor.run(
             cmd_args=cmd_args,
             workdir=workdir,
             env_vars=env_vars,

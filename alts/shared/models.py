@@ -251,6 +251,7 @@ class CeleryConfig(BaseModel):
         S3ResultsConfig,
     ]
     result_backend_always_retry: bool = True
+    result_expires: int = 3600  # 1 hour in seconds
     result_backend_max_retries: int = 10
     s3_access_key_id: Optional[str] = None
     s3_secret_access_key: Optional[str] = None
@@ -265,9 +266,11 @@ class CeleryConfig(BaseModel):
     task_acks_late: bool = True
     task_track_started: bool = True
     worker_prefetch_multiplier: int = 1
+    worker_deduplicate_successful_tasks: bool = True
     broker_pool_limit: int = 20
     # Task track timeout
-    task_tracking_timeout: int = 3600
+    task_tracking_timeout: int = 7300
+    task_soft_time_limit: int = 7200  # 2 hours
     # Application-level settings
     # Supported architectures and distributions
     supported_architectures: List[str] = constants.SUPPORTED_ARCHITECTURES
@@ -293,15 +296,18 @@ class CeleryConfig(BaseModel):
     keepalive_interval: int = 30  # unit in seconds
     commands_exec_timeout: int = 30  # unit in seconds
     provision_timeout: int = 600  # 10 minutes in seconds
-    tests_exec_timeout: int = 3600  # 1 hour in seconds
+    tests_exec_timeout: int = 1800  # 30 minutes in seconds
     deprecated_ansible_venv: str = '/code/ansible_env'
-    centos_6_epel_release_url: str = (
-        'https://dl.fedoraproject.org/pub/archive/epel/6/x86_64/'
-        'epel-release-6-8.noarch.rpm'
-    )
+    epel_release_urls: Dict[str, str] = {
+        '6': 'http://dl.fedoraproject.org/pub/archive/epel/6/x86_64/'
+             'epel-release-6-8.noarch.rpm',
+        '7': 'https://dl.fedoraproject.org/pub/archive/epel/7/x86_64/'
+             'Packages/e/epel-release-7-12.noarch.rpm',
+    }
+    centos_baseurl: str = 'http://mirror.centos.org/centos'
     git_reference_directory: Optional[str] = None
     tests_base_dir: str = '/tests'
-    package_proxy: Optional[str] = None
+    package_proxy: str = ''
     development_mode: bool = False
 
     @property
@@ -325,6 +331,43 @@ class CeleryConfig(BaseModel):
     @property
     def supported_distributions(self):
         return set(self.rhel_flavors + self.debian_flavors)
+
+    def get_celery_config_dict(self) -> Dict[str, Any]:
+        config_dict = {
+            'broker_url': self.broker_config.broker_url,
+            'broker_pool_limit': self.broker_pool_limit,
+            'result_backend': self.result_backend,
+            'result_backend_always_retry': True,
+            'result_expires': self.result_expires,  # 1 hour in seconds
+            'result_backend_max_retries': self.result_backend_max_retries,
+            'task_default_queue': 'default',
+            'task_acks_late': True,
+            'task_track_started': True,
+            # Task track timeout
+            'task_tracking_timeout': self.task_tracking_timeout,
+            'task_soft_time_limit': self.task_soft_time_limit,
+            'worker_prefetch_multiplier': self.worker_prefetch_multiplier,
+            'worker_deduplicate_successful_tasks': self.worker_deduplicate_successful_tasks,
+            'broker_transport_options': {'visibility_timeout': 36000}
+        }
+        if isinstance(self.results_backend_config, AzureResultsConfig):
+            for key in (
+                'azureblockblob_container_name',
+                'azureblockblob_base_path',
+                'azure_connection_string'
+            ):
+                config_dict[key] = getattr(self.results_backend_config, key)
+        elif isinstance(self.results_backend_config, S3ResultsConfig):
+            for key in (
+                's3_access_key_id',
+                's3_secret_access_key',
+                's3_bucket',
+                's3_base_path',
+                's3_region',
+                's3_endpoint_url',
+            ):
+                config_dict[key] = getattr(self.results_backend_config, key)
+        return config_dict
 
 
 class SchedulerConfig(CeleryConfig):

@@ -17,6 +17,7 @@ class CommandExecutor(BaseExecutor):
         logging_level: Literal['DEBUG', 'INFO'] = 'INFO',
         connection_type: Literal['local', 'ssh', 'docker'] = 'local',
         container_name: str = '',
+        check_binary_existence: bool = True,
     ):
         super().__init__(
             binary_name=binary_name,
@@ -28,6 +29,7 @@ class CommandExecutor(BaseExecutor):
             logging_level=logging_level,
             connection_type=connection_type,
             container_name=container_name,
+            check_binary_existence=check_binary_existence,
         )
 
     @measure_stage('run_single_local_command')
@@ -35,8 +37,13 @@ class CommandExecutor(BaseExecutor):
         self,
         cmd_args: List[str],
         workdir: str = '',
+        env_vars: Optional[List[str]] = None,
     ) -> CommandResult:
-        return super().run_local_command(cmd_args)
+        return super().run_local_command(
+            cmd_args,
+            workdir=workdir,
+            env_vars=env_vars,
+        )
 
     @measure_stage('run_single_ssh_command')
     def run_ssh_command(
@@ -45,7 +52,11 @@ class CommandExecutor(BaseExecutor):
         workdir: str = '',
         env_vars: Optional[List[str]] = None,
     ) -> CommandResult:
-        return super().run_ssh_command(cmd_args)
+        return super().run_ssh_command(
+            cmd_args,
+            workdir=workdir,
+            env_vars=env_vars,
+        )
 
     @measure_stage('run_single_docker_command')
     def run_docker_command(
@@ -53,8 +64,10 @@ class CommandExecutor(BaseExecutor):
         cmd_args: List[str],
         workdir: str = '',
         docker_args: Optional[List[str]] = None,
+        env_vars: Optional[List[str]] = None,
     ) -> CommandResult:
         return super().run_docker_command(
             cmd_args=cmd_args,
             docker_args=docker_args,
+            env_vars=env_vars,
         )
