@@ -187,6 +187,11 @@ def run_tests(self, task_params: dict):
         runner.run_system_info_commands()
         if bool(ALT_PKGS_REGEX.search(package_name)):
             runner.ensure_package_is_installed('cloudlinux-linksafe')
+            # Attempt to install cloudlinux-release, but expect to fail
+            runner.install_package_no_log(
+                'cloudlinux-release',
+                allow_fail=True,
+            )
         runner.install_package(
             package_name,
             package_version=package_version,
