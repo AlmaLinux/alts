@@ -296,6 +296,8 @@ class TestAnsibleExecutor:
     def test_ansible_executor_init(self):
         assert isinstance(AnsibleExecutor(), AnsibleExecutor)
 
+    # TODO: Right now we do not expect Ansible to be started
+    #  on the remote machine, so commenting remote fixtures for now
     @pytest.mark.parametrize(
         'executor_params, additional_ssh_params, extra_cmd_args',
         [
@@ -305,24 +307,24 @@ class TestAnsibleExecutor:
                 [],
                 id='local',
             ),
-            pytest.param(
-                {},
-                {'disable_known_hosts_check': True},
-                [],
-                id='on_remote',
-            ),
+            # pytest.param(
+            #     {},
+            #     {'disable_known_hosts_check': True},
+            #     [],
+            #     id='on_remote',
+            # ),
             pytest.param(
                 {},
                 {},
                 ['--list-tasks', '--syntax-check'],
                 id='local_with_extra_params',
             ),
-            pytest.param(
-                {},
-                {'disable_known_hosts_check': True},
-                ['--list-tasks', '--syntax-check'],
-                id='on_remote_with_extra_params',
-            ),
+            # pytest.param(
+            #     {},
+            #     {'disable_known_hosts_check': True},
+            #     ['--list-tasks', '--syntax-check'],
+            #     id='on_remote_with_extra_params',
+            # ),
         ],
     )
     def test_ansible_run_command(
