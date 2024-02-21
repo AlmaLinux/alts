@@ -721,12 +721,7 @@ class BaseRunner(object):
         self._logger.info('System info section is finished')
         return 0, final_output, ''
 
-    @command_decorator(
-        'install_package',
-        'Cannot install package',
-        exception_class=InstallPackageError,
-    )
-    def install_package(
+    def install_package_no_log(
         self,
         package_name: str,
         package_version: Optional[str] = None,
@@ -735,7 +730,8 @@ class BaseRunner(object):
         module_version: Optional[str] = None,
         semi_verbose: bool = False,
         verbose: bool = False,
-    ):
+        allow_fail: bool = False,
+    ) -> Tuple[int, str, str]:
         full_pkg_name = self._detect_full_package_name(
             package_name,
             package_version=package_version,
@@ -775,10 +771,47 @@ class BaseRunner(object):
             'Running "ansible-playbook %s" command',
             cmd_args_str,
         )
-        return local[self.ansible_playbook_binary].with_cwd(self._work_dir).run(
-            args=cmd_args,
-            retcode=None,
-            timeout=CONFIG.provision_timeout,
+        try:
+            cmd = self.ansible_playbook_binary
+            exit_code, stdout, stderr = local[cmd].with_cwd(self._work_dir).run(
+                args=cmd_args,
+                retcode=None,
+                timeout=CONFIG.provision_timeout,
+            )
+        except (ProcessExecutionError, ProcessTimedOut) as e:
+            self._logger.error('Cannot install package: %s', str(e))
+            stdout = ''
+            stderr = f'Failed to install package: \n{e}'
+            exit_code = 255
+            if allow_fail:
+                exit_code = 0
+        if exit_code != 0 and allow_fail:
+            exit_code = 0
+        return exit_code, stdout, stderr
+
+    @command_decorator(
+        'install_package',
+        'Cannot install package',
+        exception_class=InstallPackageError,
+    )
+    def install_package(
+        self,
+        package_name: str,
+        package_version: Optional[str] = None,
+        module_name: Optional[str] = None,
+        module_stream: Optional[str] = None,
+        module_version: Optional[str] = None,
+        semi_verbose: bool = False,
+        verbose: bool = False,
+    ):
+        return self.install_package_no_log(
+            package_name,
+            package_version=package_version,
+            module_name=module_name,
+            module_stream=module_stream,
+            module_version=module_version,
+            semi_verbose=semi_verbose,
+            verbose=verbose
         )
 
     @command_decorator(
@@ -828,11 +861,16 @@ class BaseRunner(object):
             'Running "ansible-playbook %s" command',
             cmd_args_str,
         )
-        return local[self.ansible_playbook_binary].with_cwd(self._work_dir).run(
-            args=cmd_args,
-            retcode=None,
-            timeout=CONFIG.provision_timeout,
-        )
+        cmd = self.ansible_playbook_binary
+        try:
+            return local[cmd].with_cwd(self._work_dir).run(
+                args=cmd_args,
+                retcode=None,
+                timeout=CONFIG.provision_timeout,
+            )
+        except (ProcessExecutionError, ProcessTimedOut) as e:
+            self._logger.error('Cannot uninstall package:\n%s', str(e))
+            return 1, '', f'Cannot uninstall package:\n{e}'
 
     @command_decorator(
         'package_integrity_tests',
