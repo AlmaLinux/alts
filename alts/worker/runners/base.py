@@ -803,6 +803,7 @@ class BaseRunner(object):
         module_version: Optional[str] = None,
         semi_verbose: bool = False,
         verbose: bool = False,
+        allow_fail: bool = False,
     ):
         return self.install_package_no_log(
             package_name,
@@ -811,7 +812,8 @@ class BaseRunner(object):
             module_stream=module_stream,
             module_version=module_version,
             semi_verbose=semi_verbose,
-            verbose=verbose
+            verbose=verbose,
+            allow_fail=allow_fail,
         )
 
     @command_decorator(
@@ -1030,7 +1032,7 @@ class BaseRunner(object):
             package_version=package_version,
         )
         if not package_installed:
-            self.install_package(
+            self.install_package_no_log(
                 package_name,
                 package_version=package_version,
                 semi_verbose=True
