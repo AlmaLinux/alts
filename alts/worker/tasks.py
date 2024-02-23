@@ -193,6 +193,9 @@ def run_tests(self, task_params: dict):
                 'cloudlinux-release',
                 allow_fail=True,
             )
+        if (task_params['dist_name'] == 'cloudlinux-ubuntu'
+                and task_params['package_name'] == 'ea-apache24-mod-lsapi'):
+            self.ensure_package_is_uninstalled('apache2')
         runner.install_package(
             package_name,
             package_version=package_version,
