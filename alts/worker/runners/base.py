@@ -816,18 +816,10 @@ class BaseRunner(object):
             allow_fail=allow_fail,
         )
 
-    @command_decorator(
-        'uninstall_package',
-        'Cannot uninstall package',
-        exception_class=UninstallPackageError,
-    )
-    def uninstall_package(
+    def _uninstall_package(
         self,
         package_name: str,
         package_version: Optional[str] = None,
-        module_name: Optional[str] = None,
-        module_stream: Optional[str] = None,
-        module_version: Optional[str] = None,
     ):
         if package_name in CONFIG.uninstall_excluded_pkgs:
             return 0, '', ''
@@ -848,15 +840,6 @@ class BaseRunner(object):
             '-e',
             f'pkg_name={full_pkg_name}',
         ]
-        if module_name and module_stream and module_version:
-            cmd_args.extend([
-                '-e',
-                f'module_name={module_name}',
-                '-e',
-                f'module_stream={module_stream}',
-                '-e',
-                f'module_version={module_version}',
-            ])
         cmd_args.extend(['-t', 'uninstall_package'])
         cmd_args_str = ' '.join(cmd_args)
         self._logger.debug(
@@ -873,6 +856,19 @@ class BaseRunner(object):
         except (ProcessExecutionError, ProcessTimedOut) as e:
             self._logger.error('Cannot uninstall package:\n%s', str(e))
             return 1, '', f'Cannot uninstall package:\n{e}'
+
+    def ensure_package_is_uninstalled(self, package_name: str):
+        package_exists = self.check_package_existence(package_name)
+        if package_exists:
+            self._uninstall_package(package_name)
+
+    @command_decorator(
+        'uninstall_package',
+        'Cannot uninstall package',
+        exception_class=UninstallPackageError,
+    )
+    def uninstall_package(self, package_name: str):
+        return self._uninstall_package(package_name)
 
     @command_decorator(
         'package_integrity_tests',

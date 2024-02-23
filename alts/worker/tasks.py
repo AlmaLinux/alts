@@ -186,13 +186,7 @@ def run_tests(self, task_params: dict):
             package_name,
             package_version=package_version,
         )
-        runner.uninstall_package(
-            package_name,
-            package_version,
-            module_name=module_name,
-            module_stream=module_stream,
-            module_version=module_version,
-        )
+        runner.uninstall_package(package_name)
     except VMImageNotFound as exc:
         logging.exception('Cannot find VM image: %s', exc)
     except WorkDirPreparationError:
