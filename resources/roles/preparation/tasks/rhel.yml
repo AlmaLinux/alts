@@ -74,12 +74,14 @@
   yum:
     name: epel-release
     state: present
+    lock_timeout: 300
   when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version >= '8'"
 
 - name: Install epel-release (7 and less)
   yum:
     name: "{{ epel_release_url }}"
     state: present
+    lock_timeout: 300
   when: > 
     epel_release_url is defined and
     epel_release_url and
@@ -95,18 +97,21 @@
   package:
     name: "*"
     state: latest
+    lock_timeout: 300
 
 - name: Install additional packages
   yum:
     name: "{{ additional_packages + pip_packages }}"
     state: present
     enablerepo: epel
+    lock_timeout: 300
   when: centos_7_x32 | bool is false
 
 - name: Install additional packages on CentOS 7 i686
   yum:
     name: "{{ additional_packages }}"
     state: present
+    lock_timeout: 300
   when: centos_7_x32 | bool
 
 - name: Install ansible
@@ -114,6 +119,7 @@
     name: ansible
     state: present
     enablerepo: epel
+    lock_timeout: 300
   when: pytest_is_needed | bool
 
 - name: Add required repositories
