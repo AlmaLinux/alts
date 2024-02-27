@@ -10,6 +10,7 @@
   yum:
     name: "{{ pkg_name }}"
     state: present
+    allow_downgrade: true
     lock_timeout: 300
   when: ansible_distribution_file_variety in ('RedHat', 'OracleLinux')
   tags:
