@@ -317,7 +317,7 @@ class LongRunSSHClient(AsyncSSHClient):
             self.logger.exception(
                 'Cannot execute SSH command due to unexpected exception:'
             )
-            exit_code, stdout, stderr = 1, '', format_exc()
+            raise
         finally:
             return CommandResult(
                 exit_code=1 if exit_code is None else exit_code,
