@@ -145,7 +145,7 @@ class AsyncSSHClient:
                     result.stderr,
                 )
             except TimeoutError:
-                self.logger.error('Cannot execute SSH command due to timeout:')
+                self.logger.error('Cannot execute SSH command due to timeout')
                 exit_code, stdout, stderr = 1, '', format_exc()
             except Exception:
                 self.logger.exception(
@@ -311,7 +311,7 @@ class LongRunSSHClient(AsyncSSHClient):
                 result.stderr,
             )
         except TimeoutError:
-            self.logger.error('Cannot execute SSH command due to timeout:')
+            self.logger.error('Cannot execute SSH command due to timeout')
             exit_code, stdout, stderr = 1, '', format_exc()
         except Exception:
             self.logger.exception(
