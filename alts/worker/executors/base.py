@@ -182,12 +182,6 @@ class BaseExecutor:
                 stdout='',
                 stderr='Timed out'
             )
-        except Exception:
-            return CommandResult(
-                exit_code=1,
-                stdout='',
-                stderr=format_exc()
-            )
 
     @measure_stage('run_docker_command')
     def run_docker_command(
