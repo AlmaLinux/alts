@@ -57,6 +57,7 @@ AUTO_RETRY_EXCEPTIONS = (
     TimeoutError,
 )
 ALT_PKGS_REGEX = re.compile('^alt-(php|python|ruby|nodejs).*', re.IGNORECASE)
+CUSTOM_MYSQL_PKGS_REGEX = re.compile('^cl-(mysql|mariadb).*', re.IGNORECASE)
 
 
 def are_tap_tests_success(tests_output: str):
@@ -186,7 +187,8 @@ def run_tests(self, task_params: dict):
         time.sleep(random.randint(5, 10))
         runner.setup()
         runner.run_system_info_commands()
-        if bool(ALT_PKGS_REGEX.search(package_name)):
+        if (bool(ALT_PKGS_REGEX.search(package_name)) or
+                bool(CUSTOM_MYSQL_PKGS_REGEX.search(package_name))):
             runner.ensure_package_is_installed('cloudlinux-linksafe')
             # Attempt to install cloudlinux-release, but expect to fail
             runner.install_package_no_log(
