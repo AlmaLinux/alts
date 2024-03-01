@@ -251,7 +251,8 @@ class BaseRunner(object):
         # Package installation and test stuff
         repos = repositories or []
         self._repositories = self.prepare_repositories(repos)
-        self.add_credentials_to_build_repos()
+        if CONFIG.authorize_build_repositories:
+            self.add_credentials_to_build_repos()
 
         self._artifacts = {}
         self._uploaded_logs = None
@@ -492,13 +493,23 @@ class BaseRunner(object):
         self,
         package_name: str,
         package_version: Optional[str] = None,
+        package_epoch: Optional[int] = None,
     ) -> str:
         full_pkg_name = package_name
+        delimiter = '='
         if package_version:
             delimiter = '='
             if self.pkg_manager in ('yum', 'dnf'):
                 delimiter = '-'
             full_pkg_name = f'{package_name}{delimiter}{package_version}'
+        if package_epoch:
+            if (
+                self.dist_name in CONFIG.rhel_flavors
+                and self.dist_version in ('8', '9', '10')
+                and package_version
+            ):
+                full_pkg_name = (f'{package_name}{delimiter}{package_epoch}:'
+                                 f'{package_version}')
         return full_pkg_name
 
     # First step
@@ -725,6 +736,7 @@ class BaseRunner(object):
         self,
         package_name: str,
         package_version: Optional[str] = None,
+        package_epoch: Optional[int] = None,
         module_name: Optional[str] = None,
         module_stream: Optional[str] = None,
         module_version: Optional[str] = None,
@@ -735,6 +747,7 @@ class BaseRunner(object):
         full_pkg_name = self._detect_full_package_name(
             package_name,
             package_version=package_version,
+            package_epoch=package_epoch,
         )
 
         self._logger.info(
@@ -798,6 +811,7 @@ class BaseRunner(object):
         self,
         package_name: str,
         package_version: Optional[str] = None,
+        package_epoch: Optional[int] = None,
         module_name: Optional[str] = None,
         module_stream: Optional[str] = None,
         module_version: Optional[str] = None,
@@ -808,6 +822,7 @@ class BaseRunner(object):
         return self.install_package_no_log(
             package_name,
             package_version=package_version,
+            package_epoch=package_epoch,
             module_name=module_name,
             module_stream=module_stream,
             module_version=module_version,
@@ -1022,6 +1037,7 @@ class BaseRunner(object):
         self,
         package_name: str,
         package_version: Optional[str] = None,
+        package_epoch: Optional[int] = None,
     ):
         package_installed = self.check_package_existence(
             package_name,
@@ -1031,6 +1047,7 @@ class BaseRunner(object):
             self.install_package_no_log(
                 package_name,
                 package_version=package_version,
+                package_epoch=package_epoch,
                 semi_verbose=True
             )
 
@@ -1069,7 +1086,7 @@ class BaseRunner(object):
         if extension in EXECUTORS_MAPPING:
             return EXECUTORS_MAPPING[extension]
         # Try to detect file format with magic
-        magic_out = magic.from_file(str(test_path))
+        magic_out = magic.from_file(test_path)
         for regex, executor_class_ in FILE_TYPE_REGEXES_MAPPING.items():
             if re.search(regex, magic_out, re.IGNORECASE):
                 return executor_class_  # noqa
@@ -1106,6 +1123,7 @@ class BaseRunner(object):
         self,
         package_name: str,
         package_version: Optional[str] = None,
+        package_epoch: Optional[int] = None,
     ):
         if not self._test_configuration:
             return 0, 'Nothing to run', ''
@@ -1145,6 +1163,10 @@ class BaseRunner(object):
             if tests_list and '0_init' in tests_list[0].name:
                 skip_installation_attempt = True
             for test_file in tests_list:
+                test_file_abspath = test_file.resolve()
+                if not test_file_abspath.resolve().exists():
+                    errors.append(f'File {test_file.name} or is a broken symlink')
+                    continue
                 if tests_to_run and test_file.name not in tests_to_run:
                     continue
                 if (('0_init' not in test_file.name
@@ -1153,10 +1175,11 @@ class BaseRunner(object):
                     self.ensure_package_is_installed(
                         package_name,
                         package_version=package_version,
+                        package_epoch=package_epoch,
                     )
                     skip_installation_attempt = True
                 workdir = remote_workdir
-                executor_class = self.detect_executor(test_file)
+                executor_class = self.detect_executor(test_file_abspath)
                 if not executor_class:
                     self._logger.warning(
                         'Cannot get executor for test %s',

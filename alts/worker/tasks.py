@@ -170,11 +170,13 @@ def run_tests(self, task_params: dict):
     try:
         package_name = task_params['package_name']
         package_version = task_params.get('package_version')
+        package_epoch = task_params.get('package_epoch')
         runner.setup()
         runner.run_system_info_commands()
         runner.install_package(
             package_name,
-            package_version,
+            package_version=package_version,
+            package_epoch=package_epoch,
             module_name=module_name,
             module_stream=module_stream,
             module_version=module_version,
@@ -185,6 +187,7 @@ def run_tests(self, task_params: dict):
         runner.run_third_party_tests(
             package_name,
             package_version=package_version,
+            package_epoch=package_epoch,
         )
         runner.uninstall_package(package_name)
     except VMImageNotFound as exc:

@@ -80,6 +80,7 @@ class TaskRequestPayload(BaseModel):
     repositories: List[Repository] = []
     package_name: str
     package_version: Optional[str] = None
+    package_epoch: Optional[int] = None
     module_name: Optional[str] = None
     module_stream: Optional[str] = None
     module_version: Optional[str] = None
@@ -310,6 +311,7 @@ class CeleryConfig(BaseModel):
     tests_base_dir: str = '/tests'
     package_proxy: str = ''
     development_mode: bool = False
+    authorize_build_repositories: bool = False
 
     @property
     def result_backend(self) -> str:
