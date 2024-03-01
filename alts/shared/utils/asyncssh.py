@@ -318,12 +318,11 @@ class LongRunSSHClient(AsyncSSHClient):
                 'Cannot execute SSH command due to unexpected exception:'
             )
             raise
-        finally:
-            return CommandResult(
-                exit_code=1 if exit_code is None else exit_code,
-                stdout=stdout,
-                stderr=stderr,
-            )
+        return CommandResult(
+            exit_code=1 if exit_code is None else exit_code,
+            stdout=stdout,
+            stderr=stderr,
+        )
 
     async def async_run_commands(
         self,
