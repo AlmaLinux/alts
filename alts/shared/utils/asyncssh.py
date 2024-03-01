@@ -130,6 +130,33 @@ class AsyncSSHClient:
             result.stderr,
         )
 
+    async def _async_run_command(
+            self,
+            connection: SSHClientConnection,
+            command: str,
+            cmd_timeout: Optional[float] = None,
+    ):
+        try:
+            result = await connection.run(command, timeout=cmd_timeout)
+            exit_code, stdout, stderr = (
+                result.exit_status,
+                result.stdout,
+                result.stderr,
+            )
+        except TimeoutError:
+            self.logger.error('Cannot execute SSH command due to timeout')
+            exit_code, stdout, stderr = 1, '', format_exc()
+        except Exception:
+            self.logger.exception(
+                'Cannot execute SSH command due to unexpected exception:'
+            )
+            raise
+        return CommandResult(
+            exit_code=1 if exit_code is None else exit_code,
+            stdout=stdout,
+            stderr=stderr,
+        )
+
     async def async_run_command(
         self,
         command: str,
@@ -137,27 +164,7 @@ class AsyncSSHClient:
     ) -> CommandResult:
         cmd_timeout = timeout or self.timeout
         async with self.get_connection() as conn:
-            try:
-                result = await conn.run(command, timeout=cmd_timeout)
-                exit_code, stdout, stderr = (
-                    result.exit_status,
-                    result.stdout,
-                    result.stderr,
-                )
-            except TimeoutError:
-                self.logger.error('Cannot execute SSH command due to timeout')
-                exit_code, stdout, stderr = 1, '', format_exc()
-            except Exception:
-                self.logger.exception(
-                    'Cannot execute SSH command due to unexpected exception:'
-                )
-                raise
-            finally:
-                return CommandResult(
-                    exit_code=1 if exit_code is None else exit_code,
-                    stdout=stdout,
-                    stderr=stderr,
-                )
+            return await self._async_run_command(conn, command, cmd_timeout)
 
     def sync_run_command(
         self,
@@ -289,39 +296,16 @@ class LongRunSSHClient(AsyncSSHClient):
         command: str,
         timeout: Optional[float] = None,
     ) -> CommandResult:
-        exit_code = None
-        stdout = ''
-        stderr = ''
         cmd_timeout = timeout or self.timeout
         try:
             await self.connect()
-            result = await self.connection.run(command, timeout=cmd_timeout)
-            exit_code, stdout, stderr = (
-                result.exit_status,
-                result.stdout,
-                result.stderr,
-            )
         except ChannelOpenError:
             await self.disconnect()
             await self.connect()
-            result = await self.connection.run(command, timeout=cmd_timeout)
-            exit_code, stdout, stderr = (
-                result.exit_status,
-                result.stdout,
-                result.stderr,
-            )
-        except TimeoutError:
-            self.logger.error('Cannot execute SSH command due to timeout')
-            exit_code, stdout, stderr = 1, '', format_exc()
-        except Exception:
-            self.logger.exception(
-                'Cannot execute SSH command due to unexpected exception:'
-            )
-            raise
-        return CommandResult(
-            exit_code=1 if exit_code is None else exit_code,
-            stdout=stdout,
-            stderr=stderr,
+        return await self._async_run_command(
+            self.connection,
+            command,
+            cmd_timeout,
         )
 
     async def async_run_commands(
