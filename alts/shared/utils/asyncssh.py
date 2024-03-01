@@ -293,8 +293,8 @@ class LongRunSSHClient(AsyncSSHClient):
         stdout = ''
         stderr = ''
         cmd_timeout = timeout or self.timeout
-        await self.connect()
         try:
+            await self.connect()
             result = await self.connection.run(command, timeout=cmd_timeout)
             exit_code, stdout, stderr = (
                 result.exit_status,
