@@ -12,6 +12,7 @@ from asyncssh import (
     read_known_hosts,
     read_public_key,
 )
+from asyncssh.process import TimeoutError
 from syncer import sync
 
 from alts.shared.constants import DEFAULT_SSH_AUTH_METHODS
@@ -144,7 +145,7 @@ class AsyncSSHClient:
                     result.stderr,
                 )
             except TimeoutError:
-                self.logger.exception('Cannot execute SSH command due to timeout:')
+                self.logger.error('Cannot execute SSH command due to timeout:')
                 exit_code, stdout, stderr = 1, '', format_exc()
             except Exception:
                 self.logger.exception(
@@ -310,7 +311,7 @@ class LongRunSSHClient(AsyncSSHClient):
                 result.stderr,
             )
         except TimeoutError:
-            self.logger.exception('Cannot execute SSH command due to timeout:')
+            self.logger.error('Cannot execute SSH command due to timeout:')
             exit_code, stdout, stderr = 1, '', format_exc()
         except Exception:
             self.logger.exception(

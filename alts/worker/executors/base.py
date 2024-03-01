@@ -4,7 +4,8 @@ from functools import wraps
 from traceback import format_exc
 from typing import Any, Dict, List, Literal, Optional, Union
 
-from plumbum import local
+from asyncssh.process import TimeoutError
+from plumbum import local, ProcessTimedOut
 
 from alts.shared.models import AsyncSSHParams, CommandResult
 from alts.shared.utils.asyncssh import AsyncSSHClient, LongRunSSHClient
@@ -144,6 +145,10 @@ class BaseExecutor:
                 args=cmd_args,
                 timeout=self.timeout,
             )
+        except ProcessTimedOut:
+            args = [self.binary_name] + cmd_args
+            self.logger.error('Command %s timed out', args)
+            exit_code, stdout, stderr = 1, '', 'Timed out'
         except Exception:
             self.logger.exception('Cannot run local command:')
             exit_code, stdout, stderr = 1, '', format_exc()
@@ -164,12 +169,25 @@ class BaseExecutor:
             raise ValueError('SSH params are missing')
         directory = f'cd {workdir} && ' if workdir else ''
         additional_env_vars = f"{' '.join(env_vars)} " if env_vars else ''
-        return self.ssh_client.sync_run_command(
-            directory
-            + additional_env_vars
-            + ' '.join([self.binary_name, *cmd_args]),
-            timeout=self.timeout,
-        )
+        try:
+            return self.ssh_client.sync_run_command(
+                directory
+                + additional_env_vars
+                + ' '.join([self.binary_name, *cmd_args]),
+                timeout=self.timeout,
+            )
+        except TimeoutError:
+            return CommandResult(
+                exit_code=1,
+                stdout='',
+                stderr='Timed out'
+            )
+        except Exception:
+            return CommandResult(
+                exit_code=1,
+                stdout='',
+                stderr=format_exc()
+            )
 
     @measure_stage('run_docker_command')
     def run_docker_command(
@@ -201,6 +219,10 @@ class BaseExecutor:
                     retcode=None,
                 )
             )
+        except ProcessTimedOut:
+            args = ['docker', 'exec'] + docker_args + cmd_args
+            self.logger.error('Command %s timed out', args)
+            exit_code, stdout, stderr = 1, '', 'Timed out'
         except Exception:
             self.logger.exception('Cannot run docker command:')
             exit_code, stdout, stderr = 1, '', format_exc()
