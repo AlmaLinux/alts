@@ -6,15 +6,17 @@
   tags:
     - install_package
 
-- name: Install package
+- name: Install RPM package
   yum:
     name: "{{ pkg_name }}"
     state: present
+    allow_downgrade: true
+    lock_timeout: 300
   when: ansible_distribution_file_variety in ('RedHat', 'OracleLinux')
   tags:
     - install_package
 
-- name: Install package
+- name: Install DEB package
   apt:
     name: "{{ pkg_name }}"
     state: present
@@ -23,15 +25,16 @@
   tags:
     - install_package
 
-- name: Uninstall package
+- name: Uninstall RPM package
   yum:
     name: "{{ pkg_name }}"
     state: absent
+    lock_timeout: 300
   when: ansible_distribution_file_variety in ('RedHat', 'OracleLinux')
   tags:
     - uninstall_package
 
-- name: Uninstall package
+- name: Uninstall DEB package
   apt:
     name: "{{ pkg_name }}"
     state: absent

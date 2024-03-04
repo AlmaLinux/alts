@@ -54,27 +54,16 @@ def __clone_git_repo(
         args.extend(
             ['--reference-if-able', get_abspath(reference_directory)]
         )
-    last_error = ''
-    for attempt in range(1, 6):
-        exit_code, _, stderr = local['git'].with_cwd(work_dir).run(
-            args,
-            retcode=None,
-            timeout=cmd_timeout,
-        )
-        if exit_code == 0:
-            return git_repo_path
-        logger.warning(
-            'Cannot clone the git repo: %s\n%s',
-            repo_url,
-            stderr,
-        )
-        last_error = stderr
-        sleep_time = randint(1, 10)
-        logger.info('Retrying in %d seconds', sleep_time)
-        sleep(sleep_time)
+    exit_code, stdout, stderr = local['git'].with_cwd(work_dir).run(
+        args,
+        retcode=None,
+        timeout=cmd_timeout,
+    )
+    if exit_code == 0:
+        return git_repo_path
     logger.error(
-        'Unable to clone the git repo %s:\n%s',
-        repo_url, last_error,
+        'Unable to clone the git repo %s:\n%s\n\n%s',
+        repo_url, stdout, stderr,
     )
     return
 

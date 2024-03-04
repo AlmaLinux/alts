@@ -182,14 +182,11 @@ def run_tests(self, task_params: dict):
         )
         if CONFIG.enable_integrity_tests:
             runner.run_package_integrity_tests(package_name, package_version)
-        runner.run_third_party_tests()
-        runner.uninstall_package(
+        runner.run_third_party_tests(
             package_name,
-            package_version,
-            module_name=module_name,
-            module_stream=module_stream,
-            module_version=module_version,
+            package_version=package_version,
         )
+        runner.uninstall_package(package_name)
     except VMImageNotFound as exc:
         logging.exception('Cannot find VM image: %s', exc)
     except WorkDirPreparationError:

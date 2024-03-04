@@ -97,7 +97,7 @@ class TestBaseExecutor:
                 id='bash',
             ),
             pytest.param(
-                {'binary_name': 'bash'},
+                {'binary_name': 'bash', 'check_binary_existence': False},
                 {},
                 ['--version'],
                 pytest.raises(HostKeyNotVerifiable),
@@ -105,7 +105,7 @@ class TestBaseExecutor:
                 id='untrusted_host_key',
             ),
             pytest.param(
-                {'binary_name': 'bash'},
+                {'binary_name': 'bash', 'check_binary_existence': False},
                 {
                     'password': 'foo_bar',
                     'client_keys_files': [],
@@ -118,8 +118,8 @@ class TestBaseExecutor:
                 id='permission_denied',
             ),
             pytest.param(
-                {'binary_name': 'sleep'},
-                {'timeout': 5, 'disable_known_hosts_check': True},
+                {'binary_name': 'sleep', 'timeout': 5},
+                {'disable_known_hosts_check': True},
                 ['10', '&&', 'echo "check"'],
                 does_not_raise(),
                 1,

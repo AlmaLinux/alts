@@ -2,6 +2,7 @@ import logging
 from typing import Any, Dict, List, Literal, Optional, Union
 
 from alts.shared.models import AsyncSSHParams, CommandResult
+from alts.shared.utils.asyncssh import AsyncSSHClient, LongRunSSHClient
 from alts.worker.executors.base import BaseExecutor, measure_stage
 
 
@@ -11,6 +12,7 @@ class ShellExecutor(BaseExecutor):
         binary_name: str = 'bash',
         env_vars: Optional[Dict[str, Any]] = None,
         ssh_params: Optional[Union[Dict[str, Any], AsyncSSHParams]] = None,
+        ssh_client: Optional[Union[AsyncSSHClient, LongRunSSHClient]] = None,
         timeout: Optional[int] = None,
         logger: Optional[logging.Logger] = None,
         logger_name: str = 'shell-executor',
@@ -23,6 +25,7 @@ class ShellExecutor(BaseExecutor):
             binary_name=binary_name,
             env_vars=env_vars,
             ssh_params=ssh_params,
+            ssh_client=ssh_client,
             timeout=timeout,
             logger=logger,
             logger_name=logger_name,

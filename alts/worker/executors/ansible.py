@@ -2,6 +2,7 @@ import logging
 from typing import Any, Dict, List, Literal, Optional, Union
 
 from alts.shared.models import AsyncSSHParams, CommandResult
+from alts.shared.utils.asyncssh import AsyncSSHClient, LongRunSSHClient
 from alts.worker.executors.base import BaseExecutor, measure_stage
 
 
@@ -11,6 +12,7 @@ class AnsibleExecutor(BaseExecutor):
         binary_name: str = 'ansible-playbook',
         env_vars: Optional[Dict[str, Any]] = None,
         ssh_params: Optional[Union[Dict[str, Any], AsyncSSHParams]] = None,
+        ssh_client: Optional[Union[AsyncSSHClient, LongRunSSHClient]] = None,
         timeout: Optional[int] = None,
         logger: Optional[logging.Logger] = None,
         logger_name: str = 'ansible-executor',
@@ -23,6 +25,7 @@ class AnsibleExecutor(BaseExecutor):
             binary_name=binary_name,
             env_vars=env_vars,
             ssh_params=ssh_params,
+            ssh_client=ssh_client,
             timeout=timeout,
             logger=logger,
             logger_name=logger_name,
@@ -40,6 +43,9 @@ class AnsibleExecutor(BaseExecutor):
             else:
                 self._ansible_host = ssh_params['host']
                 self._ansible_user = ssh_params.get('username') or 'root'
+        if ssh_client:
+            self._ansible_host = ssh_client.host
+            self._ansible_user = ssh_client.username or 'root'
 
     def __construct_cmd_args(
         self,
@@ -70,7 +76,7 @@ class AnsibleExecutor(BaseExecutor):
         env_vars: Optional[List[str]] = None,
     ) -> CommandResult:
         args = self.__construct_cmd_args(cmd_args, env_vars=env_vars)
-        return super().run_local_command(args)
+        return super().run_local_command(args, workdir=workdir)
 
     @measure_stage('run_remote_ansible')
     def run_ssh_command(

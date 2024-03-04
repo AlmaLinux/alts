@@ -4,10 +4,11 @@ from functools import wraps
 from traceback import format_exc
 from typing import Any, Dict, List, Literal, Optional, Union
 
-from plumbum import local
+from asyncssh.process import TimeoutError
+from plumbum import local, ProcessTimedOut
 
 from alts.shared.models import AsyncSSHParams, CommandResult
-from alts.shared.utils.asyncssh import AsyncSSHClient
+from alts.shared.utils.asyncssh import AsyncSSHClient, LongRunSSHClient
 
 
 def measure_stage(stage: str):
@@ -38,6 +39,7 @@ class BaseExecutor:
         binary_name: str,
         env_vars: Optional[Dict[str, Any]] = None,
         ssh_params: Optional[Union[Dict[str, Any], AsyncSSHParams]] = None,
+        ssh_client: Optional[Union[AsyncSSHClient, LongRunSSHClient]] = None,
         timeout: Optional[int] = None,
         logger: Optional[logging.Logger] = None,
         logger_name: str = 'base-executor',
@@ -47,6 +49,8 @@ class BaseExecutor:
         check_binary_existence: bool = True,
     ) -> None:
         self.ssh_client = None
+        if ssh_client:
+            self.ssh_client = ssh_client
         self.env_vars = {}
         self.exec_stats = {}
         self.timeout = timeout
@@ -55,11 +59,15 @@ class BaseExecutor:
             self.timeout = 30
         if env_vars and isinstance(env_vars, dict):
             self.env_vars.update(env_vars)
+        if ssh_params and ssh_client:
+            raise ValueError(
+                'ssh_params and ssh_client cannot be defined together'
+            )
         if ssh_params:
             if isinstance(ssh_params, dict):
                 ssh_params['env_vars'] = env_vars if env_vars else None
                 ssh_params = AsyncSSHParams(**ssh_params)
-            self.ssh_client = AsyncSSHClient(**ssh_params.model_dump())
+            self.ssh_client = LongRunSSHClient(**ssh_params.model_dump())
         self.connection_type = connection_type
         self.container_name = container_name
         self.logger = logger
@@ -68,8 +76,8 @@ class BaseExecutor:
         if check_binary_existence:
             self.check_binary_existence()
 
+    @staticmethod
     def setup_logger(
-        self,
         logger_name: str,
         logging_level: str,
     ) -> logging.Logger:
@@ -137,6 +145,10 @@ class BaseExecutor:
                 args=cmd_args,
                 timeout=self.timeout,
             )
+        except ProcessTimedOut:
+            args = [self.binary_name] + cmd_args
+            self.logger.error('Command %s timed out', args)
+            exit_code, stdout, stderr = 1, '', 'Timed out'
         except Exception:
             self.logger.exception('Cannot run local command:')
             exit_code, stdout, stderr = 1, '', format_exc()
@@ -157,11 +169,19 @@ class BaseExecutor:
             raise ValueError('SSH params are missing')
         directory = f'cd {workdir} && ' if workdir else ''
         additional_env_vars = f"{' '.join(env_vars)} " if env_vars else ''
-        return self.ssh_client.sync_run_command(
-            directory
-            + additional_env_vars
-            + ' '.join([self.binary_name, *cmd_args])
-        )
+        try:
+            return self.ssh_client.sync_run_command(
+                directory
+                + additional_env_vars
+                + ' '.join([self.binary_name, *cmd_args]),
+                timeout=self.timeout,
+            )
+        except TimeoutError:
+            return CommandResult(
+                exit_code=1,
+                stdout='',
+                stderr='Timed out'
+            )
 
     @measure_stage('run_docker_command')
     def run_docker_command(
@@ -193,6 +213,10 @@ class BaseExecutor:
                     retcode=None,
                 )
             )
+        except ProcessTimedOut:
+            args = ['docker', 'exec'] + docker_args + cmd_args
+            self.logger.error('Command %s timed out', args)
+            exit_code, stdout, stderr = 1, '', 'Timed out'
         except Exception:
             self.logger.exception('Cannot run docker command:')
             exit_code, stdout, stderr = 1, '', format_exc()
