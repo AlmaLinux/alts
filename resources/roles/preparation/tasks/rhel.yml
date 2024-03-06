@@ -65,6 +65,13 @@
     option: tsflags
     state: absent
 
+- name: Remove override_install_langs from YUM config
+  ini_file:
+    path: /etc/yum.conf
+    section: main
+    option: override_install_langs
+    state: absent
+
 - name: Delete /etc/rpm/macros.image-language-conf
   file:
     path: /etc/rpm/macros.image-language-conf
