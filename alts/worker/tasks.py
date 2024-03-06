@@ -6,6 +6,8 @@
 
 import logging
 import traceback
+import random
+import time
 import urllib.parse
 from celery.contrib.abortable import AbortableTask
 from collections import defaultdict
@@ -164,13 +166,16 @@ def run_tests(self, task_params: dict):
         *runner_args,
         **runner_kwargs,
     )
+    package_name = task_params['package_name']
+    package_version = task_params.get('package_version')
+    package_epoch = task_params.get('package_epoch')
     module_name = task_params.get('module_name')
     module_stream = task_params.get('module_stream')
     module_version = task_params.get('module_version')
     try:
-        package_name = task_params['package_name']
-        package_version = task_params.get('package_version')
-        package_epoch = task_params.get('package_epoch')
+        # Wait a bit to not spawn all environments at once when
+        # a lot of tasks are coming to the machine
+        time.sleep(random.randint(5, 10))
         runner.setup()
         runner.run_system_info_commands()
         runner.install_package(

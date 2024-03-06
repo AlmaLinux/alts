@@ -22,7 +22,6 @@ from typing import (
     Type,
 )
 
-import magic
 from filelock import FileLock
 from mako.lookup import TemplateLookup
 from plumbum import local, ProcessExecutionError, ProcessTimedOut
@@ -1051,13 +1050,9 @@ class BaseRunner(object):
                 semi_verbose=True
             )
 
-    def sort_tests(self, tests_dir: Path) -> List[Path]:
-        tests_list = list(tests_dir.iterdir())
-        tests_list.sort()
-        organized_tests_list = []
+    def get_init_script(self, tests_dir: Path) -> Optional[Path]:
         init = None
-        install = None
-        for test in tests_list:
+        for test in tests_dir.iterdir():
             if test.is_dir():
                 # Usually ansible directory will contain 0_init.yml
                 if test.name == 'ansible':
@@ -1068,25 +1063,43 @@ class BaseRunner(object):
             if test.name in self.INIT_TESTS:
                 init = test
                 continue
-            elif test.name == '0_install':
+        return init
+
+    def find_tests(self, tests_dir: str) -> List[Path]:
+        self._logger.info('Looking tests on the remote in %s', tests_dir)
+        if not tests_dir.endswith('/'):
+            tests_dir += '/'
+        _, stdout, _ = self.exec_command(
+            'find', tests_dir, '-maxdepth', '1', '-type', 'f'
+        )
+        tests_list = [Path(i) for i in stdout.split('\n')]
+        self._logger.debug('Tests list: %s', tests_list)
+        tests_list.sort()
+        organized_tests_list = []
+        install = None
+        for test in tests_list:
+            if test.is_dir() or test.name in self.INIT_TESTS:
+                continue
+            if test.name == '0_install':
                 install = test
                 continue
             else:
                 organized_tests_list.append(test)
-        # 0_init should be the first, 0_install should be the second
+        # 0_init is executed elsewhere, 0_install should be the first here
         if install:
             organized_tests_list.insert(0, install)
-        if init:
-            organized_tests_list.insert(0, init)
         return organized_tests_list
 
-    @staticmethod
-    def detect_executor(test_path: Path) -> DetectExecutorResult:
-        extension = test_path.suffix
+    def detect_executor(self, test_path: str) -> DetectExecutorResult:
+        extension = Path(test_path).suffix
         if extension in EXECUTORS_MAPPING:
             return EXECUTORS_MAPPING[extension]
         # Try to detect file format with magic
-        magic_out = magic.from_file(test_path)
+        _, magic_out, _ = self.exec_command('file', test_path)
+        if 'symbolic link' in magic_out:
+            target_file = magic_out.split('\n')[-1]
+            new_path = os.path.join(test_path, target_file)
+            _, magic_out, _ = self.exec_command('file', new_path)
         for regex, executor_class_ in FILE_TYPE_REGEXES_MAPPING.items():
             if re.search(regex, magic_out, re.IGNORECASE):
                 return executor_class_  # noqa
@@ -1113,6 +1126,81 @@ class BaseRunner(object):
             if 'options' in result_dict:
                 options = result_dict['options'].strip()
             return interpreter, options
+
+    def _run_test_file(
+        self,
+        test_file: Path,
+        remote_workdir: str,
+        local_workdir: str,
+        executors_cache: dict,
+    ) -> List[str]:
+        executor_params = self.get_test_executor_params()
+        executor_params['timeout'] = CONFIG.tests_exec_timeout
+        workdir = remote_workdir
+        errors = []
+        executor_class = self.detect_executor(
+            os.path.join(remote_workdir, test_file.name)
+        )
+        if not executor_class:
+            self._logger.warning(
+                'Cannot get executor for test %s',
+                test_file
+            )
+            errors.append(f'Cannot get executor for test {test_file}')
+            return errors
+        self._logger.info('Running %s', test_file)
+        self._logger.debug(
+            'Executor: %s', executor_class.__name__
+        )
+        if executor_class == AnsibleExecutor:
+            cmd_args = [test_file]
+            workdir = local_workdir
+            executor_params['binary_name'] = self.ansible_playbook_binary
+        else:
+            cmd_args = [test_file.name]
+            executor_params.pop('binary_name', None)
+        if executor_class == CommandExecutor:
+            python, options = self.detect_python_binary(test_file)
+            if options:
+                cmd_args.insert(0, options)
+            executor = CommandExecutor(python, **executor_params)
+        else:
+            if executor_class in executors_cache:
+                executor = executors_cache[executor_class]
+            else:
+                executor: Union[
+                    AnsibleExecutor,
+                    BatsExecutor,
+                    CommandExecutor,
+                    ShellExecutor,
+                ] = executor_class(**executor_params)
+                executors_cache[executor_class] = executor
+        self._logger.debug(
+            'Running the third party test %s on %s...',
+            test_file.name,
+            self.env_name,
+        )
+        try:
+            key = f'{THIRD_PARTY_SECTION_NAME}_test_{test_file.name}'
+            self.run_third_party_test(
+                executor=executor,
+                cmd_args=cmd_args,
+                docker_args=['--workdir', workdir],
+                workdir=workdir,
+                artifacts_key=key,
+                additional_section_name=THIRD_PARTY_SECTION_NAME,
+                env_vars=self._test_env.get('extra_env_vars', []),
+            )
+        except ThirdPartyTestError:
+            errors.append(f'Test {test_file.name} has failed')
+        except Exception:
+            errors.append(
+                f'Test {test_file.name} failed:\n{traceback.format_exc()}'
+            )
+            self._logger.exception(
+                'An unknown error occurred during the test execution'
+            )
+        return errors
 
     @command_decorator(
         f'{THIRD_PARTY_SECTION_NAME}_tests_wrapper',
@@ -1157,87 +1245,34 @@ class BaseRunner(object):
                 self._logger.warning('Directory %s does not exist', tests_path)
                 self._logger.warning('Skipping test configuration')
                 continue
-            tests_list = self.sort_tests(tests_path)
-            skip_installation_attempt = False
+            init_test = self.get_init_script(tests_path)
+            if init_test:
+                self._run_test_file(
+                    init_test,
+                    remote_workdir,
+                    local_workdir,
+                    executors_cache,
+                )
+            tests_list = self.find_tests(remote_workdir)
             # Check if package has 0_init-like script
-            if tests_list and '0_init' in tests_list[0].name:
-                skip_installation_attempt = True
             for test_file in tests_list:
-                test_file_abspath = test_file.resolve()
-                if not test_file_abspath.resolve().exists():
-                    errors.append(f'File {test_file.name} or is a broken symlink')
-                    continue
                 if tests_to_run and test_file.name not in tests_to_run:
                     continue
                 if (('0_init' not in test_file.name
-                     or '0_install' not in test_file.name)
-                        and not skip_installation_attempt):
+                     or '0_install' not in test_file.name)):
                     self.ensure_package_is_installed(
                         package_name,
                         package_version=package_version,
                         package_epoch=package_epoch,
                     )
-                    skip_installation_attempt = True
-                workdir = remote_workdir
-                executor_class = self.detect_executor(test_file_abspath)
-                if not executor_class:
-                    self._logger.warning(
-                        'Cannot get executor for test %s',
-                        test_file
-                    )
-                    errors.append(f'Cannot get executor for test {test_file}')
-                    continue
-                self._logger.info('Running %s', test_file)
-                self._logger.debug(
-                    'Executor: %s,', executor_class.__name__
+                test_errors = self._run_test_file(
+                    test_file,
+                    remote_workdir,
+                    local_workdir,
+                    executors_cache,
                 )
-                if executor_class == AnsibleExecutor:
-                    cmd_args = [test_file]
-                    workdir = local_workdir
-                else:
-                    cmd_args = [test_file.name]
-                if executor_class == CommandExecutor:
-                    python, options = self.detect_python_binary(test_file)
-                    if options:
-                        cmd_args.insert(0, options)
-                    executor = CommandExecutor(python, **executor_params)
-                else:
-                    if executor_class in executors_cache:
-                        executor = executors_cache[executor_class]
-                    else:
-                        executor: Union[
-                            AnsibleExecutor,
-                            BatsExecutor,
-                            CommandExecutor,
-                            ShellExecutor,
-                        ] = executor_class(**executor_params)
-                        executors_cache[executor_class] = executor
-                self._logger.debug(
-                    'Running the third party test %s on %s...',
-                    test_file.name,
-                    self.env_name,
-                )
-                try:
-                    key = f'{THIRD_PARTY_SECTION_NAME}_test_{test_file.name}'
-                    self.run_third_party_test(
-                        executor=executor,
-                        cmd_args=cmd_args,
-                        docker_args=['--workdir', workdir],
-                        workdir=workdir,
-                        artifacts_key=key,
-                        additional_section_name=THIRD_PARTY_SECTION_NAME,
-                        env_vars=self._test_env.get('extra_env_vars', []),
-                    )
-                except ThirdPartyTestError:
-                    errors.append(f'Test {test_file.name} has failed')
-                except Exception:
-                    errors.append(
-                        f'Test {test_file.name} failed:\n{traceback.format_exc()}'
-                    )
-                    self._logger.exception(
-                        'An unknown error occurred during the test execution'
-                    )
-                skip_installation_attempt = True
+                if test_errors:
+                    errors.extend(test_errors)
             git_reset_hard(test_repo_path, self._logger)
         if errors:
             return 1, '', '\n'.join(errors)
