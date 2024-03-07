@@ -22,6 +22,7 @@ from typing import (
     Type,
 )
 
+from billiard.exceptions import SoftTimeLimitExceeded
 from filelock import FileLock
 from mako.lookup import TemplateLookup
 from plumbum import local, ProcessExecutionError, ProcessTimedOut
@@ -118,7 +119,12 @@ def command_decorator(
             if not self._work_dir or not os.path.exists(self._work_dir):
                 return
             start = datetime.datetime.utcnow()
-            exit_code, stdout, stderr = fn(self, *args, **kwargs)
+            try:
+                exit_code, stdout, stderr = fn(self, *args, **kwargs)
+            except SoftTimeLimitExceeded:
+                exit_code = 1
+                stdout = ''
+                stderr = 'Task timeout has exceeded'
             finish = datetime.datetime.utcnow()
             add_to = self._artifacts
             key = kwargs.get('artifacts_key', artifacts_key)
