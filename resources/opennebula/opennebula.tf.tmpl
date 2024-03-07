@@ -44,3 +44,7 @@ resource "opennebula_virtual_machine" "${vm_name}" {
 output "vm_ip" {
   value = opennebula_virtual_machine.${vm_name}.ip
 }
+
+output "vm_id" {
+  value = opennebula_virtual_machine.${vm_name}.id
+}

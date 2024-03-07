@@ -10,6 +10,7 @@ __all__ = [
     'ConfigNotFoundError',
     'DBUpdateError',
     'InstallPackageError',
+    'OpennebulaVMStopError',
     'ProvisionError',
     'PublishArtifactsError',
     'StartEnvironmentError',
@@ -86,4 +87,8 @@ class ThirdPartyTestError(ALTSBaseError):
 
 
 class SystemInfoCmdError(ALTSBaseError):
+    pass
+
+
+class OpennebulaVMStopError(ALTSBaseError):
     pass
