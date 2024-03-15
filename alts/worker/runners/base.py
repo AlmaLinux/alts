@@ -1103,8 +1103,8 @@ class BaseRunner(object):
         # Try to detect file format with magic
         _, magic_out, _ = self.exec_command('file', test_path)
         if 'symbolic link' in magic_out:
-            target_file = magic_out.split('\n')[-1]
-            new_path = os.path.join(test_path, target_file)
+            target_file = magic_out.split(' ')[-1].strip('\n`\'"')
+            new_path = os.path.join(os.path.dirname(test_path), target_file)
             _, magic_out, _ = self.exec_command('file', new_path)
         if 'directory' in magic_out:
             self._logger.info("Skipping %s since it's a directory", test_path)
