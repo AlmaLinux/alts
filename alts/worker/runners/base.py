@@ -1106,6 +1106,9 @@ class BaseRunner(object):
             target_file = magic_out.split('\n')[-1]
             new_path = os.path.join(test_path, target_file)
             _, magic_out, _ = self.exec_command('file', new_path)
+        if 'directory' in magic_out:
+            self._logger.info("Skipping %s since it's a directory", test_path)
+            return
         for regex, executor_class_ in FILE_TYPE_REGEXES_MAPPING.items():
             if re.search(regex, magic_out, re.IGNORECASE):
                 return executor_class_  # noqa
