@@ -95,12 +95,12 @@ EXECUTORS_MAPPING = {
     '.yaml': AnsibleExecutor,
 }
 
-DetectExecutorResult = Type[Union[
+DetectExecutorResult = Type[Optional[Union[
     AnsibleExecutor,
     BatsExecutor,
     CommandExecutor,
     ShellExecutor,
-]]
+]]]
 
 
 def command_decorator(
@@ -1155,7 +1155,6 @@ class BaseRunner(object):
                 'Cannot get executor for test %s',
                 test_file
             )
-            errors.append(f'Cannot get executor for test {test_file}')
             return errors
         self._logger.info('Running %s', test_file)
         self._logger.debug(
