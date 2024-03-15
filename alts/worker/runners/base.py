@@ -1076,7 +1076,7 @@ class BaseRunner(object):
         if not tests_dir.endswith('/'):
             tests_dir += '/'
         _, stdout, _ = self.exec_command(
-            'find', tests_dir, '-maxdepth', '1', '-type', 'f'
+            'find', tests_dir, '-maxdepth', '1', '-type', 'f', '-o', '-type', 'l'
         )
         tests_list = [Path(i) for i in stdout.split('\n')]
         self._logger.debug('Tests list: %s', tests_list)
