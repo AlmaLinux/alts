@@ -197,10 +197,10 @@ class BaseExecutor:
             for var in env_vars:
                 additional_env_vars.extend(('-e', var))
         try:
-            exit_code, stdout, stderr = (
+            runner = (
                 local['docker']
                 .with_env(**self.env_vars)
-                .run(
+                .run_bg(
                     args=[
                         'exec',
                         *docker_args,
@@ -213,6 +213,10 @@ class BaseExecutor:
                     retcode=None,
                 )
             )
+            runner.wait()
+            stdout = runner.stdout
+            stderr = runner.stderr
+            exit_code = runner.returncode
         except ProcessTimedOut:
             args = ['docker', 'exec'] + docker_args + cmd_args
             self.logger.error('Command %s timed out', args)
