@@ -204,6 +204,7 @@ class BaseRunner(object):
         repositories: Optional[List[dict]] = None,
         dist_arch: str = 'x86_64',
         artifacts_uploader: Optional[BaseLogsUploader] = None,
+        package_channel: Optional[str] = None,
         test_configuration: Optional[dict] = None,
         verbose: bool = False,
     ):
@@ -263,6 +264,7 @@ class BaseRunner(object):
         self._uploaded_logs = None
         self._stats = {}
         self._verbose = verbose
+        self.package_channel = package_channel
 
     @property
     def artifacts(self):
@@ -1488,6 +1490,8 @@ class GenericVMRunner(BaseRunner):
         dist_version: Union[str, int],
         repositories: Optional[List[dict]] = None,
         dist_arch: str = 'x86_64',
+        artifacts_uploader: Optional[BaseLogsUploader] = None,
+        package_channel: Optional[str] = None,
         test_configuration: Optional[dict] = None,
         verbose: bool = False,
     ):
@@ -1499,6 +1503,8 @@ class GenericVMRunner(BaseRunner):
             repositories=repositories,
             dist_arch=dist_arch,
             test_configuration=test_configuration,
+            artifacts_uploader=artifacts_uploader,
+            package_channel=package_channel,
             verbose=verbose,
         )
         self._tests_dir = CONFIG.tests_base_dir

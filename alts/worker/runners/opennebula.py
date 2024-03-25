@@ -18,6 +18,7 @@ from alts.shared.exceptions import (
     VMImageNotFound,
     StopEnvironmentError,
 )
+from alts.shared.uploaders.base import BaseLogsUploader
 from alts.worker import CONFIG
 from alts.worker.runners.base import GenericVMRunner, command_decorator
 
@@ -40,6 +41,7 @@ class OpennebulaRunner(GenericVMRunner):
         dist_version: Union[str, int],
         repositories: Optional[List[dict]] = None,
         dist_arch: str = 'x86_64',
+        artifacts_uploader: Optional[BaseLogsUploader] = None,
         package_channel: Optional[str] = None,
         test_configuration: Optional[dict] = None,
         verbose: bool = False,
@@ -52,9 +54,10 @@ class OpennebulaRunner(GenericVMRunner):
             repositories=repositories,
             dist_arch=dist_arch,
             test_configuration=test_configuration,
+            artifacts_uploader=artifacts_uploader,
+            package_channel=package_channel,
             verbose=verbose,
         )
-        self.package_channel = package_channel
         user = CONFIG.opennebula_config.username
         password = CONFIG.opennebula_config.password
         self.opennebula_client = pyone.OneServer(

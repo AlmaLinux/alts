@@ -159,6 +159,7 @@ def run_tests(self, task_params: dict):
         'repositories': task_params.get('repositories', []),
         'dist_arch': task_params.get('dist_arch', 'x86_64'),
         'test_configuration': task_params.get('test_configuration', {}),
+        'package_channel': task_params.get('package_channel', 'beta'),
     }
 
     runner_class = RUNNER_MAPPING[task_params['runner_type']]
