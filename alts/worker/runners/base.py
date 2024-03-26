@@ -838,6 +838,27 @@ class BaseRunner(object):
             allow_fail=allow_fail,
         )
 
+    def detect_protected_packages(self):
+        if self.dist_name not in CONFIG.rhel_flavors:
+            return []
+        exit_code, stdout, stderr = self.exec_command(
+            'ls', f'/etc/{self.pkg_manager}/protected.d/'
+        )
+        if exit_code != 0:
+            return []
+        files = [i.strip() for i in stdout.split('\n') if i.strip()]
+        protected = []
+        for file_ in files:
+            exit_code, stdout, stderr = self.exec_command(
+                'cat', f'/etc/{self.pkg_manager}/protected.d/{file_}',
+            )
+            if exit_code != 0:
+                continue
+            file_protected = [i.strip() for i in stdout.split('\n') if i.strip()]
+            if file_protected:
+                protected.extend(file_protected)
+        return protected
+
     def _uninstall_package(
         self,
         package_name: str,
@@ -845,6 +866,9 @@ class BaseRunner(object):
     ):
         if package_name in CONFIG.uninstall_excluded_pkgs:
             return 0, '', ''
+
+        if package_name in self.detect_protected_packages():
+            return 0, f'Package {package_name} is protected', ''
 
         full_pkg_name = self._detect_full_package_name(
             package_name, package_version=package_version
