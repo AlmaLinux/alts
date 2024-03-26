@@ -302,11 +302,20 @@ class LongRunSSHClient(AsyncSSHClient):
         except ChannelOpenError:
             await self.disconnect()
             await self.connect()
-        return await self._async_run_command(
-            self.connection,
-            command,
-            cmd_timeout,
-        )
+        try:
+            return await self._async_run_command(
+                self.connection,
+                command,
+                cmd_timeout,
+            )
+        except ChannelOpenError:
+            await self.disconnect()
+            await self.connect()
+            return await self._async_run_command(
+                self.connection,
+                command,
+                cmd_timeout,
+            )
 
     async def async_run_commands(
         self,

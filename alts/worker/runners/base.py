@@ -22,7 +22,7 @@ from typing import (
     Type,
 )
 
-import magic
+from billiard.exceptions import SoftTimeLimitExceeded
 from filelock import FileLock
 from mako.lookup import TemplateLookup
 from plumbum import local, ProcessExecutionError, ProcessTimedOut
@@ -95,12 +95,12 @@ EXECUTORS_MAPPING = {
     '.yaml': AnsibleExecutor,
 }
 
-DetectExecutorResult = Type[Union[
+DetectExecutorResult = Type[Optional[Union[
     AnsibleExecutor,
     BatsExecutor,
     CommandExecutor,
     ShellExecutor,
-]]
+]]]
 
 
 def command_decorator(
@@ -119,7 +119,12 @@ def command_decorator(
             if not self._work_dir or not os.path.exists(self._work_dir):
                 return
             start = datetime.datetime.utcnow()
-            exit_code, stdout, stderr = fn(self, *args, **kwargs)
+            try:
+                exit_code, stdout, stderr = fn(self, *args, **kwargs)
+            except SoftTimeLimitExceeded:
+                exit_code = 1
+                stdout = ''
+                stderr = 'Task timeout has exceeded'
             finish = datetime.datetime.utcnow()
             add_to = self._artifacts
             key = kwargs.get('artifacts_key', artifacts_key)
@@ -199,6 +204,7 @@ class BaseRunner(object):
         repositories: Optional[List[dict]] = None,
         dist_arch: str = 'x86_64',
         artifacts_uploader: Optional[BaseLogsUploader] = None,
+        package_channel: Optional[str] = None,
         test_configuration: Optional[dict] = None,
         verbose: bool = False,
     ):
@@ -251,12 +257,14 @@ class BaseRunner(object):
         # Package installation and test stuff
         repos = repositories or []
         self._repositories = self.prepare_repositories(repos)
-        self.add_credentials_to_build_repos()
+        if CONFIG.authorize_build_repositories:
+            self.add_credentials_to_build_repos()
 
         self._artifacts = {}
         self._uploaded_logs = None
         self._stats = {}
         self._verbose = verbose
+        self.package_channel = package_channel
 
     @property
     def artifacts(self):
@@ -492,13 +500,23 @@ class BaseRunner(object):
         self,
         package_name: str,
         package_version: Optional[str] = None,
+        package_epoch: Optional[int] = None,
     ) -> str:
         full_pkg_name = package_name
+        delimiter = '='
         if package_version:
             delimiter = '='
             if self.pkg_manager in ('yum', 'dnf'):
                 delimiter = '-'
             full_pkg_name = f'{package_name}{delimiter}{package_version}'
+        if package_epoch:
+            if (
+                self.dist_name in CONFIG.rhel_flavors
+                and self.dist_version in ('8', '9', '10')
+                and package_version
+            ):
+                full_pkg_name = (f'{package_name}{delimiter}{package_epoch}:'
+                                 f'{package_version}')
         return full_pkg_name
 
     # First step
@@ -725,6 +743,7 @@ class BaseRunner(object):
         self,
         package_name: str,
         package_version: Optional[str] = None,
+        package_epoch: Optional[int] = None,
         module_name: Optional[str] = None,
         module_stream: Optional[str] = None,
         module_version: Optional[str] = None,
@@ -735,6 +754,7 @@ class BaseRunner(object):
         full_pkg_name = self._detect_full_package_name(
             package_name,
             package_version=package_version,
+            package_epoch=package_epoch,
         )
 
         self._logger.info(
@@ -798,6 +818,7 @@ class BaseRunner(object):
         self,
         package_name: str,
         package_version: Optional[str] = None,
+        package_epoch: Optional[int] = None,
         module_name: Optional[str] = None,
         module_stream: Optional[str] = None,
         module_version: Optional[str] = None,
@@ -808,6 +829,7 @@ class BaseRunner(object):
         return self.install_package_no_log(
             package_name,
             package_version=package_version,
+            package_epoch=package_epoch,
             module_name=module_name,
             module_stream=module_stream,
             module_version=module_version,
@@ -1022,6 +1044,7 @@ class BaseRunner(object):
         self,
         package_name: str,
         package_version: Optional[str] = None,
+        package_epoch: Optional[int] = None,
     ):
         package_installed = self.check_package_existence(
             package_name,
@@ -1031,16 +1054,13 @@ class BaseRunner(object):
             self.install_package_no_log(
                 package_name,
                 package_version=package_version,
+                package_epoch=package_epoch,
                 semi_verbose=True
             )
 
-    def sort_tests(self, tests_dir: Path) -> List[Path]:
-        tests_list = list(tests_dir.iterdir())
-        tests_list.sort()
-        organized_tests_list = []
+    def get_init_script(self, tests_dir: Path) -> Optional[Path]:
         init = None
-        install = None
-        for test in tests_list:
+        for test in tests_dir.iterdir():
             if test.is_dir():
                 # Usually ansible directory will contain 0_init.yml
                 if test.name == 'ansible':
@@ -1051,25 +1071,46 @@ class BaseRunner(object):
             if test.name in self.INIT_TESTS:
                 init = test
                 continue
-            elif test.name == '0_install':
+        return init
+
+    def find_tests(self, tests_dir: str) -> List[Path]:
+        self._logger.info('Looking tests on the remote in %s', tests_dir)
+        if not tests_dir.endswith('/'):
+            tests_dir += '/'
+        _, stdout, _ = self.exec_command(
+            'find', tests_dir, '-maxdepth', '1', '-type', 'f', '-o', '-type', 'l'
+        )
+        tests_list = [Path(i) for i in stdout.split('\n')]
+        self._logger.debug('Tests list: %s', tests_list)
+        tests_list.sort()
+        organized_tests_list = []
+        install = None
+        for test in tests_list:
+            if test.is_dir() or test.name in self.INIT_TESTS:
+                continue
+            if test.name == '0_install':
                 install = test
                 continue
             else:
                 organized_tests_list.append(test)
-        # 0_init should be the first, 0_install should be the second
+        # 0_init is executed elsewhere, 0_install should be the first here
         if install:
             organized_tests_list.insert(0, install)
-        if init:
-            organized_tests_list.insert(0, init)
         return organized_tests_list
 
-    @staticmethod
-    def detect_executor(test_path: Path) -> DetectExecutorResult:
-        extension = test_path.suffix
+    def detect_executor(self, test_path: str) -> DetectExecutorResult:
+        extension = Path(test_path).suffix
         if extension in EXECUTORS_MAPPING:
             return EXECUTORS_MAPPING[extension]
         # Try to detect file format with magic
-        magic_out = magic.from_file(str(test_path))
+        _, magic_out, _ = self.exec_command('file', test_path)
+        if 'symbolic link' in magic_out:
+            target_file = magic_out.split(' ')[-1].strip('\n`\'"')
+            new_path = os.path.join(os.path.dirname(test_path), target_file)
+            _, magic_out, _ = self.exec_command('file', new_path)
+        if 'directory' in magic_out:
+            self._logger.info("Skipping %s since it's a directory", test_path)
+            return
         for regex, executor_class_ in FILE_TYPE_REGEXES_MAPPING.items():
             if re.search(regex, magic_out, re.IGNORECASE):
                 return executor_class_  # noqa
@@ -1097,6 +1138,80 @@ class BaseRunner(object):
                 options = result_dict['options'].strip()
             return interpreter, options
 
+    def _run_test_file(
+        self,
+        test_file: Path,
+        remote_workdir: str,
+        local_workdir: str,
+        executors_cache: dict,
+    ) -> List[str]:
+        executor_params = self.get_test_executor_params()
+        executor_params['timeout'] = CONFIG.tests_exec_timeout
+        workdir = remote_workdir
+        errors = []
+        executor_class = self.detect_executor(
+            os.path.join(remote_workdir, test_file.name)
+        )
+        if not executor_class:
+            self._logger.warning(
+                'Cannot get executor for test %s',
+                test_file
+            )
+            return errors
+        self._logger.info('Running %s', test_file)
+        self._logger.debug(
+            'Executor: %s', executor_class.__name__
+        )
+        if executor_class == AnsibleExecutor:
+            cmd_args = [test_file]
+            workdir = local_workdir
+            executor_params['binary_name'] = self.ansible_playbook_binary
+        else:
+            cmd_args = [test_file.name]
+            executor_params.pop('binary_name', None)
+        if executor_class == CommandExecutor:
+            python, options = self.detect_python_binary(test_file)
+            if options:
+                cmd_args.insert(0, options)
+            executor = CommandExecutor(python, **executor_params)
+        else:
+            if executor_class in executors_cache:
+                executor = executors_cache[executor_class]
+            else:
+                executor: Union[
+                    AnsibleExecutor,
+                    BatsExecutor,
+                    CommandExecutor,
+                    ShellExecutor,
+                ] = executor_class(**executor_params)
+                executors_cache[executor_class] = executor
+        self._logger.debug(
+            'Running the third party test %s on %s...',
+            test_file.name,
+            self.env_name,
+        )
+        try:
+            key = f'{THIRD_PARTY_SECTION_NAME}_test_{test_file.name}'
+            self.run_third_party_test(
+                executor=executor,
+                cmd_args=cmd_args,
+                docker_args=['--workdir', workdir],
+                workdir=workdir,
+                artifacts_key=key,
+                additional_section_name=THIRD_PARTY_SECTION_NAME,
+                env_vars=self._test_env.get('extra_env_vars', []),
+            )
+        except ThirdPartyTestError:
+            errors.append(f'Test {test_file.name} has failed')
+        except Exception:
+            errors.append(
+                f'Test {test_file.name} failed:\n{traceback.format_exc()}'
+            )
+            self._logger.exception(
+                'An unknown error occurred during the test execution'
+            )
+        return errors
+
     @command_decorator(
         f'{THIRD_PARTY_SECTION_NAME}_tests_wrapper',
         'Preparation/running third party tests has failed',
@@ -1106,6 +1221,7 @@ class BaseRunner(object):
         self,
         package_name: str,
         package_version: Optional[str] = None,
+        package_epoch: Optional[int] = None,
     ):
         if not self._test_configuration:
             return 0, 'Nothing to run', ''
@@ -1139,82 +1255,34 @@ class BaseRunner(object):
                 self._logger.warning('Directory %s does not exist', tests_path)
                 self._logger.warning('Skipping test configuration')
                 continue
-            tests_list = self.sort_tests(tests_path)
-            skip_installation_attempt = False
+            init_test = self.get_init_script(tests_path)
+            if init_test:
+                self._run_test_file(
+                    init_test,
+                    remote_workdir,
+                    local_workdir,
+                    executors_cache,
+                )
+            tests_list = self.find_tests(remote_workdir)
             # Check if package has 0_init-like script
-            if tests_list and '0_init' in tests_list[0].name:
-                skip_installation_attempt = True
             for test_file in tests_list:
                 if tests_to_run and test_file.name not in tests_to_run:
                     continue
                 if (('0_init' not in test_file.name
-                     or '0_install' not in test_file.name)
-                        and not skip_installation_attempt):
+                     or '0_install' not in test_file.name)):
                     self.ensure_package_is_installed(
                         package_name,
                         package_version=package_version,
+                        package_epoch=package_epoch,
                     )
-                    skip_installation_attempt = True
-                workdir = remote_workdir
-                executor_class = self.detect_executor(test_file)
-                if not executor_class:
-                    self._logger.warning(
-                        'Cannot get executor for test %s',
-                        test_file
-                    )
-                    errors.append(f'Cannot get executor for test {test_file}')
-                    continue
-                self._logger.info('Running %s', test_file)
-                self._logger.debug(
-                    'Executor: %s,', executor_class.__name__
+                test_errors = self._run_test_file(
+                    test_file,
+                    remote_workdir,
+                    local_workdir,
+                    executors_cache,
                 )
-                if executor_class == AnsibleExecutor:
-                    cmd_args = [test_file]
-                    workdir = local_workdir
-                else:
-                    cmd_args = [test_file.name]
-                if executor_class == CommandExecutor:
-                    python, options = self.detect_python_binary(test_file)
-                    if options:
-                        cmd_args.insert(0, options)
-                    executor = CommandExecutor(python, **executor_params)
-                else:
-                    if executor_class in executors_cache:
-                        executor = executors_cache[executor_class]
-                    else:
-                        executor: Union[
-                            AnsibleExecutor,
-                            BatsExecutor,
-                            CommandExecutor,
-                            ShellExecutor,
-                        ] = executor_class(**executor_params)
-                        executors_cache[executor_class] = executor
-                self._logger.debug(
-                    'Running the third party test %s on %s...',
-                    test_file.name,
-                    self.env_name,
-                )
-                try:
-                    key = f'{THIRD_PARTY_SECTION_NAME}_test_{test_file.name}'
-                    self.run_third_party_test(
-                        executor=executor,
-                        cmd_args=cmd_args,
-                        docker_args=['--workdir', workdir],
-                        workdir=workdir,
-                        artifacts_key=key,
-                        additional_section_name=THIRD_PARTY_SECTION_NAME,
-                        env_vars=self._test_env.get('extra_env_vars', []),
-                    )
-                except ThirdPartyTestError:
-                    errors.append(f'Test {test_file.name} has failed')
-                except Exception:
-                    errors.append(
-                        f'Test {test_file.name} failed:\n{traceback.format_exc()}'
-                    )
-                    self._logger.exception(
-                        'An unknown error occurred during the test execution'
-                    )
-                skip_installation_attempt = True
+                if test_errors:
+                    errors.extend(test_errors)
             git_reset_hard(test_repo_path, self._logger)
         if errors:
             return 1, '', '\n'.join(errors)
@@ -1422,6 +1490,8 @@ class GenericVMRunner(BaseRunner):
         dist_version: Union[str, int],
         repositories: Optional[List[dict]] = None,
         dist_arch: str = 'x86_64',
+        artifacts_uploader: Optional[BaseLogsUploader] = None,
+        package_channel: Optional[str] = None,
         test_configuration: Optional[dict] = None,
         verbose: bool = False,
     ):
@@ -1433,6 +1503,8 @@ class GenericVMRunner(BaseRunner):
             repositories=repositories,
             dist_arch=dist_arch,
             test_configuration=test_configuration,
+            artifacts_uploader=artifacts_uploader,
+            package_channel=package_channel,
             verbose=verbose,
         )
         self._tests_dir = CONFIG.tests_base_dir

@@ -6,14 +6,21 @@
 
 import os
 import re
+import time
 from typing import Callable, List, Optional, Union
 
 import pyone
+from plumbum import local
 
 from alts.shared.constants import X32_ARCHITECTURES
-from alts.shared.exceptions import VMImageNotFound
+from alts.shared.exceptions import (
+    OpennebulaVMStopError,
+    VMImageNotFound,
+    StopEnvironmentError,
+)
+from alts.shared.uploaders.base import BaseLogsUploader
 from alts.worker import CONFIG
-from alts.worker.runners.base import GenericVMRunner
+from alts.worker.runners.base import GenericVMRunner, command_decorator
 
 __all__ = ['OpennebulaRunner']
 
@@ -34,6 +41,7 @@ class OpennebulaRunner(GenericVMRunner):
         dist_version: Union[str, int],
         repositories: Optional[List[dict]] = None,
         dist_arch: str = 'x86_64',
+        artifacts_uploader: Optional[BaseLogsUploader] = None,
         package_channel: Optional[str] = None,
         test_configuration: Optional[dict] = None,
         verbose: bool = False,
@@ -46,9 +54,10 @@ class OpennebulaRunner(GenericVMRunner):
             repositories=repositories,
             dist_arch=dist_arch,
             test_configuration=test_configuration,
+            artifacts_uploader=artifacts_uploader,
+            package_channel=package_channel,
             verbose=verbose,
         )
-        self.package_channel = package_channel
         user = CONFIG.opennebula_config.username
         password = CONFIG.opennebula_config.password
         self.opennebula_client = pyone.OneServer(
@@ -76,19 +85,24 @@ class OpennebulaRunner(GenericVMRunner):
             arches_to_try = X32_ARCHITECTURES
         else:
             arches_to_try = [self.dist_arch]
-        filtered_templates = []
-        for arch in arches_to_try:
-            for template in templates.VMTEMPLATE:
-                conditions = [
-                    bool(re.search(regex_str, template.NAME)),
-                    template.NAME.startswith(platform_name_version),
-                    arch in template.NAME,
-                ]
-                if self.package_channel is not None:
-                    conditions.append(self.package_channel in template.NAME)
-                if all(conditions):
-                    filtered_templates.append(template)
-                    break
+
+        def search_template(include_channel: bool = True):
+            f_templates = []
+            for arch in arches_to_try:
+                for template in templates.VMTEMPLATE:
+                    conditions = [
+                        bool(re.search(regex_str, template.NAME)),
+                        template.NAME.startswith(platform_name_version),
+                        arch in template.NAME,
+                    ]
+                    if self.package_channel is not None and include_channel:
+                        conditions.append(self.package_channel in template.NAME)
+                    if all(conditions):
+                        f_templates.append(template)
+                        break
+            return f_templates
+
+        filtered_templates = search_template()
         self._logger.debug(
             'Filtered templates: %s',
             [i.NAME for i in filtered_templates],
@@ -99,12 +113,19 @@ class OpennebulaRunner(GenericVMRunner):
             f'architecture: {self.dist_arch}'
         )
         if not filtered_templates:
-            if self.package_channel is not None:
+            self._logger.info('Searching new templates without the channel')
+            if self.package_channel is not None and self.package_channel == 'beta':
+                filtered_templates = search_template(include_channel=False)
+                self._logger.debug(
+                    'Filtered templates: %s',
+                    [i.NAME for i in filtered_templates],
+                )
                 template_params += f' channel: {self.package_channel}'
-            raise VMImageNotFound(
-                'Cannot find a template '
-                f'with the parameters: {template_params}'
-            )
+                if not filtered_templates:
+                    raise VMImageNotFound(
+                        'Cannot find a template '
+                        f'with the parameters: {template_params}'
+                    )
         # Sort templates in order to get the latest image as first in the list
         sorted_templates = sorted(
             filtered_templates,
@@ -170,3 +191,68 @@ class OpennebulaRunner(GenericVMRunner):
             opennebula_username=CONFIG.opennebula_config.username,
             opennebula_password=CONFIG.opennebula_config.password,
         )
+
+    def destroy_vm_via_api(self, vm_id: int):
+        def vm_info():
+            return self.opennebula_client.vm.info(vm_id)
+
+        def wait_for_state(state: pyone.VM_STATE, attempts: int = 120):
+            info = vm_info()
+            while info.STATE != state and attempts > 0:
+                self._logger.info('VM state: %s', info.STATE)
+                time.sleep(5)
+                attempts -= 1
+                info = vm_info()
+            if info.STATE != state:
+                raise OpennebulaVMStopError(
+                    f'State {state} is not achieved, actual state: {info.STATE}'
+                )
+
+        def recover_delete():
+            # 3 stands for 'delete'
+            try:
+                self.opennebula_client.vm.recover(vm_id, 3)
+                wait_for_state(pyone.VM_STATE.DONE, attempts=60)
+            except:
+                self._logger.exception(
+                    'Cannot terminate VM %s via API, please contact infra '
+                    'team to ask for help', vm_id
+                )
+
+        try:
+            self.opennebula_client.vm.action('terminate-hard', vm_id)
+            wait_for_state(pyone.VM_STATE.DONE)
+        except OpennebulaVMStopError:
+            self._logger.warning(
+                'Cannot delete VM with terminate-hard, trying recover-delete'
+            )
+            recover_delete()
+        except Exception as e:
+            self._logger.error(
+                'Unexpected error during execution of '
+                'terminate-hard on VM %s:\n%s',
+                vm_id, str(e)
+            )
+            recover_delete()
+
+    @command_decorator(
+        'stop_environment',
+        'Cannot destroy environment',
+        exception_class=StopEnvironmentError,
+        is_abortable=False,
+    )
+    def stop_env(self):
+        id_exit_code, vm_id, id_stderr = local['terraform'].with_cwd(
+            self._work_dir).run(
+            args=('output', '-raw', '-no-color', 'vm_id'),
+            retcode=None,
+            timeout=CONFIG.provision_timeout,
+        )
+        if id_exit_code != 0:
+            self._logger.warning('Cannot get VM ID: %s', id_stderr)
+        try:
+            return super().stop_env()
+        except StopEnvironmentError:
+            if vm_id:
+                self.destroy_vm_via_api(int(vm_id.strip()))
+                return 0, f'{vm_id} is destroyed via API', ''

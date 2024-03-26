@@ -6,6 +6,8 @@
 
 import logging
 import traceback
+import random
+import time
 import urllib.parse
 from celery.contrib.abortable import AbortableTask
 from collections import defaultdict
@@ -157,6 +159,7 @@ def run_tests(self, task_params: dict):
         'repositories': task_params.get('repositories', []),
         'dist_arch': task_params.get('dist_arch', 'x86_64'),
         'test_configuration': task_params.get('test_configuration', {}),
+        'package_channel': task_params.get('package_channel', 'beta'),
     }
 
     runner_class = RUNNER_MAPPING[task_params['runner_type']]
@@ -164,17 +167,22 @@ def run_tests(self, task_params: dict):
         *runner_args,
         **runner_kwargs,
     )
+    package_name = task_params['package_name']
+    package_version = task_params.get('package_version')
+    package_epoch = task_params.get('package_epoch')
     module_name = task_params.get('module_name')
     module_stream = task_params.get('module_stream')
     module_version = task_params.get('module_version')
     try:
-        package_name = task_params['package_name']
-        package_version = task_params.get('package_version')
+        # Wait a bit to not spawn all environments at once when
+        # a lot of tasks are coming to the machine
+        time.sleep(random.randint(5, 10))
         runner.setup()
         runner.run_system_info_commands()
         runner.install_package(
             package_name,
-            package_version,
+            package_version=package_version,
+            package_epoch=package_epoch,
             module_name=module_name,
             module_stream=module_stream,
             module_version=module_version,
@@ -185,6 +193,7 @@ def run_tests(self, task_params: dict):
         runner.run_third_party_tests(
             package_name,
             package_version=package_version,
+            package_epoch=package_epoch,
         )
         runner.uninstall_package(package_name)
     except VMImageNotFound as exc:

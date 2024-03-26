@@ -13,6 +13,5 @@ filesplit==3.0.2,<4.0
 pulpcore-client==3.45.2
 pyone==6.8.1
 asyncssh==2.14.2
-python-magic==0.4.27
 filelock==3.13.1
 syncer==2.0.3

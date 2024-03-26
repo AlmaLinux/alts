@@ -22,6 +22,7 @@ from alts.shared.exceptions import (
     StopEnvironmentError,
     ThirdPartyTestError,
 )
+from alts.shared.uploaders.base import BaseLogsUploader
 from alts.worker import CONFIG
 from alts.worker.executors.ansible import AnsibleExecutor
 from alts.worker.executors.bats import BatsExecutor
@@ -66,6 +67,8 @@ class DockerRunner(BaseRunner):
         repositories: Optional[List[dict]] = None,
         dist_arch: str = 'x86_64',
         test_configuration: Optional[dict] = None,
+        artifacts_uploader: Optional[BaseLogsUploader] = None,
+        package_channel: Optional[str] = None,
         verbose: bool = False,
     ):
         """
@@ -92,6 +95,8 @@ class DockerRunner(BaseRunner):
             repositories=repositories,
             dist_arch=dist_arch,
             test_configuration=test_configuration,
+            artifacts_uploader=artifacts_uploader,
+            package_channel=package_channel,
             verbose=verbose,
         )
         self._ansible_connection_type = 'docker'
