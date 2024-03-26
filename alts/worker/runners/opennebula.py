@@ -85,19 +85,24 @@ class OpennebulaRunner(GenericVMRunner):
             arches_to_try = X32_ARCHITECTURES
         else:
             arches_to_try = [self.dist_arch]
-        filtered_templates = []
-        for arch in arches_to_try:
-            for template in templates.VMTEMPLATE:
-                conditions = [
-                    bool(re.search(regex_str, template.NAME)),
-                    template.NAME.startswith(platform_name_version),
-                    arch in template.NAME,
-                ]
-                if self.package_channel is not None:
-                    conditions.append(self.package_channel in template.NAME)
-                if all(conditions):
-                    filtered_templates.append(template)
-                    break
+
+        def search_template(include_channel: bool = True):
+            f_templates = []
+            for arch in arches_to_try:
+                for template in templates.VMTEMPLATE:
+                    conditions = [
+                        bool(re.search(regex_str, template.NAME)),
+                        template.NAME.startswith(platform_name_version),
+                        arch in template.NAME,
+                    ]
+                    if self.package_channel is not None and include_channel:
+                        conditions.append(self.package_channel in template.NAME)
+                    if all(conditions):
+                        f_templates.append(template)
+                        break
+            return f_templates
+
+        filtered_templates = search_template()
         self._logger.debug(
             'Filtered templates: %s',
             [i.NAME for i in filtered_templates],
@@ -108,12 +113,19 @@ class OpennebulaRunner(GenericVMRunner):
             f'architecture: {self.dist_arch}'
         )
         if not filtered_templates:
-            if self.package_channel is not None:
+            self._logger.info('Searching new templates without the channel')
+            if self.package_channel is not None and self.package_channel == 'beta':
+                filtered_templates = search_template(include_channel=False)
+                self._logger.debug(
+                    'Filtered templates: %s',
+                    [i.NAME for i in filtered_templates],
+                )
                 template_params += f' channel: {self.package_channel}'
-            raise VMImageNotFound(
-                'Cannot find a template '
-                f'with the parameters: {template_params}'
-            )
+                if not filtered_templates:
+                    raise VMImageNotFound(
+                        'Cannot find a template '
+                        f'with the parameters: {template_params}'
+                    )
         # Sort templates in order to get the latest image as first in the list
         sorted_templates = sorted(
             filtered_templates,
