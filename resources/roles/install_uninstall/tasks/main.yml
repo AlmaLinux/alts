@@ -26,18 +26,23 @@
     - install_package
 
 - name: Uninstall RPM package
-  yum:
-    name: "{{ pkg_name }}"
-    state: absent
-    lock_timeout: 300
+  shell:
+    cmd: "rpm -e --nodeps {{ pkg_name }}"
+  register: result
+  retries: 30
+  delay: 10
+  until: result.rc == 0
   when: ansible_distribution_file_variety in ('RedHat', 'OracleLinux')
   tags:
     - uninstall_package
 
 - name: Uninstall DEB package
-  apt:
-    name: "{{ pkg_name }}"
-    state: absent
+  shell:
+    cmd: "dpkg -r --force-depends {{ pkg_name }}"
+  register: result
+  retries: 30
+  delay: 10
+  until: result.rc == 0
   when: ansible_distribution_file_variety == 'Debian'
   tags:
     - uninstall_package
