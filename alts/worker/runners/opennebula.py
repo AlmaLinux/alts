@@ -70,13 +70,13 @@ class OpennebulaRunner(GenericVMRunner):
     ) -> tuple[Optional[int], Optional[int]]:
         platform_name_version = f'{self.dist_name}-{self.dist_version}'
         templates = self.opennebula_client.templatepool.info(-1, -1, -1, -1)
+        channels = '|'.join(CONFIG.allowed_channel_names)
         regex_str = (
             r'(?P<platform_name>\w+(-\w+)?)-(?P<version>\d+.\d+)'
             r'-(?P<arch>\w+).*.test_system'
+            f'(.({channels}))?'
+            r'.b\d+'
         )
-        if self.package_channel is not None:
-            channels = '|'.join(CONFIG.allowed_channel_names)
-            regex_str += f'.({channels})'
         # Filter images to leave only those that are related to the particular
         # platform
         # Note: newer OS don't have 32-bit images usually, so we need to try
@@ -103,7 +103,7 @@ class OpennebulaRunner(GenericVMRunner):
             return f_templates
 
         filtered_templates = search_template()
-        self._logger.debug(
+        self._logger.info(
             'Filtered templates: %s',
             [i.NAME for i in filtered_templates],
         )
@@ -116,7 +116,7 @@ class OpennebulaRunner(GenericVMRunner):
             self._logger.info('Searching new templates without the channel')
             if self.package_channel is not None and self.package_channel == 'beta':
                 filtered_templates = search_template(include_channel=False)
-                self._logger.debug(
+                self._logger.info(
                     'Filtered templates: %s',
                     [i.NAME for i in filtered_templates],
                 )
