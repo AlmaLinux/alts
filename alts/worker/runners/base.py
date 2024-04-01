@@ -1656,7 +1656,7 @@ class GenericVMRunner(BaseRunner):
             result = None
             for attempt in range(1, 6):
                 cmd = (f'if [ -e {repo_path} ]; then cd {repo_path} && '
-                       f'git checkout master && git pull; '
+                       f'git reset --hard origin/master && git checkout master && git pull; '
                        f'else cd {self._tests_dir} && git clone {repo_url}; fi')
                 result = self._ssh_client.sync_run_command(cmd)
                 if result.is_successful():
