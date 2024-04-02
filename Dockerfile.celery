@@ -1,34 +1,58 @@
 FROM almalinux:9
 
-RUN mkdir -p /code ~/.terraform.d/plugin-cache ~/.ssh /srv/celery_results \
-    && echo "plugin_cache_dir = \"\$HOME/.terraform.d/plugin-cache\"" > ~/.terraformrc \
-    && echo "plugin_cache_may_break_dependency_lock_file = true" >> ~/.terraformrc \
-    && sed -i 's/enabled=0/enabled=1/' /etc/yum.repos.d/almalinux-crb.repo \
-    && dnf update -y \
-    && dnf install -y epel-release \
-    && dnf install -y python3-virtualenv python39 wget unzip yum-utils openssh-clients \
-    && yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo \
-    && yum-config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo \
-    && dnf install -y docker-ce docker-ce-cli containerd.io ansible terraform --enablerepo=epel \
-    && dnf clean all \
-    && cat /dev/zero | ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -q -N ""
-COPY requirements/ /tmp/requirements
-RUN cd /code \
-    && python3.9 -m venv env \
-    && source env/bin/activate \
-    && pip3 install --no-cache -U pip setuptools \
-    && pip3 install --no-cache -r /tmp/requirements/celery.txt \
-    && deactivate \
-    && ansible-galaxy collection install community.docker \
-    && ansible-galaxy collection install community.general
-RUN cd /code \
-    && python3.9 -m venv ansible_env \
-    && source ansible_env/bin/activate \
-    && pip3 install --no-cache -U pip setuptools \
-    && pip3 install --no-cache -r /tmp/requirements/celery.txt \
-    && pip3 install ansible-core==2.12.10 \
-    && ansible-galaxy collection install community.docker \
-    && deactivate \
-    && rm -rf /tmp/requirements
-RUN update-crypto-policies --set LEGACY
+RUN <<EOT
+  set -ex
+  dnf upgrade -y
+  dnf install -y epel-release yum-utils openssh-clients wget unzip
+  dnf config-manager --set-enabled crb
+EOT
+
+# Install Docker
+RUN <<EOT
+  set -ex
+  yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+  dnf install -y docker-ce
+EOT
+
+# Install Ansible
+RUN <<EOT
+  set -ex
+  dnf install -y ansible
+  ansible-galaxy collection install community.general community.docker
+EOT
+
+# Install Terraform
+RUN <<EOT
+  set -ex
+  yum-config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
+  dnf install -y terraform
+  mkdir -p /root/.terraform.d/plugin-cache
+  echo "plugin_cache_dir = /root/.terraform.d/plugin-cache" >> /root/.terraformrc
+  echo "plugin_cache_may_break_dependency_lock_file = true" >> /root/.terraformrc
+EOT
+
+RUN dnf clean all
+
+RUN <<EOT
+  set -ex
+  ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -q -N ''
+  update-crypto-policies --set LEGACY
+EOT
+
 WORKDIR /code
+COPY requirements .
+
+RUN <<EOT
+  set -ex
+  python3 -m venv /root/ansible_env
+  source /root/ansible_env/bin/activate
+  pip3 install -r celery.txt ansible-core==2.12.10
+EOT
+
+RUN <<EOT
+  set -ex
+  python3 -m ensurepip
+  pip3 install -r celery.txt -r devel.txt
+EOT
+
+RUN rm -f *.txt

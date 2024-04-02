@@ -23,7 +23,7 @@ jobs:
               User $USER
               HostName 127.0.0.1
           EOF
-          cat - ~/.ssh/id_rsa.pub > ~/.ssh/authorized_keys
+          cat ~/.ssh/id_rsa.pub > ~/.ssh/authorized_keys
       - name: Prepare binary executors
         run: |
           sudo apt-get install bats ansible
@@ -32,7 +32,7 @@ jobs:
           python -m venv env
           env/bin/python -m pip install -U pip
           env/bin/python -m pip install -r requirements/scheduler.txt
-          env/bin/python -m pip install -r requirements/celery.txt
+          env/bin/python -m pip install -r requirements/devel.txt
       - name: Run unit tests (pytest)
         env:
           CELERY_CONFIG_PATH: tests/tests_config.yaml
