@@ -1,6 +1,10 @@
 System overview
 --
-[![badges](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/maccelf/32596473c214f6d25557088b42ae28eb/raw/alts-badge__main.json)](https://github.com/AlmaLinux/alts/blob/master/tests/README.md)
+
+<picture>
+  <img alt="Test Coverage" src="https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/andrewlukoshko/c3616635e183fcec39a92a4ffad0015b/raw/coverage-badge.json">
+</picture>
+<br/><br/>
 
 AlmaLinux Test System (ALTS) - is a way to test rpm packages under realistic circumstances, on real systems with installation, launching, integrity checks, etc. If needed, it also supports third-party test scripts.
 
