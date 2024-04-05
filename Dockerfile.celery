@@ -52,7 +52,7 @@ EOT
 RUN <<EOT
   set -ex
   python3 -m ensurepip
-  pip3 install -r celery.txt -r devel.txt
+  pip3 install -r celery.txt
 EOT
 
 RUN rm -f *.txt

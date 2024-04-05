@@ -51,6 +51,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           file: Dockerfile.scheduler
+          target: alts-tests
           context: .
           load: true
           cache-from: type=gha
@@ -74,7 +75,7 @@ jobs:
 
       - name: Run pytest
         run: |
-          docker compose run --rm --no-deps tests bash -c "
+          docker compose run --rm --no-deps alts_tests bash -c "
             /usr/sbin/sshd && \
             pytest -v --cov \
               --junit-xml=$REPORTS_DIR/pytest-report.xml \
@@ -84,28 +85,28 @@ jobs:
       - name: Run pylint
         if: ${{ steps.changed-files.outputs.src == 'true' }}
         run: |
-          docker compose run --rm --no-deps tests bash -c "
+          docker compose run --rm alts_tests bash -c "
             pylint --exit-zero ${{ steps.changed-files.outputs.src_files }} \
               | tee $REPORTS_DIR/pylint-report.txt"
 
       - name: Run black
         if: ${{ steps.changed-files.outputs.py == 'true' }}
         run: |
-          docker compose run --rm --no-deps tests bash -c "
+          docker compose run --rm alts_tests bash -c "
             black --check --diff --color ${{ steps.changed-files.outputs.py_files }} \
               | tee >(sed 's/\x1B\[[0-9;]*m//g' > $REPORTS_DIR/black-report.txt)"
 
       - name: Run isort
         if: ${{ steps.changed-files.outputs.py == 'true' }}
         run: |
-          docker compose run --rm --no-deps tests bash -c "
+          docker compose run --rm alts_tests bash -c "
             isort --check-only --diff --color ${{ steps.changed-files.outputs.py_files }} \
               | tee >(sed 's/\x1B\[[0-9;]*m//g' > $REPORTS_DIR/isort-report.txt)"
 
       - name: Run bandit
         if: ${{ steps.changed-files.outputs.src == 'true' }}
         run: |
-          docker compose run --rm --no-deps tests bash -c "
+          docker compose run --rm alts_tests bash -c "
             bandit -c pyproject.toml ${{ steps.changed-files.outputs.src_files }} \
               | tee >(sed 's/\x1B\[[0-9;]*m//g' > $REPORTS_DIR/bandit-report.txt)"
 

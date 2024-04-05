@@ -29,6 +29,7 @@ jobs:
         with:
           file: Dockerfile.scheduler
           context: .
+          target: alts-tests
           load: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -39,7 +40,7 @@ jobs:
       - name: Run pytest
         id: pytest
         run: |
-          docker compose run --rm --no-deps tests bash -c "
+          docker compose run --rm alts_tests bash -c "
             /usr/sbin/sshd && \ 
             pytest -v --cov \
               --cov-report=json:$REPORTS_DIR/pytest-report.json \
