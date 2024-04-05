@@ -38,6 +38,7 @@ services:
     image: alts-scheduler:latest
     build:
       dockerfile: Dockerfile.scheduler
+      target: alts-scheduler
       context: .
     environment:
       CELERY_CONFIG_PATH: "/scheduler_config.yaml"
@@ -51,8 +52,14 @@ services:
     depends_on:
       - rabbitmq
 
-  tests:
-    extends: scheduler
+  alts_tests:
+    image: alts-tests:latest
+    build:
+      dockerfile: Dockerfile.scheduler
+      target: alts-tests
+      context: .
     environment:
       CELERY_CONFIG_PATH: "tests/tests_config.yaml"
       SCHEDULER_CONFIG_PATH: "tests/tests_config.yaml"
+    volumes:
+      - ".:/code"
