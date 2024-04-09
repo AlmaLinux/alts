@@ -1168,6 +1168,7 @@ class BaseRunner(object):
         remote_workdir: str,
         local_workdir: str,
         executors_cache: dict,
+        local_tests_path: Path,
     ) -> List[str]:
         executor_params = self.get_test_executor_params()
         executor_params['timeout'] = CONFIG.tests_exec_timeout
@@ -1194,7 +1195,8 @@ class BaseRunner(object):
             cmd_args = [test_file.name]
             executor_params.pop('binary_name', None)
         if executor_class == CommandExecutor:
-            python, options = self.detect_python_binary(test_file)
+            local_file_location = local_tests_path / test_file.name
+            python, options = self.detect_python_binary(local_file_location)
             if options:
                 cmd_args.insert(0, options)
             executor = CommandExecutor(python, **executor_params)
@@ -1208,7 +1210,8 @@ class BaseRunner(object):
                     CommandExecutor,
                     ShellExecutor,
                 ] = executor_class(**executor_params)
-                executors_cache[executor_class] = executor
+                if executor_class != CommandExecutor:
+                    executors_cache[executor_class] = executor
         self._logger.debug(
             'Running the third party test %s on %s...',
             test_file.name,
@@ -1286,6 +1289,7 @@ class BaseRunner(object):
                     remote_workdir,
                     local_workdir,
                     executors_cache,
+                    tests_path,
                 )
             tests_list = self.find_tests(remote_workdir)
             # Check if package has 0_init-like script
@@ -1304,6 +1308,7 @@ class BaseRunner(object):
                     remote_workdir,
                     local_workdir,
                     executors_cache,
+                    tests_path,
                 )
                 if test_errors:
                     errors.extend(test_errors)
@@ -1323,7 +1328,7 @@ class BaseRunner(object):
             return
 
         def replace_host_name(log_string) -> str:
-            return re.sub(r'\[local\]', f'[{self._task_id}', log_string)
+            return re.sub(r'\[local\]', f'[{self._task_id}]', log_string)
 
         def write_to_file(file_base_name: str, artifacts_section: dict):
             log_file_path = os.path.join(
