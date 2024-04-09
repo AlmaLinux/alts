@@ -1,22 +1,27 @@
 ---
 
+- name: Detect PowerTools (CRB) repository name
+  set_fact:
+    powertools_repository_name: powertools
+  when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version == '8'"
+
+- name: Detect PowerTools (CRB) repository name
+  set_fact:
+    powertools_repository_name: crb
+  when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version == '9'"
+
+
 - name: Install needed packages
   dnf:
-    name: ["python3-pip", "python3-virtualenv", "librabbitmq",
-           "cmake", "libtool", "autoconf", "git", "ansible", "python3-devel",
-           "rust", "cargo", "openssl-devel"
+    name: [
+      "python3-pip", "python3-virtualenv", "librabbitmq",
+      "cmake", "libtool", "autoconf", "git", "ansible", "python3-devel",
+      "rust", "cargo", "openssl-devel"
     ]
     state: present
-    enablerepo: epel
-
-- name: Add Celery user
-  user:
-    name: "{{ test_system_user }}"
-    groups: docker
-    generate_ssh_key: yes
-    ssh_key_bits: 4096
-    ssh_key_file: .ssh/id_rsa
-    state: present
+    enablerepo:
+      - epel
+      - "{{ powertools_repository_name }}"
 
 - name: Configure Celery user
   become: yes
@@ -25,12 +30,12 @@
     - name: Clone ALTS repository
       git:
         repo: https://github.com/AlmaLinux/alts
-        dest: ~/alts
+        dest: /home/{{ test_system_user }}/alts
 
     - name: Install Celery dependencies
       pip:
         virtualenv: "{{ celery_venv_dir }}"
-        requirements: ~/alts/requirements/celery.txt
+        requirements: /home/{{ test_system_user }}/alts/requirements/celery.txt
 
     - name: Create config and SSL folder
       file:
@@ -74,14 +79,6 @@
     group: "{{ test_system_user }}"
     state: directory
 
-- name: Create PID files directory for Celery service
-  file:
-    path: "{{ celery_pid_file_dir }}"
-    mode: 0755
-    owner: "{{ test_system_user }}"
-    group: "{{ test_system_user }}"
-    state: directory
-
 - name: Create folder for Celery local results
   file:
     path: "{{ celery_result_folder }}"
@@ -98,4 +95,4 @@
   service:
     name: alts-celery
     enabled: yes
-    state: started
+    state: stopped

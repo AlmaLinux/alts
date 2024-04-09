@@ -1,6 +1,6 @@
 ---
 
-scheduler_venv_dir: ~/.venv-scheduler
+scheduler_venv_dir: /home/{{ test_system_user }}/.venv-scheduler
 
 opennebula_endpoint:
 opennebula_user:

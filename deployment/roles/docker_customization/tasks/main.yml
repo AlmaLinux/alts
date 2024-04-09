@@ -1,0 +1,48 @@
+---
+
+- set_fact:
+    docker_service_state: started
+
+- set_fact:
+    docker_proxy_path: "/usr/libexec/docker/docker-proxy"
+  when: "ansible_distribution == 'Fedora'"
+
+- set_fact:
+    docker_proxy_path: "/usr/bin/docker-proxy"
+  when: "ansible_facts.os_family == 'RedHat'"
+
+- name: Deploy docker options file
+  template:
+    src: docker-options.j2
+    dest: /etc/sysconfig/docker
+    mode: 0644
+    owner: root
+    group: root
+
+- name: Create docker service config directory
+  file:
+    path: /etc/systemd/system/docker.service.d
+    state: directory
+    mode: 0755
+    owner: root
+    group: root
+
+- name: Deploy custom docker service configuration
+  copy:
+    src: docker-moby.conf
+    dest: /etc/systemd/system/docker.service.d/docker-moby.conf
+    mode: 0644
+    owner: root
+    group: root
+  register: config_deploy
+
+- set_fact:
+    docker_service_state: restarted
+  when: "config_deploy.changed"
+
+- name: Restart docker service if needed
+  systemd:
+    name: docker
+    state: "{{ docker_service_state }}"
+    enabled: yes
+    daemon_reload: yes

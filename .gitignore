@@ -135,7 +135,13 @@ terraform.rc
 
 # Ignore sensitive files from deployment
 deployment/hosts
+deployment/hosts.*
 deployment/files/*.pem
 deployment/files/*.crt
 deployment/files/*/*.pem
 deployment/files/*/*.crt
+deployment/*vars*.yml
+deployment/*vars*.yaml
+
+# Ignore venvs of all kind
+*venv

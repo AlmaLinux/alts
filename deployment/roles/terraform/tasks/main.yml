@@ -21,22 +21,18 @@
     path: /tmp/terraform.zip
     state: absent
 
-- name: Configure Terraform for test system user
-  become: yes
-  become_user: "{{ test_system_user }}"
-  block:
-    - name: Add Terraform plugin cache directory
-      file:
-        path: "{{ terraform_plugin_cache_dir }}"
-        owner: "{{ test_system_user }}"
-        group: "{{ test_system_user }}"
-        mode: 0755
-        state: directory
+- name: Add Terraform plugin cache directory
+  file:
+    path: "{{ terraform_plugin_cache_dir }}"
+    owner: "{{ test_system_user }}"
+    group: "{{ test_system_user }}"
+    mode: 0755
+    state: directory
 
-    - name: Create Terraform configuration file
-      template:
-        src: terraformrc.j2
-        dest: ~/.terraformrc
-        owner: "{{ test_system_user }}"
-        group: "{{ test_system_user }}"
-        mode: 0644
+- name: Create Terraform configuration file
+  template:
+    src: terraformrc.j2
+    dest: /home/{{ test_system_user }}/.terraformrc
+    owner: "{{ test_system_user }}"
+    group: "{{ test_system_user }}"
+    mode: 0644

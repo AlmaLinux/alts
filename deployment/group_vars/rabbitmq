@@ -1,13 +1,13 @@
 ---
 
+broker_type: rabbitmq
+logs_uploader_type: pulp
 rabbitmq_ssl: true
-rabbitmq_port: 5672
-rabbitmq_ssl_port: 5671
 rabbitmq_copy_ssl_files: true
 rabbitmq_admin_user: admin
 rabbitmq_admin_password: some-secret-password
-rabbitmq_ssl_folder: "/etc/rabbitmq/ssl"
-rabbitmq_cacert: "files/ca_certificate.pem"
+rabbitmq_ssl_folder: "/etc/rabbitmq/ssl/"
+rabbitmq_cacert: "files/rabbitmq/ca_certificate.pem"
 rabbitmq_server_key: "files/rabbitmq/server_key.pem"
 rabbitmq_server_cert: "files/rabbitmq/server_certificate.pem"
 rabbitmq_conf_ssl_options_cacertfile: "{{ rabbitmq_ssl_folder }}/{{ rabbitmq_cacert | basename }}"
@@ -16,4 +16,4 @@ rabbitmq_conf_ssl_options_certfile: "{{ rabbitmq_ssl_folder }}/{{ rabbitmq_serve
 rabbitmq_ssl_verify: "verify_peer"
 rabbitmq_ssl_fail_if_no_peer_cert: true
 rabbitmq_test_system_password: some-another-secret-password
-rabbitmq_test_system_vhost: test_system
+rabbitmq_test_system_vhost: /test-system

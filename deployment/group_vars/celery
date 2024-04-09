@@ -1,9 +1,12 @@
 ---
 
+broker_type: rabbitmq
+logs_uploader_type: pulp
+terraform_plugin_cache_dir: /home/{{ test_system_user }}/.terraform.d/plugins-cache
 test_system_user: test-system
 test_system_vhost: test_system
 test_system_password: some-another-secret-password
-test_system_config_dir: ~/.config/alts
+test_system_config_dir: /home/{{ test_system_user }}/.config/alts
 
 rabbitmq_host: localhost
 rabbitmq_port: 5672
@@ -20,9 +23,8 @@ celery_cacert: "{{ celery_ssl_dir }}/{{ celery_src_cacert | basename }}"
 
 result_backend_name: local
 celery_result_folder: /srv/celery_results
+celery_pool_type: prefork
 
-celery_pid_file_dir: /var/run/celery
-celery_pid_file: "{{ celery_pid_file_dir }}/worker.pid"
 celery_log_file_dir: /var/log/celery
 celery_log_file: "{{ celery_log_file_dir }}/celery.log"
 celery_concurrency: 10

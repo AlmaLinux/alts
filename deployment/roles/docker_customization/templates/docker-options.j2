@@ -1,0 +1,7 @@
+# Modify these options if you want to change the way the docker daemon runs
+OPTIONS="--log-driver=journald \
+  --live-restore \
+  --default-ulimit nofile={{ docker_open_files }}:{{ docker_open_files }} \
+  --init-path /usr/libexec/docker/docker-init \
+  --userland-proxy-path {{ docker_proxy_path }} \
+"
