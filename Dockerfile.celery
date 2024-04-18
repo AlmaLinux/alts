@@ -55,4 +55,4 @@ RUN <<EOT
   pip3 install -r celery.txt
 EOT
 
-RUN rm -f *.txt
+RUN rm -rf *.txt ~/.cache/pip
