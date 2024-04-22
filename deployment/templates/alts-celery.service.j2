@@ -5,10 +5,11 @@ After=network.target
 [Service]
 User={{ test_system_user }}
 Group={{ test_system_user }}
+WorkingDirectory=/home/{{ test_system_user }}/alts
 Environment=CELERY_CONFIG_PATH={{ test_system_config_dir }}/celery.yaml
-ExecStart=/bin/sh -c 'source {{ celery_venv_dir }}/bin/activate && cd ~/alts && celery -A alts.worker.app worker \
+ExecStart={{ celery_venv_dir }}/bin/celery -A alts.worker.app worker \
     --pool={{ celery_pool_type }} --concurrency={{ celery_concurrency }} --loglevel={{ celery_loglevel }} \
-    -Q {{ celery_queues|join(",") }} --logfile={{ celery_log_file }}'
+    -Q {{ celery_queues|join(",") }} --logfile={{ celery_log_file }}
 
 [Install]
 WantedBy=multi-user.target

@@ -1,8 +1,8 @@
 ---
 
-celery_venv_dir: ~/.venv-celery
+celery_venv_dir: /home/{{ test_system_user }}/.venv-celery
+plugin_cache_dir: "$HOME/.terraform.d/plugin-cache"
 opennebula_endpoint:
 opennebula_user:
 opennebula_password:
 opennebula_vm_group:
-scheduler_http_port: 8000

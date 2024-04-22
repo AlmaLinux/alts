@@ -16,3 +16,13 @@
   dnf:
     name: epel-release
     state: present
+
+- name: Add Celery user
+  user:
+    name: "{{ test_system_user }}"
+    groups: docker
+    append: yes
+    generate_ssh_key: yes
+    ssh_key_bits: 4096
+    ssh_key_file: .ssh/id_rsa
+    state: present

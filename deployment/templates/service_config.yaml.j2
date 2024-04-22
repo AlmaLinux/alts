@@ -10,10 +10,7 @@ ssl_config:
 broker_config:
 {% if broker_type == 'rabbitmq' %}
   rabbitmq_host: {{ rabbitmq_host }}
-  rabbitmq_port: {{ rabbitmq_port }}
-{% if celery_ssl %}
-  rabbitmq_ssl_port: {{ rabbitmq_ssl_port }}
-{% endif %}
+  rabbitmq_port: {{ rabbitmq_ssl_port if celery_ssl else  rabbitmq_port }}
   rabbitmq_user: {{ test_system_user }}
   rabbitmq_password: {{ test_system_password }}
   rabbitmq_vhost: {{ test_system_vhost }}
@@ -48,10 +45,7 @@ opennebula_rpc_endpoint: {{ opennebula_endpoint }}
 opennebula_username: {{ opennebula_user }}
 opennebula_password: {{ opennebula_password }}
 opennebula_vm_group: {{ opennebula_vm_group }}
-{% endif %}
 
-{% if jwt_secret | default('') %}
-jwt_secret: {{ jwt_secret }}
 {% endif %}
 {% if scheduler_working_directory | default('') %}
 working_directory: {{ scheduler_working_directory }}
@@ -59,7 +53,6 @@ working_directory: {{ scheduler_working_directory }}
 {% if uploader_concurrency | default('') %}
 uploader_concurrency: {{ uploader_concurrency | int }}
 {% endif %}
-
 {% if bs_host | default('') %}
 bs_host: {{ bs_host }}
 {% endif %}
@@ -76,4 +69,10 @@ logs_uploader_config:
 {% endif %}
 {% if pulp_password | default('') %}
   pulp_password: {{ pulp_password }}
+{% endif %}
+{% endif %}
+
+{% if jwt_secret | default('') %}
+jwt_secret: {{ jwt_secret }}
+
 {% endif %}
