@@ -2,7 +2,7 @@
 
 - name: Enable module
   shell: dnf module enable -y "{{ module_name }}:{{ module_stream }}:{{ module_version }}"
-  when: ansible_distribution_file_variety == 'RedHat' and module_name is defined and module_stream is defined and module_version is defined
+  when: ansible_distribution_file_variety in ('RedHat', 'CentOS') and module_name is defined and module_stream is defined and module_version is defined
   tags:
     - install_package
 
@@ -12,7 +12,7 @@
     state: present
     allow_downgrade: true
     lock_timeout: 300
-  when: ansible_distribution_file_variety in ('RedHat', 'OracleLinux')
+  when: ansible_distribution_file_variety in ('RedHat', 'OracleLinux', 'CentOS')
   tags:
     - install_package
 
@@ -32,7 +32,7 @@
   retries: 30
   delay: 10
   until: result.rc == 0
-  when: ansible_distribution_file_variety in ('RedHat', 'OracleLinux')
+  when: ansible_distribution_file_variety in ('RedHat', 'OracleLinux', 'CentOS')
   tags:
     - uninstall_package
 
