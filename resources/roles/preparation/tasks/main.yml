@@ -3,7 +3,7 @@
 - name: Initial provision for RPM distributions
   include_tasks:
     file: rhel.yml
-  when: ansible_distribution_file_variety in ('RedHat', 'OracleLinux')
+  when: ansible_facts.os_family == 'RedHat'
   tags:
     - initial_provision
 
