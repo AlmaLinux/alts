@@ -12,6 +12,6 @@ plumbum==1.8.2
 pulpcore-client==3.45.2
 pydantic==2.6.1
 pyone==6.8.1
-requests==2.31.0
+requests==2.32.2
 syncer==2.0.3
 tap.py==3.1
