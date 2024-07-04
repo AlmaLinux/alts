@@ -868,6 +868,7 @@ class BaseRunner(object):
                 'Cannot resolve non-uninstallable packages via DNF: %s',
                 dnf_command
             )
+            return protected
         dnf_protected = [i.strip() for i in stdout.split('\n') if i.strip()]
         if dnf_protected:
             protected.extend(dnf_protected)
