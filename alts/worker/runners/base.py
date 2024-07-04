@@ -857,7 +857,22 @@ class BaseRunner(object):
             file_protected = [i.strip() for i in stdout.split('\n') if i.strip()]
             if file_protected:
                 protected.extend(file_protected)
-        return protected
+        protected.append('kernel-core')
+        dnf_command = (
+            r'dnf', '-q', '--qf=%{NAME}', 'repoquery', '--requires', '--resolve', '--recursive' +
+            ' '.join(protected)
+        )
+        exit_code, stdout, stderr = self.exec_command(*dnf_command)
+        if exit_code != 0:
+            self._logger.warning(
+                'Cannot resolve non-uninstallable packages via DNF: %s',
+                dnf_command
+            )
+            return protected
+        dnf_protected = [i.strip() for i in stdout.split('\n') if i.strip()]
+        if dnf_protected:
+            protected.extend(dnf_protected)
+        return list(set(protected))
 
     def _uninstall_package(
         self,
@@ -1055,7 +1070,8 @@ class BaseRunner(object):
         if self.dist_name in CONFIG.rhel_flavors:
             cmd = ('rpm', '-q', package_name)
         elif self.dist_name in CONFIG.debian_flavors:
-            cmd = ('dpkg', '-l', package_name)
+            cmd = ('dpkg-query', '-Wf', r'${db:Status-Status} ${Package}\n',
+                   package_name)
         else:
             raise ValueError(f'Unknown distribution: {self.dist_name}')
         exit_code, stdout, stderr = self.exec_command(*cmd)
