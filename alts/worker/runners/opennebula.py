@@ -73,7 +73,7 @@ class OpennebulaRunner(GenericVMRunner):
         channels = '|'.join(CONFIG.allowed_channel_names)
         regex_str = (
             r'(?P<platform_name>\w+(-\w+)?)-(?P<version>\d+(.\d+)?)'
-            r'-(?P<arch>\w+).*.test_system'
+            r'-(?P<arch>\w+).base_image.test_system'
             f'(.({channels}))?'
             r'.b\d+'
         )
