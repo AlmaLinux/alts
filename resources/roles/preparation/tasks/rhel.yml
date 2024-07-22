@@ -55,6 +55,7 @@
 - name: Add YUM proxy
   ini_file:
     path: /etc/yum.conf
+    follow: yes
     section: main
     option: proxy
     value: "{{ package_proxy }}"
@@ -63,6 +64,7 @@
 - name: Remove nodocs param from YUM config
   ini_file:
     path: /etc/yum.conf
+    follow: yes
     section: main
     option: tsflags
     state: absent
@@ -70,6 +72,7 @@
 - name: Remove override_install_langs from YUM config
   ini_file:
     path: /etc/yum.conf
+    follow: yes
     section: main
     option: override_install_langs
     state: absent

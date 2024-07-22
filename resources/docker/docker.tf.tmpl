@@ -7,6 +7,17 @@ resource "docker_container" "${container_name}" {
   name = "${container_name}"
   must_run = true
   command = ["sleep", "21600"]
+  env = [
+% if http_proxy:
+    "http_proxy=${http_proxy}",
+% endif
+% if https_proxy:
+    "https_proxy=${https_proxy}",
+% endif
+% if no_proxy:
+    "no_proxy=${no_proxy}",
+% endif
+  ]
 % if external_network:
   networks_advanced {
     name = "${external_network}"
