@@ -255,7 +255,7 @@ class BaseRunner(object):
         )
 
         # Package installation and test stuff
-        repos = repositories.copy() or []
+        repos = repositories.copy() if repositories is not None else []
         if CONFIG.authorize_build_repositories:
             repos = self.add_credentials_to_build_repos(repos)
         self._repositories = self.prepare_repositories(repos)
