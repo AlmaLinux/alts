@@ -255,11 +255,10 @@ class BaseRunner(object):
         )
 
         # Package installation and test stuff
-        repos = repositories or []
-        self._repositories = self.prepare_repositories(repos)
+        repos = repositories.copy() if repositories is not None else []
         if CONFIG.authorize_build_repositories:
-            self.add_credentials_to_build_repos()
-
+            repos = self.add_credentials_to_build_repos(repos)
+        self._repositories = self.prepare_repositories(repos)
         self._artifacts = {}
         self._uploaded_logs = None
         self._stats = {}
@@ -371,11 +370,27 @@ class BaseRunner(object):
             self._logger.debug('Repository modified state: %s', repo)
         return repositories
 
-    def add_credentials_to_build_repos(self):
-        for repo in self._repositories:
+    def add_credentials_to_build_repos(self, repositories: List[dict]) -> List[dict]:
+        modified_repositories = []
+        for repo in repositories:
             if '-br' not in repo['name']:
+                modified_repositories.append(repo)
                 continue
-            parsed = urllib.parse.urlparse(repo['url'])
+            # Sometimes URL can start from 'deb' part, in this case we need to
+            # get the actual URL from it and then add the rest of it back
+            url_parts = None
+            parsed_url_index = None
+            repo_url = repo['url']
+            if repo['url'].startswith(('deb ', 'deb-src ')):
+                url_parts = repo['url'].split(' ')
+                for i, part in enumerate(url_parts):
+                    if part.startswith(('http', 'https')):
+                        repo_url = part
+                        parsed_url_index = i
+                        break
+
+            parsed = urllib.parse.urlparse(repo_url)
+            self._logger.debug('Parsed repo url: %s', parsed)
             netloc = parsed.netloc
             if CONFIG.bs_token and '@' not in netloc:
                 netloc = f'alts:{CONFIG.bs_token}@{parsed.netloc}'
@@ -388,11 +403,16 @@ class BaseRunner(object):
                 parsed.fragment,
             ))
             if (self.dist_name in CONFIG.debian_flavors
-                    and not repo['url'].startswith('deb ')):
+                    and not url_parts):
                 url = f'deb {url} ./'
-                self._logger.info('Modified repo url: %s', url)
+            elif url_parts and parsed_url_index:
+                url_parts[parsed_url_index] = url
+                url = ' '.join(url_parts)
+            self._logger.debug('Modified repo url: %s', url)
             repo['url'] = url
-        self._logger.info('Repositories: %s', self._repositories)
+            modified_repositories.append(repo)
+        self._logger.info('Repositories: %s', modified_repositories)
+        return modified_repositories
 
     def __init_task_logger(self, log_file):
         """
@@ -458,6 +478,10 @@ class BaseRunner(object):
     def __del__(self):
         self.stop_env()
         self.erase_work_dir()
+        self._repositories = None
+        if self._logger.hasHandlers():
+            for handler in self._logger.handlers:
+                handler.flush()
 
     def _render_template(self, template_name, result_file_path, **kwargs):
         template = self._template_lookup.get_template(template_name)
