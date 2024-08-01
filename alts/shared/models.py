@@ -305,7 +305,7 @@ class CeleryConfig(BaseModel):
         '6': 'http://dl.fedoraproject.org/pub/archive/epel/6/x86_64/'
              'epel-release-6-8.noarch.rpm',
         '7': 'https://dl.fedoraproject.org/pub/archive/epel/7/x86_64/'
-             'Packages/e/epel-release-7-12.noarch.rpm',
+             'Packages/e/epel-release-7-14.noarch.rpm',
     }
     centos_baseurl: str = 'http://mirror.centos.org/centos'
     git_reference_directory: Optional[str] = None

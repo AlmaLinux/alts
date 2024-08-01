@@ -4,14 +4,22 @@
   set_fact:
     centos_7_x32: false
     bats_package: bats
+    final_centos_repo_baseurl: "{{ centos_repo_baseurl }}"
 
 - name: Set fact about CentOS 7 x32 arch
   set_fact:
     centos_7_x32: true
     bats_package: "http://ftp.icm.edu.pl/pub/Linux/dist/epel/7/x86_64/Packages/b/bats-0.4.0-1.20141016git3b33a5a.el7.noarch.rpm"
+    final_centos_repo_baseurl: "{{ centos_repo_baseurl }}/altarch"
+    centos_distro_version: "7"
   when: >
     ansible_facts.distribution_major_version == '7' and
     ansible_facts.userspace_architecture in ('i386', 'i486', 'i586', 'i686')
+
+- name: Set fact about distro version for CentOS 7 x86_64
+  set_fact:
+    centos_distro_version: "7.9.2009"
+  when: "ansible_facts.distribution_major_version == '7' and ansible_facts.userspace_architecture == 'x86_64'"
 
 - name: Re-define procps package name
   set_fact:
@@ -40,7 +48,7 @@
 - name: Add os and updates repositories for version 6
   yum_repository:
     name: "centos-6-{{ item }}"
-    baseurl: "{{ centos_repo_baseurl }}/6.10/{{ item }}/$basearch/"
+    baseurl: "{{ final_centos_repo_baseurl }}/6.10/{{ item }}/$basearch/"
     description: "CentOS 6 {{ item }} repository"
     enabled: yes
     gpgcheck: yes
@@ -51,6 +59,21 @@
   when: >
     ansible_distribution_file_variety in ('RedHat', 'CentOS') and
     ansible_facts.distribution_major_version == '6'
+
+- name: Add os and updates repositories for version 7
+  yum_repository:
+    name: "centos-7-{{ item }}"
+    baseurl: "{{ final_centos_repo_baseurl }}/{{ centos_distro_version }}/{{ item }}/$basearch/"
+    description: "CentOS 7 {{ item }} repository"
+    enabled: yes
+    gpgcheck: yes
+    gpgkey: https://vault.centos.org/7.9.2009/os/x86_64/RPM-GPG-KEY-CentOS-7
+  with_items:
+    - "os"
+    - "updates"
+  when: >
+    ansible_distribution_file_variety in ('RedHat', 'CentOS') and
+    ansible_facts.distribution_major_version == '7'
 
 - name: Add YUM proxy
   ini_file:

@@ -18,7 +18,7 @@ EOT
 RUN <<EOT
   set -ex
   dnf install -y ansible
-  ansible-galaxy collection install community.general community.docker
+  ansible-galaxy collection install community.general community.docker ansible.posix
 EOT
 
 # Install Terraform
@@ -27,7 +27,7 @@ RUN <<EOT
   yum-config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
   dnf install -y terraform
   mkdir -p /root/.terraform.d/plugin-cache
-  echo "plugin_cache_dir = /root/.terraform.d/plugin-cache" >> /root/.terraformrc
+  echo 'plugin_cache_dir = "$HOME/.terraform.d/plugin-cache"' >> /root/.terraformrc
   echo "plugin_cache_may_break_dependency_lock_file = true" >> /root/.terraformrc
 EOT
 
