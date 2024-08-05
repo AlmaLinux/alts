@@ -9,7 +9,7 @@
 - name: Set fact about CentOS 7 x32 arch
   set_fact:
     centos_7_x32: true
-    bats_package: "http://ftp.icm.edu.pl/pub/Linux/dist/epel/7/x86_64/Packages/b/bats-0.4.0-1.20141016git3b33a5a.el7.noarch.rpm"
+    bats_package: "https://archives.fedoraproject.org/pub/archive/epel/7/x86_64/Packages/b/bats-0.4.0-1.20141016git3b33a5a.el7.noarch.rpm"
     final_centos_repo_baseurl: "{{ centos_repo_baseurl }}/altarch"
     centos_distro_version: "7"
   when: >
@@ -59,6 +59,11 @@
   when: >
     ansible_distribution_file_variety in ('RedHat', 'CentOS') and
     ansible_facts.distribution_major_version == '6'
+
+- name: Remove CentOS-Base repository file for version 7
+  file:
+    path: /etc/yum.repos.d/CentOS-Base.repo
+    state: absent
 
 - name: Add os and updates repositories for version 7
   yum_repository:
