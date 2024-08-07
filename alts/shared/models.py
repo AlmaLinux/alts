@@ -70,6 +70,11 @@ class TestConfiguration(BaseModel):
     test_env: Optional[dict] = None
 
 
+class TestFlavor(BaseModel):
+    name: str
+    version: str
+
+
 class TaskRequestPayload(BaseModel):
     bs_task_id: int
     runner_type: Literal['any', 'docker', 'opennebula'] = 'any'
@@ -78,6 +83,7 @@ class TaskRequestPayload(BaseModel):
     dist_arch: str
     package_channel: Optional[Literal["stable", "beta"]] = None
     test_configuration: Optional[TestConfiguration] = None
+    test_flavor: Optional[TestFlavor] = None
     repositories: List[Repository] = []
     package_name: str
     package_version: Optional[str] = None
@@ -144,7 +150,7 @@ class OpennebulaConfig(BaseModel):
     username: Optional[str] = None
     password: Optional[str] = None
     vm_group: Optional[str] = None
-    default_vm_disk_size: Optional[int] = 15000
+    default_vm_disk_size: Optional[int] = 15360
     default_vm_ram_size: Optional[int] = 1536
     network: Optional[str] = None
 

@@ -158,8 +158,9 @@ def run_tests(self, task_params: dict):
     runner_kwargs = {
         'repositories': task_params.get('repositories', []),
         'dist_arch': task_params.get('dist_arch', 'x86_64'),
-        'test_configuration': task_params.get('test_configuration', {}),
         'package_channel': task_params.get('package_channel', 'beta'),
+        'test_configuration': task_params.get('test_configuration', {}),
+        'test_flavor': task_params.get('test_flavor', {})
     }
 
     runner_class = RUNNER_MAPPING[task_params['runner_type']]

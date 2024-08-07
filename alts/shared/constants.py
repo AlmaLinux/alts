@@ -2,6 +2,7 @@ __all__ = [
     'API_VERSION',
     'ARCHITECTURES',
     'ALLOWED_CHANNELS',
+    'COMMAND_TIMEOUT_EXIT_CODE',
     'COSTS',
     'DRIVERS',
     'DEFAULT_FILE_CHUNK_SIZE',
@@ -50,6 +51,8 @@ ALLOWED_CHANNELS = ['stable', 'beta']
 DEFAULT_FILE_CHUNK_SIZE = 8388608  # 8 megabytes in bytes
 DEFAULT_REQUEST_TIMEOUT = 60  # 1 minute
 DEFAULT_UPLOADER_CONCURRENCY = 4
+# Exit code the same as HTTP request
+COMMAND_TIMEOUT_EXIT_CODE = 408
 
 DEFAULT_SSH_AUTH_METHODS = [
     'gssapi-keyex',

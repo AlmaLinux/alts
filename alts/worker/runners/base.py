@@ -4,6 +4,7 @@ import logging
 import os
 import random
 import re
+import signal
 import shutil
 import tempfile
 import time
@@ -27,6 +28,7 @@ from filelock import FileLock
 from mako.lookup import TemplateLookup
 from plumbum import local, ProcessExecutionError, ProcessTimedOut
 
+from alts.shared.constants import COMMAND_TIMEOUT_EXIT_CODE
 from alts.shared.exceptions import (
     AbortedTestTask,
     InstallPackageError,
@@ -206,12 +208,14 @@ class BaseRunner(object):
         artifacts_uploader: Optional[BaseLogsUploader] = None,
         package_channel: Optional[str] = None,
         test_configuration: Optional[dict] = None,
+        test_flavor: Optional[Dict[str, str]] = None,
         verbose: bool = False,
     ):
         # Environment ID and working directory preparation
         self._task_id = task_id
         self._task_is_aborted = task_is_aborted
         self._test_configuration = test_configuration or {}
+        self._test_flavor = test_flavor or {}
         self._test_env = self._test_configuration.get('test_env') or {}
         self._logger = self.init_test_task_logger(
             task_id,
@@ -343,6 +347,14 @@ class BaseRunner(object):
     @property
     def repositories(self):
         return self._repositories
+
+    @property
+    def test_flavor(self) -> Dict[str, str]:
+        return self._test_flavor
+
+    @property
+    def test_configuration(self) -> dict:
+        return self._test_configuration
 
     @property
     def env_name(self):
@@ -543,6 +555,52 @@ class BaseRunner(object):
                                  f'{package_version}')
         return full_pkg_name
 
+    def run_ansible_command(
+        self, args: Union[tuple, list], retcode_none: bool = False,
+        timeout: int = CONFIG.provision_timeout
+    ):
+        run_kwargs = {
+            'args': args,
+            'timeout': timeout
+        }
+        if retcode_none:
+            run_kwargs['retcode'] = None
+        cmd = local[self.ansible_playbook_binary].with_cwd(self._work_dir)
+        formulated_cmd = cmd.formulate(args=run_kwargs.get('args', ()))
+        exception_happened = False
+        cmd_pid = None
+        try:
+            future = cmd.run_bg(**run_kwargs)
+            cmd_pid = future.proc.pid
+            future.wait()
+            exit_code, stdout, stderr = future.retcode, future.stdout, future.stderr
+        except ProcessExecutionError as e:
+            stdout = e.stdout
+            stderr = e.stderr
+            exit_code = e.retcode
+            exception_happened = True
+        except ProcessTimedOut:
+            stdout = ''
+            stderr = f'Timeout occurred when running ansible command: "{formulated_cmd}"'
+            exit_code = COMMAND_TIMEOUT_EXIT_CODE
+            exception_happened = True
+        except Exception as e:
+            self._logger.error(
+                'Unknown error happened during %s execution: %s',
+                formulated_cmd
+            )
+            stdout = ''
+            stderr = str(e)
+            exit_code = 255
+
+        if exception_happened and cmd_pid:
+            try:
+                os.killpg(cmd_pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+
+        return exit_code, stdout, stderr
+
     # First step
     def prepare_work_dir_files(self):
         # In case if you've removed worker folder, recreate one
@@ -681,17 +739,14 @@ class BaseRunner(object):
             'Running "ansible-playbook %s" command',
             cmd_args_str,
         )
-        try:
-            return local[self.ansible_playbook_binary].with_cwd(
-                self._work_dir).run(
-                    args=cmd_args,
-                    retcode=None,
-                    timeout=CONFIG.provision_timeout,
-                )
-        except ProcessTimedOut as e:
-            return 1, '', f'Provision has timed out: {e}'
-        except ProcessExecutionError as e:
-            return 1, '', f'Provision exited abnormally: {e}'
+        exit_code, out, err = self.run_ansible_command(
+            cmd_args, timeout=CONFIG.provision_timeout
+        )
+        if exit_code == COMMAND_TIMEOUT_EXIT_CODE:
+            return 1, '', f'Provision has timed out: {out}\n{err}'
+        elif exit_code != 0:
+            return 1, '', f'Provision exited abnormally: {out}\n{err}'
+        return exit_code, out, err
 
     def get_system_info_commands_list(self) -> Dict[str, tuple]:
         self._logger.debug('Returning default system info commands list')
@@ -815,23 +870,17 @@ class BaseRunner(object):
             'Running "ansible-playbook %s" command',
             cmd_args_str,
         )
-        try:
-            cmd = self.ansible_playbook_binary
-            exit_code, stdout, stderr = local[cmd].with_cwd(self._work_dir).run(
-                args=cmd_args,
-                retcode=None,
-                timeout=CONFIG.provision_timeout,
+        exit_code, out, err = self.run_ansible_command(
+            cmd_args, timeout=CONFIG.provision_timeout
+        )
+        if exit_code == COMMAND_TIMEOUT_EXIT_CODE:
+            self._logger.error(
+                'Package was not installed due to command timeout: %s',
+                f'{out}\n{err}'
             )
-        except (ProcessExecutionError, ProcessTimedOut) as e:
-            self._logger.error('Cannot install package: %s', str(e))
-            stdout = ''
-            stderr = f'Failed to install package: \n{e}'
-            exit_code = 255
-            if allow_fail:
-                exit_code = 0
-        if exit_code != 0 and allow_fail:
-            exit_code = 0
-        return exit_code, stdout, stderr
+        elif exit_code != 0:
+            self._logger.error('Cannot install package %s: %s', full_pkg_name, err)
+        return exit_code, out, err
 
     @command_decorator(
         'install_package',
@@ -883,8 +932,8 @@ class BaseRunner(object):
                 protected.extend(file_protected)
         protected.append('kernel-core')
         dnf_command = (
-            r'dnf', '-q', '--qf=%{NAME}', 'repoquery', '--requires', '--resolve', '--recursive' +
-            ' '.join(protected)
+            r'dnf', '-q', '--qf=%{NAME}', 'repoquery', '--requires', '--resolve', '--recursive',
+            *protected
         )
         exit_code, stdout, stderr = self.exec_command(*dnf_command)
         if exit_code != 0:
@@ -931,16 +980,18 @@ class BaseRunner(object):
             'Running "ansible-playbook %s" command',
             cmd_args_str,
         )
-        cmd = self.ansible_playbook_binary
-        try:
-            return local[cmd].with_cwd(self._work_dir).run(
-                args=cmd_args,
-                retcode=None,
-                timeout=CONFIG.provision_timeout,
+
+        exit_code, out, err = self.run_ansible_command(
+            cmd_args, timeout=CONFIG.provision_timeout
+        )
+        if exit_code == COMMAND_TIMEOUT_EXIT_CODE:
+            self._logger.error(
+                'Package was not uninstalled due to command timeout: %s',
+                f'{out}\n{err}'
             )
-        except (ProcessExecutionError, ProcessTimedOut) as e:
-            self._logger.error('Cannot uninstall package:\n%s', str(e))
-            return 1, '', f'Cannot uninstall package:\n{e}'
+        elif exit_code != 0:
+            self._logger.error('Cannot uninstall package %s: %s', full_pkg_name, err)
+        return exit_code, out, err
 
     def ensure_package_is_uninstalled(self, package_name: str):
         package_exists = self.check_package_existence(package_name)
@@ -1562,6 +1613,7 @@ class GenericVMRunner(BaseRunner):
         artifacts_uploader: Optional[BaseLogsUploader] = None,
         package_channel: Optional[str] = None,
         test_configuration: Optional[dict] = None,
+        test_flavor: Optional[Dict[str, str]] = None,
         verbose: bool = False,
     ):
         super().__init__(
@@ -1571,9 +1623,10 @@ class GenericVMRunner(BaseRunner):
             dist_version,
             repositories=repositories,
             dist_arch=dist_arch,
-            test_configuration=test_configuration,
             artifacts_uploader=artifacts_uploader,
             package_channel=package_channel,
+            test_configuration=test_configuration,
+            test_flavor=test_flavor,
             verbose=verbose,
         )
         self._tests_dir = CONFIG.tests_base_dir

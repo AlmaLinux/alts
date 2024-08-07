@@ -122,7 +122,7 @@
     name: "{{ epel_release_url }}"
     state: present
     lock_timeout: 300
-  when: > 
+  when: >
     epel_release_url is defined and
     epel_release_url and
     ansible_facts.os_family == 'RedHat' and
@@ -138,6 +138,14 @@
     name: "*"
     state: latest
     lock_timeout: 300
+
+- name: Remove CentOS-Base.repo file again (just in case)
+  file:
+    path: "/etc/yum.repos.d/CentOS-Base.repo"
+    state: absent
+  when: >
+    ansible_distribution_file_variety in ('RedHat', 'CentOS') and
+    ansible_facts.distribution_major_version == '7'
 
 - name: Install additional packages
   yum:
