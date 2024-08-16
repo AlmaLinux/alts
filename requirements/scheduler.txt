@@ -1,6 +1,6 @@
 -r base.txt
 SQLAlchemy==1.4.51
-aiohttp==3.9.4
+aiohttp==3.10.2
 databases[sqlite]==0.8.0
 fastapi==0.109.2
 python-jose==3.3.0
