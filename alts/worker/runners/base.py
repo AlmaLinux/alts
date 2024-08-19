@@ -573,7 +573,7 @@ class BaseRunner(object):
             future = cmd.run_bg(**run_kwargs)
             cmd_pid = future.proc.pid
             future.wait()
-            exit_code, stdout, stderr = future.retcode, future.stdout, future.stderr
+            exit_code, stdout, stderr = future.returncode, future.stdout, future.stderr
         except ProcessExecutionError as e:
             stdout = e.stdout
             stderr = e.stderr
