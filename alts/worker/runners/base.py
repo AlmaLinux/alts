@@ -251,12 +251,23 @@ class BaseRunner(object):
         self._dist_name = dist_name.lower()
         self._dist_version = str(dist_version).lower()
         self._dist_arch = dist_arch.lower()
-        self._env_name = re.sub(
-            r'\.',
-            '_',
-            f'alts_{self.TYPE}_{self.dist_name}_'
-            f'{self.dist_version}_{self.dist_arch}_{task_id}',
-        )
+        if self.test_flavor:
+            flavor_name = self.test_flavor['name']
+            flavor_version = self.test_flavor['version']
+            self._env_name = re.sub(
+                r'\.',
+                '_',
+                f'alts_{self.TYPE}_{self.dist_name}_'
+                f'{self.dist_version}_{flavor_name}_{flavor_version}_'
+                f'{self.dist_arch}_{task_id}',
+            )
+        else:
+            self._env_name = re.sub(
+                r'\.',
+                '_',
+                f'alts_{self.TYPE}_{self.dist_name}_'
+                f'{self.dist_version}_{self.dist_arch}_{task_id}',
+            )
 
         # Package installation and test stuff
         repos = repositories.copy() if repositories is not None else []
