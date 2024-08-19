@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 from typing import (
     Callable,
+    Dict,
     List,
     Optional,
     Union,
@@ -67,6 +68,7 @@ class DockerRunner(BaseRunner):
         repositories: Optional[List[dict]] = None,
         dist_arch: str = 'x86_64',
         test_configuration: Optional[dict] = None,
+        test_flavor: Optional[Dict[str, str]] = None,
         artifacts_uploader: Optional[BaseLogsUploader] = None,
         package_channel: Optional[str] = None,
         verbose: bool = False,
@@ -95,6 +97,7 @@ class DockerRunner(BaseRunner):
             repositories=repositories,
             dist_arch=dist_arch,
             test_configuration=test_configuration,
+            test_flavor=test_flavor,
             artifacts_uploader=artifacts_uploader,
             package_channel=package_channel,
             verbose=verbose,
