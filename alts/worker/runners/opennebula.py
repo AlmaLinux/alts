@@ -7,7 +7,12 @@
 import os
 import re
 import time
-from typing import Callable, List, Optional, Union
+from typing import (
+    Callable, Dict,
+    List,
+    Optional,
+    Union,
+)
 
 import pyone
 from plumbum import local
@@ -44,6 +49,7 @@ class OpennebulaRunner(GenericVMRunner):
         artifacts_uploader: Optional[BaseLogsUploader] = None,
         package_channel: Optional[str] = None,
         test_configuration: Optional[dict] = None,
+        test_flavor: Optional[Dict[str, str]] = None,
         verbose: bool = False,
     ):
         super().__init__(
@@ -53,9 +59,10 @@ class OpennebulaRunner(GenericVMRunner):
             dist_version,
             repositories=repositories,
             dist_arch=dist_arch,
-            test_configuration=test_configuration,
             artifacts_uploader=artifacts_uploader,
             package_channel=package_channel,
+            test_configuration=test_configuration,
+            test_flavor=test_flavor,
             verbose=verbose,
         )
         user = CONFIG.opennebula_config.username
@@ -71,12 +78,12 @@ class OpennebulaRunner(GenericVMRunner):
         platform_name_version = f'{self.dist_name}-{self.dist_version}'
         templates = self.opennebula_client.templatepool.info(-1, -1, -1, -1)
         channels = '|'.join(CONFIG.allowed_channel_names)
-        regex_str = (
-            r'(?P<platform_name>\w+(-\w+)?)-(?P<version>\d+(.\d+)?)'
-            r'-(?P<arch>\w+).*.test_system'
-            f'(.({channels}))?'
-            r'.b\d+'
-        )
+        regex_str = r'(?P<platform_name>\w+(-\w+)?)-(?P<version>\d+(.\d+)?)-(?P<arch>\w+)'
+        if self.test_flavor:
+            name = self.test_flavor['name']
+            version = self.test_flavor['version']
+            regex_str += f'.(?P<flavor_name>{name})-(?P<flavor_version>{version})'
+        regex_str += f'.base_image.test_system.({channels}).b\d+' # noqa
         # Filter images to leave only those that are related to the particular
         # platform
         # Note: newer OS don't have 32-bit images usually, so we need to try

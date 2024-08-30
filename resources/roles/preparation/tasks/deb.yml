@@ -48,7 +48,7 @@
 
 - name: Delete buster-backports repository
   apt_repository:
-    repo: "deb http://ftp.debian.org/debian buster-backports main"
+    repo: "deb http://archive.debian.org/debian buster-backports main"
     filename: "buster-backports"
     state: absent
   when: "ansible_facts.distribution == 'Debian' and ansible_facts.distribution_release == 'buster'"
