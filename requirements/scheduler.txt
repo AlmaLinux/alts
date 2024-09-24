@@ -1,7 +1,7 @@
 -r base.txt
-SQLAlchemy==1.4.51
-aiohttp==3.10.2
+SQLAlchemy==1.4.54
+aiohttp==3.10.5
 databases[sqlite]==0.8.0
-fastapi==0.109.2
-python-jose==3.3.0
-uvicorn==0.27.1
+fastapi==0.115.0
+pyjwt==2.9.0
+uvicorn==0.30.6
