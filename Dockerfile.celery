@@ -46,7 +46,7 @@ RUN <<EOT
   set -ex
   python3 -m venv /root/ansible_env
   source /root/ansible_env/bin/activate
-  pip3 install -r celery.txt ansible-core==2.12.10
+  pip3 install -r celery.txt ansible-core==2.15.12
 EOT
 
 RUN <<EOT

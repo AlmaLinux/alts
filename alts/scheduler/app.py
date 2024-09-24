@@ -10,6 +10,7 @@ import signal
 import urllib.parse
 from threading import Event
 
+import jwt
 from celery.contrib.abortable import AbortableAsyncResult
 from celery.exceptions import TimeoutError
 from celery.states import READY_STATES, RECEIVED, STARTED
@@ -21,7 +22,6 @@ from fastapi import (
 )
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer
-from jose import JWTError, jwt
 from sqlalchemy import select
 
 from alts.scheduler import CONFIG
@@ -213,7 +213,7 @@ async def authenticate_user(credentials: str = Depends(http_bearer_scheme)):
             CONFIG.jwt_secret,
             algorithms=[CONFIG.hashing_algorithm],
         )
-    except JWTError:
+    except jwt.PyJWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
