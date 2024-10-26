@@ -889,7 +889,9 @@ class BaseRunner(object):
                 'Package was not installed due to command timeout: %s',
                 f'{out}\n{err}'
             )
-        elif exit_code != 0:
+        if allow_fail and exit_code != 0:
+            exit_code = 0
+        if exit_code != 0:
             self._logger.error('Cannot install package %s: %s', full_pkg_name, err)
         return exit_code, out, err
 
