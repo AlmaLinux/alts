@@ -1479,14 +1479,7 @@ class BaseRunner(object):
         except UploadError as e:
             raise PublishArtifactsError from e
 
-    # After: install_package and run_tests
-    @command_decorator(
-        'stop_environment',
-        'Cannot destroy environment',
-        exception_class=StopEnvironmentError,
-        is_abortable=False,
-    )
-    def stop_env(self):
+    def _stop_env(self):
         if os.path.exists(self._work_dir):
             self._logger.info(
                 'Destroying the environment %s...',
@@ -1503,6 +1496,16 @@ class BaseRunner(object):
                 retcode=None,
                 timeout=CONFIG.provision_timeout,
             )
+
+    # After: install_package and run_tests
+    @command_decorator(
+        'stop_environment',
+        'Cannot destroy environment',
+        exception_class=StopEnvironmentError,
+        is_abortable=False,
+    )
+    def stop_env(self):
+        return self._stop_env()
 
     def erase_work_dir(self):
         if self._work_dir and os.path.exists(self._work_dir):
