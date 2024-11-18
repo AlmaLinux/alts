@@ -21,11 +21,10 @@ from alts.shared.constants import X32_ARCHITECTURES
 from alts.shared.exceptions import (
     OpennebulaVMStopError,
     VMImageNotFound,
-    StopEnvironmentError,
 )
 from alts.shared.uploaders.base import BaseLogsUploader
 from alts.worker import CONFIG
-from alts.worker.runners.base import GenericVMRunner, command_decorator
+from alts.worker.runners.base import GenericVMRunner
 
 __all__ = ['OpennebulaRunner']
 
@@ -242,24 +241,24 @@ class OpennebulaRunner(GenericVMRunner):
             )
             recover_delete()
 
-    @command_decorator(
-        'stop_environment',
-        'Cannot destroy environment',
-        exception_class=StopEnvironmentError,
-        is_abortable=False,
-    )
-    def stop_env(self):
+    def _stop_env(self):
+        stop_exit_code, stop_out, stop_err = super()._stop_env()
+        if stop_exit_code == 0:
+            return stop_exit_code, stop_out, stop_err
+
+        self._logger.warning(
+            'Cannot stop VM conventionally. Output:\n%s\nStderr:\n%s',
+            stop_out, stop_err
+        )
         id_exit_code, vm_id, id_stderr = local['terraform'].with_cwd(
             self._work_dir).run(
             args=('output', '-raw', '-no-color', 'vm_id'),
             retcode=None,
             timeout=CONFIG.provision_timeout,
         )
-        if id_exit_code != 0:
+        self._logger.debug('VM ID: %s', vm_id)
+        if id_exit_code != 0 or not vm_id:
             self._logger.warning('Cannot get VM ID: %s', id_stderr)
-        try:
-            return super().stop_env()
-        except StopEnvironmentError:
-            if vm_id:
-                self.destroy_vm_via_api(int(vm_id.strip()))
-                return 0, f'{vm_id} is destroyed via API', ''
+            return id_exit_code, 'Cannot get VM ID', id_stderr
+        self.destroy_vm_via_api(int(vm_id.strip()))
+        return 0, f'{vm_id} is destroyed via API', ''

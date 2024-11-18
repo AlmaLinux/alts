@@ -1479,6 +1479,25 @@ class BaseRunner(object):
         except UploadError as e:
             raise PublishArtifactsError from e
 
+    def _stop_env(self):
+        if not os.path.exists(self._work_dir):
+            return 0, '', f'Working directory {self._work_dir} does not exist'
+        self._logger.info(
+            'Destroying the environment %s...',
+            self.env_name,
+        )
+        self._logger.debug(
+            'Running "terraform destroy --auto-approve" command'
+        )
+        cmd_args = ['destroy', '--auto-approve', '-no-color']
+        if self.TF_VARIABLES_FILE:
+            cmd_args.extend(['--var-file', self.TF_VARIABLES_FILE])
+        return local['terraform'].with_cwd(self._work_dir).run(
+            args=cmd_args,
+            retcode=None,
+            timeout=CONFIG.provision_timeout,
+        )
+
     # After: install_package and run_tests
     @command_decorator(
         'stop_environment',
@@ -1487,35 +1506,23 @@ class BaseRunner(object):
         is_abortable=False,
     )
     def stop_env(self):
-        if os.path.exists(self._work_dir):
-            self._logger.info(
-                'Destroying the environment %s...',
-                self.env_name,
-            )
-            self._logger.debug(
-                'Running "terraform destroy --auto-approve" command'
-            )
-            cmd_args = ['destroy', '--auto-approve', '-no-color']
-            if self.TF_VARIABLES_FILE:
-                cmd_args.extend(['--var-file', self.TF_VARIABLES_FILE])
-            return local['terraform'].with_cwd(self._work_dir).run(
-                args=cmd_args,
-                retcode=None,
-                timeout=CONFIG.provision_timeout,
-            )
+        return self._stop_env()
 
     def erase_work_dir(self):
-        if self._work_dir and os.path.exists(self._work_dir):
-            self._logger.info('Erasing working directory...')
-            try:
-                shutil.rmtree(self._work_dir)
-            except Exception as e:
-                self._logger.error(
-                    'Error while erasing working directory: %s',
-                    e,
-                )
-            else:
-                self._logger.info('Working directory was successfully removed')
+        if not self._work_dir:
+            return
+        if self._work_dir and not os.path.exists(self._work_dir):
+            return
+        self._logger.info('Erasing working directory...')
+        try:
+            shutil.rmtree(self._work_dir)
+        except Exception as e:
+            self._logger.error(
+                'Error while erasing working directory: %s',
+                e,
+            )
+        else:
+            self._logger.info('Working directory was successfully removed')
 
     def setup(self, skip_provision: bool = False):
         self._stats['started_at'] = datetime.datetime.utcnow().isoformat()

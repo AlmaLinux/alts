@@ -20,7 +20,6 @@ from plumbum import local
 from alts.shared.exceptions import (
     PackageIntegrityTestsError,
     ProvisionError,
-    StopEnvironmentError,
     ThirdPartyTestError,
 )
 from alts.shared.uploaders.base import BaseLogsUploader
@@ -351,20 +350,14 @@ class DockerRunner(BaseRunner):
         ])
         return test_repo_path
 
-    @command_decorator(
-        'stop_environment',
-        'Cannot destroy environment',
-        exception_class=StopEnvironmentError,
-    )
-    def stop_env(self):
+    def _stop_env(self):
         _, container_id, _ = local['terraform'].with_cwd(
             self._work_dir).run(
             args=('output', '-raw', '-no-color', 'container_id'),
             retcode=None,
             timeout=CONFIG.provision_timeout,
         )
-        try:
-            return super().stop_env()
-        except StopEnvironmentError:
-            # Attempt to delete environment via plain docker command
+        exit_code, out, err = super()._stop_env()
+        if exit_code != 0:
             return self.exec_command('rm', '-f', container_id)
+        return exit_code, out, err
