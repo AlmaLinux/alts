@@ -174,6 +174,7 @@ def run_tests(self, task_params: dict):
     module_name = task_params.get('module_name')
     module_stream = task_params.get('module_stream')
     module_version = task_params.get('module_version')
+    vm_alive = task_params.get('vm_alive')
     try:
         # Wait a bit to not spawn all environments at once when
         # a lot of tasks are coming to the machine
@@ -236,7 +237,8 @@ def run_tests(self, task_params: dict):
             section_name='Unexpected errors during tests',
         )
     finally:
-        runner.teardown()
+        if not vm_alive:
+            runner.teardown()
         summary = defaultdict(dict)
         if aborted:
             summary['revoked'] = True
