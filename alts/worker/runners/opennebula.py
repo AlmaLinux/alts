@@ -49,6 +49,7 @@ class OpennebulaRunner(GenericVMRunner):
         package_channel: Optional[str] = None,
         test_configuration: Optional[dict] = None,
         test_flavor: Optional[Dict[str, str]] = None,
+        vm_alive: bool = False,
         verbose: bool = False,
     ):
         super().__init__(
@@ -62,6 +63,7 @@ class OpennebulaRunner(GenericVMRunner):
             package_channel=package_channel,
             test_configuration=test_configuration,
             test_flavor=test_flavor,
+            vm_alive= vm_alive,
             verbose=verbose,
         )
         user = CONFIG.opennebula_config.username
