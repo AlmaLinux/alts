@@ -209,6 +209,7 @@ class BaseRunner(object):
         package_channel: Optional[str] = None,
         test_configuration: Optional[dict] = None,
         test_flavor: Optional[Dict[str, str]] = None,
+        vm_alive: bool = False,
         verbose: bool = False,
     ):
         # Environment ID and working directory preparation
@@ -279,6 +280,7 @@ class BaseRunner(object):
         self._stats = {}
         self._verbose = verbose
         self.package_channel = package_channel
+        self.vm_alive = vm_alive
 
     @property
     def artifacts(self):
@@ -1634,6 +1636,7 @@ class GenericVMRunner(BaseRunner):
         package_channel: Optional[str] = None,
         test_configuration: Optional[dict] = None,
         test_flavor: Optional[Dict[str, str]] = None,
+        vm_alive: bool = False,
         verbose: bool = False,
     ):
         super().__init__(
@@ -1652,6 +1655,7 @@ class GenericVMRunner(BaseRunner):
         self._tests_dir = CONFIG.tests_base_dir
         self._ssh_client: Optional[Union[AsyncSSHClient, LongRunSSHClient]] = None
         self._vm_ip = None
+        self._vm_alive = vm_alive
 
     def _wait_for_ssh(self, retries=60):
         ansible = local[self.ansible_binary]
@@ -1746,12 +1750,13 @@ class GenericVMRunner(BaseRunner):
         self._ssh_client = LongRunSSHClient(**params)
 
     def teardown(self, publish_artifacts: bool = True):
-        if self._ssh_client:
-            try:
-                self._ssh_client.close()
-            except:
-                pass
-        super().teardown(publish_artifacts=publish_artifacts)
+        if not self._vm_alive:
+            if self._ssh_client:
+                try:
+                    self._ssh_client.close()
+                except:
+                    pass
+            super().teardown(publish_artifacts=publish_artifacts)
 
     def exec_command(self, *args, **kwargs) -> Tuple[int, str, str]:
         command = ' '.join(args)
