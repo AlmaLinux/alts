@@ -50,7 +50,7 @@ class Task(Base):
 
     id = sqlalchemy.Column(sqlalchemy.Integer, primary_key=True)
     task_id = sqlalchemy.Column(sqlalchemy.String, unique=True)
-    bs_task_id = sqlalchemy.Column(sqlalchemy.Integer)
+    bs_task_id = sqlalchemy.Column(sqlalchemy.String)
     callback_href = sqlalchemy.Column(sqlalchemy.String)
     queue_name = sqlalchemy.Column(sqlalchemy.String)
     status = sqlalchemy.Column(sqlalchemy.String)
