@@ -33,6 +33,7 @@ services:
       - ".:/code"
     depends_on:
       - rabbitmq
+      - redis
 
   scheduler:
     image: alts-scheduler:latest
@@ -51,6 +52,9 @@ services:
       - ".:/code"
     depends_on:
       - rabbitmq
+
+  redis:
+    image: redis
 
   alts_tests:
     image: alts-tests:latest
