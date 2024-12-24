@@ -63,7 +63,7 @@ class OpennebulaRunner(GenericVMRunner):
             package_channel=package_channel,
             test_configuration=test_configuration,
             test_flavor=test_flavor,
-            vm_alive= vm_alive,
+            vm_alive=vm_alive,
             verbose=verbose,
         )
         user = CONFIG.opennebula_config.username
