@@ -384,3 +384,6 @@ class SchedulerConfig(CeleryConfig):
     working_directory: str = '/srv/alts/scheduler'
     jwt_secret: str
     hashing_algorithm: str = 'HS256'
+    sentry_dsn: str = None
+    sentry_traces_sample_rate: float = 0.2
+    sentry_environment: str = 'dev'
