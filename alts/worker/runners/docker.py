@@ -353,7 +353,7 @@ class DockerRunner(BaseRunner):
         return test_repo_path
 
     def _stop_env(self):
-        _, container_id, _ = local['terraform'].with_cwd(
+        _, container_id, _ = local['terraform'].with_env(TF_LOG='TRACE').with_cwd(
             self._work_dir).run(
             args=('output', '-raw', '-no-color', 'container_id'),
             retcode=None,

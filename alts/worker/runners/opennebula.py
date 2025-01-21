@@ -252,7 +252,7 @@ class OpennebulaRunner(GenericVMRunner):
             'Cannot stop VM conventionally. Output:\n%s\nStderr:\n%s',
             stop_out, stop_err
         )
-        id_exit_code, vm_id, id_stderr = local['terraform'].with_cwd(
+        id_exit_code, vm_id, id_stderr = local['terraform'].with_env(TF_LOG='TRACE').with_cwd(
             self._work_dir).run(
             args=('output', '-raw', '-no-color', 'vm_id'),
             retcode=None,
