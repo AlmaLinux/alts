@@ -6,6 +6,7 @@
 
 import aiohttp
 import logging
+import sentry_sdk
 import signal
 import urllib.parse
 from threading import Event
@@ -40,6 +41,15 @@ terminate_event = Event()
 graceful_terminate_event = Event()
 http_bearer_scheme = HTTPBearer()
 
+if CONFIG.sentry_dsn:
+    sentry_sdk.init(
+        dsn=CONFIG.sentry_dsn,
+        traces_sample_rate=CONFIG.sentry_traces_sample_rate,
+        environment=CONFIG.sentry_environment,
+        ignore_errors=[
+            ConnectionResetError
+        ],
+    )
 
 def get_celery_task_result(task_id: str, timeout: int = 1) -> tuple:
     """
