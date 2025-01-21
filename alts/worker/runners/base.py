@@ -657,7 +657,7 @@ class BaseRunner(object):
 
     def __terraform_init(self):
         with FileLock(TF_INIT_LOCK_PATH, timeout=60, thread_local=False):
-            return local['terraform'].with_cwd(self._work_dir).run(
+            return local['terraform'].with_env(TF_LOG='TRACE').with_cwd(self._work_dir).run(
                 ('init', '-no-color'),
                 timeout=CONFIG.provision_timeout,
             )
@@ -701,7 +701,7 @@ class BaseRunner(object):
         cmd_args = ['apply', '--auto-approve', '-no-color']
         if self.TF_VARIABLES_FILE:
             cmd_args.extend(['--var-file', self.TF_VARIABLES_FILE])
-        return local['terraform'].with_cwd(self._work_dir).run(
+        return local['terraform'].with_env(TF_LOG='TRACE').with_cwd(self._work_dir).run(
             args=cmd_args,
             retcode=None,
             timeout=CONFIG.provision_timeout,
@@ -1492,7 +1492,7 @@ class BaseRunner(object):
         cmd_args = ['destroy', '--auto-approve', '-no-color']
         if self.TF_VARIABLES_FILE:
             cmd_args.extend(['--var-file', self.TF_VARIABLES_FILE])
-        return local['terraform'].with_cwd(self._work_dir).run(
+        return local['terraform'].with_env(TF_LOG='TRACE').with_cwd(self._work_dir).run(
             args=cmd_args,
             retcode=None,
             timeout=CONFIG.provision_timeout,
@@ -1711,7 +1711,7 @@ class GenericVMRunner(BaseRunner):
         # VM gets its IP address only after deploy.
         # To extract it, the `vm_ip` output should be defined
         # in Terraform main file.
-        ip_exit_code, ip_stdout, ip_stderr = local['terraform'].with_cwd(
+        ip_exit_code, ip_stdout, ip_stderr = local['terraform'].with_env(TF_LOG='TRACE').with_cwd(
             self._work_dir).run(
             args=('output', '-raw',  '-no-color', 'vm_ip'),
             retcode=None,
