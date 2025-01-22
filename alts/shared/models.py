@@ -92,6 +92,7 @@ class TaskRequestPayload(BaseModel):
     module_stream: Optional[str] = None
     module_version: Optional[str] = None
     callback_href: Optional[str] = None
+    vm_alive: bool = False
     verbose: bool = False
 
 
