@@ -1750,13 +1750,12 @@ class GenericVMRunner(BaseRunner):
         self._ssh_client = LongRunSSHClient(**params)
 
     def teardown(self, publish_artifacts: bool = True):
-        if not self._vm_alive:
-            if self._ssh_client:
-                try:
-                    self._ssh_client.close()
-                except:
-                    pass
-            super().teardown(publish_artifacts=publish_artifacts)
+        if self._ssh_client:
+            try:
+                self._ssh_client.close()
+            except:
+                pass
+        super().teardown(publish_artifacts=publish_artifacts)
 
     def exec_command(self, *args, **kwargs) -> Tuple[int, str, str]:
         command = ' '.join(args)
