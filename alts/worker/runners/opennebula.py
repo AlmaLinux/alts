@@ -244,6 +244,8 @@ class OpennebulaRunner(GenericVMRunner):
             recover_delete()
 
     def _stop_env(self):
+        if self._vm_alive:
+            return 0, "WARNING: VM won't be destroyed because vm_alive=True was given", ""
         stop_exit_code, stop_out, stop_err = super()._stop_env()
         if stop_exit_code == 0:
             return stop_exit_code, stop_out, stop_err
