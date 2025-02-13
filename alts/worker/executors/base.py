@@ -1,4 +1,5 @@
 import logging
+import time
 from datetime import datetime
 from functools import wraps
 from traceback import format_exc
@@ -9,6 +10,7 @@ from plumbum import local, ProcessTimedOut
 
 from alts.shared.models import AsyncSSHParams, CommandResult
 from alts.shared.utils.asyncssh import AsyncSSHClient, LongRunSSHClient
+from alts.shared.utils.plumbum_utils import wait_bg_process
 
 
 def measure_stage(stage: str):
@@ -209,15 +211,14 @@ class BaseExecutor:
                         self.binary_name,
                         *cmd_args,
                     ],
-                    timeout=self.timeout,
                     retcode=None,
                 )
             )
-            runner.wait()
+            wait_bg_process(runner, self.timeout or 30)
             stdout = runner.stdout
             stderr = runner.stderr
             exit_code = runner.returncode
-        except ProcessTimedOut:
+        except (ProcessTimedOut, TimeoutError):
             args = ['docker', 'exec'] + docker_args + cmd_args
             self.logger.error('Command %s timed out', args)
             exit_code, stdout, stderr = 1, '', 'Timed out'

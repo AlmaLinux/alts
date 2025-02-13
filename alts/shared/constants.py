@@ -1,3 +1,5 @@
+from enum import IntEnum
+
 __all__ = [
     'API_VERSION',
     'ARCHITECTURES',
@@ -60,3 +62,10 @@ DEFAULT_SSH_AUTH_METHODS = [
     'hostbased',
     'publickey',
 ]
+
+
+class TapStatusEnum(IntEnum):
+    FAILED = 0
+    DONE = 1
+    TODO = 2
+    SKIPPED = 3
