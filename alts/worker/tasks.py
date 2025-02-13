@@ -116,8 +116,10 @@ def parse_tap_output(text):
     def get_diagnostic(tap_item):
         diagnostics = []
         index = raw_data.index(tap_item) + 1
-        while index < len(raw_data) and \
-                raw_data[index].category == 'diagnostic':
+        while (
+            index < len(raw_data)
+            and raw_data[index].category == 'diagnostic'
+        ):
             diagnostics.append(raw_data[index].text)
             index += 1
         return "\n".join(diagnostics)
@@ -353,7 +355,10 @@ def run_tests(self, task_params: dict):
                     stage_info = {'success': is_success(stage_data)}
                     if CONFIG.logs_uploader_config.skip_artifacts_upload:
                         stage_info.update(
-                            parse_and_compress_stage_results(stage_data),
+                            parse_and_compress_stage_results(
+                                stage_data,
+                                log_name=stage,
+                            ),
                         )
                     summary[stage] = stage_info
                     continue
@@ -364,7 +369,7 @@ def run_tests(self, task_params: dict):
                     if CONFIG.logs_uploader_config.skip_artifacts_upload:
                         stage_info.update(
                             parse_and_compress_stage_results(
-                                stage_data,
+                                inner_data,
                                 log_name=inner_stage,
                             ),
                         )

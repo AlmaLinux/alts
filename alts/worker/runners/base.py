@@ -52,6 +52,7 @@ from alts.shared.utils.git_utils import (
     git_reset_hard,
     prepare_gerrit_command,
 )
+from alts.shared.utils.plumbum_utils import wait_bg_process
 from alts.worker import CONFIG, RESOURCES_DIR
 from alts.worker.executors.ansible import AnsibleExecutor
 from alts.worker.executors.bats import BatsExecutor
@@ -572,10 +573,7 @@ class BaseRunner(object):
         self, args: Union[tuple, list], retcode_none: bool = False,
         timeout: int = CONFIG.provision_timeout
     ):
-        run_kwargs = {
-            'args': args,
-            'timeout': timeout
-        }
+        run_kwargs = {'args': args}
         if retcode_none:
             run_kwargs['retcode'] = None
         cmd = local[self.ansible_playbook_binary].with_cwd(self._work_dir)
@@ -585,8 +583,10 @@ class BaseRunner(object):
         try:
             future = cmd.run_bg(**run_kwargs)
             cmd_pid = future.proc.pid
-            future.wait()
-            exit_code, stdout, stderr = future.returncode, future.stdout, future.stderr
+            wait_bg_process(future, timeout)
+            exit_code, stdout, stderr = (
+                future.returncode, future.stdout, future.stderr
+            )
         except ProcessExecutionError as e:
             stdout = e.stdout
             stderr = e.stderr
@@ -598,8 +598,8 @@ class BaseRunner(object):
             exit_code = COMMAND_TIMEOUT_EXIT_CODE
             exception_happened = True
         except Exception as e:
-            self._logger.error(
-                'Unknown error happened during %s execution: %s',
+            self._logger.exception(
+                'Unknown error happened during execution: %s',
                 formulated_cmd
             )
             stdout = ''

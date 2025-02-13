@@ -9,6 +9,7 @@ from plumbum import local, ProcessTimedOut
 
 from alts.shared.models import AsyncSSHParams, CommandResult
 from alts.shared.utils.asyncssh import AsyncSSHClient, LongRunSSHClient
+from alts.shared.utils.plumbum_utils import wait_bg_process
 
 
 def measure_stage(stage: str):
@@ -209,11 +210,10 @@ class BaseExecutor:
                         self.binary_name,
                         *cmd_args,
                     ],
-                    timeout=self.timeout,
                     retcode=None,
                 )
             )
-            runner.wait()
+            wait_bg_process(runner, self.timeout or 30)
             stdout = runner.stdout
             stderr = runner.stderr
             exit_code = runner.returncode
