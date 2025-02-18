@@ -580,8 +580,11 @@ class BaseRunner(object):
         formulated_cmd = cmd.formulate(args=run_kwargs.get('args', ()))
         exception_happened = False
         cmd_pid = None
+        bg_stdout = tempfile.NamedTemporaryFile(delete=False, mode='w+', prefix=self._task_id, suffix='.stdout.log')
+        bg_stderr = tempfile.NamedTemporaryFile(delete=False, mode='w+', prefix=self._task_id, suffix='.stderr.log')
+        stdout = stderr = ''
         try:
-            future = cmd.run_bg(**run_kwargs)
+            future = cmd.run_bg(**run_kwargs, stdout=bg_stdout, stderr=bg_stderr)
             cmd_pid = future.proc.pid
             wait_bg_process(future, timeout)
             exit_code, stdout, stderr = (
@@ -605,6 +608,14 @@ class BaseRunner(object):
             stdout = ''
             stderr = str(e)
             exit_code = 255
+        finally:
+            bg_stdout.seek(0)
+            bg_stderr.seek(0)
+            stdout += f'\n{bg_stdout.read()}'
+            stderr += f'\n{bg_stderr.read()}'
+            for file in (bg_stdout, bg_stderr):
+                file.close()
+                os.unlink(file.name)
 
         if exception_happened and cmd_pid:
             try:
