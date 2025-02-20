@@ -933,7 +933,7 @@ class BaseRunner(object):
             module_stream=module_stream,
             module_version=module_version,
             semi_verbose=semi_verbose,
-            verbose=verbose,
+            verbose=self._verbose or verbose,
             allow_fail=allow_fail,
         )
 
@@ -1196,7 +1196,8 @@ class BaseRunner(object):
                 package_name,
                 package_version=package_version,
                 package_epoch=package_epoch,
-                semi_verbose=True
+                semi_verbose=True,
+                verbose=self._verbose,
             )
 
     def get_init_script(self, tests_dir: Path) -> Optional[Path]:
@@ -1548,7 +1549,7 @@ class BaseRunner(object):
         self.initialize_terraform()
         self.start_env()
         if not skip_provision:
-            self.initial_provision()
+            self.initial_provision(verbose=self._verbose)
 
     def teardown(self, publish_artifacts: bool = True):
         try:
