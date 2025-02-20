@@ -164,7 +164,8 @@ def run_tests(self, task_params: dict):
         'package_channel': task_params.get('package_channel', 'beta'),
         'test_configuration': task_params.get('test_configuration', {}),
         'test_flavor': task_params.get('test_flavor', {}),
-        'vm_alive': task_params.get('vm_alive')
+        'vm_alive': task_params.get('vm_alive'),
+        'verbose': task_params.get('verbose', False),
     }
 
     runner_class = RUNNER_MAPPING[task_params['runner_type']]
