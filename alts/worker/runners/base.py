@@ -52,6 +52,10 @@ from alts.shared.utils.git_utils import (
     git_reset_hard,
     prepare_gerrit_command,
 )
+from alts.shared.utils.log_utils import (
+    get_temp_log_files,
+    read_and_cleanup_temp_log_files,
+)
 from alts.shared.utils.plumbum_utils import wait_bg_process
 from alts.worker import CONFIG, RESOURCES_DIR
 from alts.worker.executors.ansible import AnsibleExecutor
@@ -580,11 +584,10 @@ class BaseRunner(object):
         formulated_cmd = cmd.formulate(args=run_kwargs.get('args', ()))
         exception_happened = False
         cmd_pid = None
-        bg_stdout = tempfile.NamedTemporaryFile(delete=False, mode='w+', prefix=self._task_id, suffix='.stdout.log')
-        bg_stderr = tempfile.NamedTemporaryFile(delete=False, mode='w+', prefix=self._task_id, suffix='.stderr.log')
+        out_file, err_file = get_temp_log_files(str(self._task_id))
         stdout = stderr = ''
         try:
-            future = cmd.run_bg(**run_kwargs, stdout=bg_stdout, stderr=bg_stderr)
+            future = cmd.run_bg(**run_kwargs, stdout=out_file, stderr=err_file)
             cmd_pid = future.proc.pid
             wait_bg_process(future, timeout)
             exit_code, stdout, stderr = (
@@ -609,13 +612,9 @@ class BaseRunner(object):
             stderr = str(e)
             exit_code = 255
         finally:
-            bg_stdout.seek(0)
-            bg_stderr.seek(0)
-            stdout += f'\n{bg_stdout.read()}'
-            stderr += f'\n{bg_stderr.read()}'
-            for file in (bg_stdout, bg_stderr):
-                file.close()
-                os.unlink(file.name)
+            out, err = read_and_cleanup_temp_log_files(out_file, err_file)
+            stdout += out
+            stderr += err
 
         if exception_happened and cmd_pid:
             try:

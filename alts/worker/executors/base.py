@@ -1,6 +1,4 @@
 import logging
-import os
-import tempfile
 from datetime import datetime
 from functools import wraps
 from traceback import format_exc
@@ -11,6 +9,10 @@ from plumbum import local, ProcessTimedOut
 
 from alts.shared.models import AsyncSSHParams, CommandResult
 from alts.shared.utils.asyncssh import AsyncSSHClient, LongRunSSHClient
+from alts.shared.utils.log_utils import (
+    get_temp_log_files,
+    read_and_cleanup_temp_log_files,
+)
 from alts.shared.utils.plumbum_utils import wait_bg_process
 
 
@@ -199,8 +201,7 @@ class BaseExecutor:
         if env_vars:
             for var in env_vars:
                 additional_env_vars.extend(('-e', var))
-        bg_stdout = tempfile.NamedTemporaryFile(delete=False, mode='w+', prefix=self.container_name, suffix='.stdout.log')
-        bg_stderr = tempfile.NamedTemporaryFile(delete=False, mode='w+', prefix=self.container_name, suffix='.stderr.log')
+        out_file, err_file = get_temp_log_files(str(self.container_name))
         stdout = stderr = ''
         try:
             runner = (
@@ -216,8 +217,8 @@ class BaseExecutor:
                         *cmd_args,
                     ],
                     retcode=None,
-                    stdout=bg_stdout,
-                    stderr=bg_stderr,
+                    stdout=out_file,
+                    stderr=err_file,
                 )
             )
             wait_bg_process(runner, self.timeout or 30)
@@ -232,13 +233,9 @@ class BaseExecutor:
             self.logger.exception('Cannot run docker command:')
             exit_code, stdout, stderr = 1, '', format_exc()
         finally:
-            bg_stdout.seek(0)
-            bg_stderr.seek(0)
-            stdout += f'\n{bg_stdout.read()}'
-            stderr += f'\n{bg_stderr.read()}'
-            for file in (bg_stdout, bg_stderr):
-                file.close()
-                os.unlink(file.name)
+            out, err = read_and_cleanup_temp_log_files(out_file, err_file)
+            stdout += out
+            stderr += err
         return CommandResult(
             exit_code=exit_code,
             stdout=stdout,
