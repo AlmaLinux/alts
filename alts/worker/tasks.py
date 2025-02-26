@@ -10,6 +10,8 @@ import traceback
 import random
 import time
 import urllib.parse
+import base64
+import gzip
 from celery.contrib.abortable import AbortableTask
 from collections import defaultdict
 from socket import timeout
@@ -26,7 +28,7 @@ from requests.exceptions import (
 from urllib3 import Retry
 from urllib3.exceptions import TimeoutError
 
-from alts.shared.constants import API_VERSION, DEFAULT_REQUEST_TIMEOUT
+from alts.shared.constants import API_VERSION, DEFAULT_REQUEST_TIMEOUT, TapStatusEnum
 from alts.shared.exceptions import (
     InstallPackageError,
     PackageIntegrityTestsError,
@@ -87,6 +89,88 @@ def are_tap_tests_success(tests_output: str):
                 continue
             errors += 1
     return errors == 0
+
+
+def parse_tap_output(text):
+    """
+    Parses TAP test output and returns list of TAP-formatted entities.
+    Returns list of dicts with detailed status report for each test in file.
+
+    Parameters
+    ----------
+    text: str or unicode or bytes
+        Test output from VM
+
+    Returns
+    -------
+    list
+
+    """
+    def to_unicode(s):
+        if isinstance(s, bytes):
+            return s.decode('utf8')
+        if isinstance(s, str):
+            return s
+        return str(s)
+
+    def get_diagnostic(tap_item):
+        diagnostics = []
+        index = raw_data.index(tap_item) + 1
+        while (
+            index < len(raw_data)
+            and raw_data[index].category == 'diagnostic'
+        ):
+            diagnostics.append(raw_data[index].text)
+            index += 1
+        return "\n".join(diagnostics)
+
+    try:
+        prepared_text = to_unicode(text).replace('\r\n', '\n')
+    except TypeError:
+        prepared_text = to_unicode(text.replace(b'\r\n', b'\n'))
+    tap_parser = tap.parser.Parser()
+    try:
+        raw_data = list(tap_parser.parse_text(prepared_text))
+    except Exception:
+        return
+
+    tap_output = []
+    if not all((item.category == 'unknown' for item in raw_data)):
+        for test_result in raw_data:
+            if test_result.category != 'test':
+                continue
+            test_name = test_result.description
+            if not test_name:
+                test_name = test_result.directive.text
+            status = TapStatusEnum.FAILED
+            if test_result.todo:
+                status = TapStatusEnum.TODO
+            elif test_result.skip:
+                status = TapStatusEnum.SKIPPED
+            elif test_result.ok:
+                status = TapStatusEnum.DONE
+            tap_output.append({
+                'test_name': test_name,
+                'status': status,
+                'diagnostic': get_diagnostic(test_result),
+            })
+    return tap_output
+
+
+def parse_and_compress_stage_results(stage_data: dict, log_name: str = ''):
+    code = stage_data.get('exit_code')
+    out = stage_data.get('stdout', '')
+    err = stage_data.get('stderr', '')
+    log = f'Exit code: {code}\nStdout:\n{out}\nStderr:\n{err}'
+    result = {
+        'exit_code': code,
+        'compressed_log': base64.b64encode(
+            gzip.compress(log.encode()),
+        ).decode('utf-8'),
+    }
+    if out and 'bats' in log_name:
+        result['tap_results'] = parse_tap_output(out)
+    return result
 
 
 class RetryableTask(AbortableTask):
@@ -164,7 +248,7 @@ def run_tests(self, task_params: dict):
         'package_channel': task_params.get('package_channel', 'beta'),
         'test_configuration': task_params.get('test_configuration', {}),
         'test_flavor': task_params.get('test_flavor', {}),
-        'vm_alive': task_params.get('vm_alive')
+        'vm_alive': task_params.get('vm_alive'),
     }
 
     runner_class = RUNNER_MAPPING[task_params['runner_type']]
@@ -270,18 +354,25 @@ def run_tests(self, task_params: dict):
                 if stage not in TESTS_SECTIONS_NAMES:
                     stage_info = {'success': is_success(stage_data)}
                     if CONFIG.logs_uploader_config.skip_artifacts_upload:
-                        stage_info.update(stage_data)
+                        stage_info.update(
+                            parse_and_compress_stage_results(
+                                stage_data,
+                                log_name=stage,
+                            ),
+                        )
                     summary[stage] = stage_info
                     continue
                 if stage not in summary:
                     summary[stage] = {}
                 for inner_stage, inner_data in stage_data.items():
-                    stage_info = {
-                        'success': is_success(inner_data),
-                        'output': inner_data['stdout'],
-                    }
+                    stage_info = {'success': is_success(inner_data)}
                     if CONFIG.logs_uploader_config.skip_artifacts_upload:
-                        stage_info.update(inner_data)
+                        stage_info.update(
+                            parse_and_compress_stage_results(
+                                inner_data,
+                                log_name=inner_stage,
+                            ),
+                        )
                     summary[stage][inner_stage] = stage_info
             if runner.uploaded_logs:
                 summary['logs'] = runner.uploaded_logs

@@ -50,7 +50,7 @@ class OpennebulaRunner(GenericVMRunner):
         test_configuration: Optional[dict] = None,
         test_flavor: Optional[Dict[str, str]] = None,
         vm_alive: bool = False,
-        verbose: bool = False,
+        verbose: bool = True,
     ):
         super().__init__(
             task_id,

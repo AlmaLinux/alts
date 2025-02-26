@@ -52,6 +52,11 @@ from alts.shared.utils.git_utils import (
     git_reset_hard,
     prepare_gerrit_command,
 )
+from alts.shared.utils.log_utils import (
+    get_temp_log_files,
+    read_and_cleanup_temp_log_files,
+)
+from alts.shared.utils.plumbum_utils import wait_bg_process
 from alts.worker import CONFIG, RESOURCES_DIR
 from alts.worker.executors.ansible import AnsibleExecutor
 from alts.worker.executors.bats import BatsExecutor
@@ -572,21 +577,22 @@ class BaseRunner(object):
         self, args: Union[tuple, list], retcode_none: bool = False,
         timeout: int = CONFIG.provision_timeout
     ):
-        run_kwargs = {
-            'args': args,
-            'timeout': timeout
-        }
+        run_kwargs = {'args': args}
         if retcode_none:
             run_kwargs['retcode'] = None
         cmd = local[self.ansible_playbook_binary].with_cwd(self._work_dir)
         formulated_cmd = cmd.formulate(args=run_kwargs.get('args', ()))
         exception_happened = False
         cmd_pid = None
+        out_file, err_file = get_temp_log_files(str(self._task_id))
+        stdout = stderr = ''
         try:
-            future = cmd.run_bg(**run_kwargs)
+            future = cmd.run_bg(**run_kwargs, stdout=out_file, stderr=err_file)
             cmd_pid = future.proc.pid
-            future.wait()
-            exit_code, stdout, stderr = future.returncode, future.stdout, future.stderr
+            wait_bg_process(future, timeout)
+            exit_code, stdout, stderr = (
+                future.returncode, future.stdout, future.stderr
+            )
         except ProcessExecutionError as e:
             stdout = e.stdout
             stderr = e.stderr
@@ -598,13 +604,17 @@ class BaseRunner(object):
             exit_code = COMMAND_TIMEOUT_EXIT_CODE
             exception_happened = True
         except Exception as e:
-            self._logger.error(
-                'Unknown error happened during %s execution: %s',
+            self._logger.exception(
+                'Unknown error happened during execution: %s',
                 formulated_cmd
             )
             stdout = ''
             stderr = str(e)
             exit_code = 255
+        finally:
+            out, err = read_and_cleanup_temp_log_files(out_file, err_file)
+            stdout += out
+            stderr += err
 
         if exception_happened and cmd_pid:
             try:
@@ -922,7 +932,7 @@ class BaseRunner(object):
             module_stream=module_stream,
             module_version=module_version,
             semi_verbose=semi_verbose,
-            verbose=verbose,
+            verbose=self._verbose or verbose,
             allow_fail=allow_fail,
         )
 
@@ -1185,7 +1195,8 @@ class BaseRunner(object):
                 package_name,
                 package_version=package_version,
                 package_epoch=package_epoch,
-                semi_verbose=True
+                semi_verbose=True,
+                verbose=self._verbose,
             )
 
     def get_init_script(self, tests_dir: Path) -> Optional[Path]:
@@ -1537,7 +1548,7 @@ class BaseRunner(object):
         self.initialize_terraform()
         self.start_env()
         if not skip_provision:
-            self.initial_provision()
+            self.initial_provision(verbose=self._verbose)
 
     def teardown(self, publish_artifacts: bool = True):
         try:

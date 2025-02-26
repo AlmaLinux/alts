@@ -9,6 +9,11 @@ from plumbum import local, ProcessTimedOut
 
 from alts.shared.models import AsyncSSHParams, CommandResult
 from alts.shared.utils.asyncssh import AsyncSSHClient, LongRunSSHClient
+from alts.shared.utils.log_utils import (
+    get_temp_log_files,
+    read_and_cleanup_temp_log_files,
+)
+from alts.shared.utils.plumbum_utils import wait_bg_process
 
 
 def measure_stage(stage: str):
@@ -196,6 +201,8 @@ class BaseExecutor:
         if env_vars:
             for var in env_vars:
                 additional_env_vars.extend(('-e', var))
+        out_file, err_file = get_temp_log_files(str(self.container_name))
+        stdout = stderr = ''
         try:
             runner = (
                 local['docker']
@@ -209,11 +216,12 @@ class BaseExecutor:
                         self.binary_name,
                         *cmd_args,
                     ],
-                    timeout=self.timeout,
                     retcode=None,
+                    stdout=out_file,
+                    stderr=err_file,
                 )
             )
-            runner.wait()
+            wait_bg_process(runner, self.timeout or 30)
             stdout = runner.stdout
             stderr = runner.stderr
             exit_code = runner.returncode
@@ -224,6 +232,10 @@ class BaseExecutor:
         except Exception:
             self.logger.exception('Cannot run docker command:')
             exit_code, stdout, stderr = 1, '', format_exc()
+        finally:
+            out, err = read_and_cleanup_temp_log_files(out_file, err_file)
+            stdout += out
+            stderr += err
         return CommandResult(
             exit_code=exit_code,
             stdout=stdout,
