@@ -1,5 +1,13 @@
 ---
 
+- name: Add required repositories
+  apt_repository:
+    repo: "{{ item.url }}"
+    filename: 'test_repos'
+    update_cache: yes
+  with_items: "{{ repositories }}"
+  when: repositories is defined and (repositories | length > 0)
+
 - name: Update all packages
   apt:
     name: "*"
@@ -63,11 +71,3 @@
       - ca-certificates
       - "{{ procps_pkg }}"
     state: present
-
-- name: Add required repositories
-  apt_repository:
-    repo: "{{ item.url }}"
-    filename: 'test_repos'
-    update_cache: yes
-  with_items: "{{ repositories }}"
-  when: repositories is defined and (repositories | length > 0)

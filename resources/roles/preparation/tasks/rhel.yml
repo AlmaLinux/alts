@@ -133,6 +133,16 @@
     cmd: yum-config-manager --disable epel
   when: centos_7_x32 | bool
 
+- name: Add required repositories
+  yum_repository:
+    name: "{{ item.name }}"
+    baseurl: "{{ item.url }}"
+    description: "Repository {{ item.name }}"
+    enabled: yes
+    gpgcheck: no
+  with_items: "{{ repositories }}"
+  when: repositories is defined and (repositories | length > 0)
+
 - name: Update all packages
   package:
     name: "*"
@@ -169,13 +179,3 @@
     enablerepo: epel
     lock_timeout: 300
   when: pytest_is_needed | bool
-
-- name: Add required repositories
-  yum_repository:
-    name: "{{ item.name }}"
-    baseurl: "{{ item.url }}"
-    description: "Repository {{ item.name }}"
-    enabled: yes
-    gpgcheck: no
-  with_items: "{{ repositories }}"
-  when: repositories is defined and (repositories | length > 0)
