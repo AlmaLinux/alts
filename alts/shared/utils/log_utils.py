@@ -19,13 +19,11 @@ def read_and_cleanup_temp_log_files(
     out_file: IO[str],
     err_file: IO[str],
 ) -> Tuple[str, str]:
-    out = err = ''
-    for file, log in zip(
-        (out_file, err_file),
-        (out, err),
-    ):
+    for file in (out_file, err_file):
         file.seek(0)
-        log += f'\n{file.read()}'
+    out = f'\n{out_file.read()}'
+    err = f'\n{err_file.read()}'
+    for file in (out_file, err_file):
         file.close()
         os.unlink(file.name)
     return out, err

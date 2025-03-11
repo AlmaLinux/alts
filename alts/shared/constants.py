@@ -51,7 +51,7 @@ ALLOWED_CHANNELS = ['stable', 'beta']
 
 
 DEFAULT_FILE_CHUNK_SIZE = 8388608  # 8 megabytes in bytes
-DEFAULT_REQUEST_TIMEOUT = 60  # 1 minute
+DEFAULT_REQUEST_TIMEOUT = 300  # 5 minutes
 DEFAULT_UPLOADER_CONCURRENCY = 4
 # Exit code the same as HTTP request
 COMMAND_TIMEOUT_EXIT_CODE = 408
