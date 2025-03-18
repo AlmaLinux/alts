@@ -1,5 +1,6 @@
 import itertools
 import logging
+import sentry_sdk
 
 from celery import Celery
 from kombu import Exchange, Queue
@@ -31,6 +32,16 @@ celery_app.conf.task_queues = task_queues
 celery_app.conf.task_default_queue = 'default'
 celery_app.conf.task_default_exchange = 'default'
 celery_app.conf.task_default_routing_key = 'default'
+
+if CONFIG.sentry_dsn:
+    sentry_sdk.init(
+        dsn=CONFIG.sentry_dsn,
+        traces_sample_rate=CONFIG.sentry_traces_sample_rate,
+        environment=CONFIG.sentry_environment,
+        ignore_errors=[
+            ConnectionResetError
+        ],
+    )
 
 if CONFIG.use_ssl:
     if not getattr(CONFIG, 'ssl_config'):
