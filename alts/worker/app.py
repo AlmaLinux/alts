@@ -37,6 +37,7 @@ if CONFIG.sentry_dsn:
     sentry_sdk.init(
         dsn=CONFIG.sentry_dsn,
         traces_sample_rate=CONFIG.sentry_traces_sample_rate,
+        profiles_sample_rate=CONFIG.sentry_profiles_sample_rate,
         environment=CONFIG.sentry_environment,
         ignore_errors=[
             ConnectionResetError
