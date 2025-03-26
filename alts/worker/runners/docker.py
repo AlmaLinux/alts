@@ -71,7 +71,7 @@ class DockerRunner(BaseRunner):
         vm_alive: bool = False,
         artifacts_uploader: Optional[BaseLogsUploader] = None,
         package_channel: Optional[str] = None,
-        verbose: bool = True,
+        verbose: bool = False,
     ):
         """
         Docker environment class initialization.
