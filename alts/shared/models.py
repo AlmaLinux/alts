@@ -310,7 +310,7 @@ class CeleryConfig(BaseModel):
     ]
     keepalive_interval: int = 30  # unit in seconds
     commands_exec_timeout: int = 30  # unit in seconds
-    provision_timeout: int = 1200  # 20 minutes in seconds
+    provision_timeout: int = 1800  # 30 minutes in seconds
     tests_exec_timeout: int = 1800  # 30 minutes in seconds
     deprecated_ansible_venv: str = get_abspath('~/ansible_env')
     epel_release_urls: Dict[str, str] = {
