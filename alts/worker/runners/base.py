@@ -4,8 +4,8 @@ import logging
 import os
 import random
 import re
-import signal
 import shutil
+import signal
 import tempfile
 import time
 import traceback
@@ -18,15 +18,16 @@ from typing import (
     Dict,
     List,
     Optional,
-    Union,
     Tuple,
     Type,
+    Union,
 )
 
 from billiard.exceptions import SoftTimeLimitExceeded
 from filelock import FileLock
 from mako.lookup import TemplateLookup
-from plumbum import local, ProcessExecutionError, ProcessTimedOut
+from plumbum import ProcessExecutionError, ProcessTimedOut, local
+from sentry_sdk import capture_exception
 
 from alts.shared.constants import COMMAND_TIMEOUT_EXIT_CODE
 from alts.shared.exceptions import (
@@ -603,6 +604,7 @@ class BaseRunner(object):
             stderr = f'Timeout occurred when running ansible command: "{formulated_cmd}"'
             exit_code = COMMAND_TIMEOUT_EXIT_CODE
             exception_happened = True
+            capture_exception(stderr)
         except Exception as e:
             self._logger.exception(
                 'Unknown error happened during execution: %s',
@@ -767,7 +769,7 @@ class BaseRunner(object):
         )
         if exit_code == COMMAND_TIMEOUT_EXIT_CODE:
             return 1, '', f'Provision has timed out: {out}\n{err}'
-        elif exit_code != 0:
+        if exit_code != 0:
             return 1, '', f'Provision exited abnormally: {out}\n{err}'
         return exit_code, out, err
 
