@@ -79,12 +79,13 @@ class OpennebulaRunner(GenericVMRunner):
         platform_name_version = f'{self.dist_name}-{self.dist_version}'
         templates = self.opennebula_client.templatepool.info(-1, -1, -1, -1)
         channels = '|'.join(CONFIG.allowed_channel_names)
-        regex_str = r'(?P<platform_name>\w+(-\w+)?)-(?P<version>\d+(.\d+)?)-(?P<arch>\w+)'
+        regex_str = r'(?P<platform_name>\w+(-\w+)?)-(?P<version>\d+(\.\d+)?)-(?P<arch>\w+)'
+        flavor = 'base_image'
         if self.test_flavor:
             name = self.test_flavor['name']
             version = self.test_flavor['version']
-            regex_str += f'.(?P<flavor_name>{name})-(?P<flavor_version>{version})'
-        regex_str += f'.base_image.test_system.({channels}).b\d+' # noqa
+            flavor = f'(?P<flavor_name>{name})-(?P<flavor_version>{version})'
+        regex_str += f'\.{flavor}\.test_system\.({channels})\.b\d{{8}}-\d+'
         # Filter images to leave only those that are related to the particular
         # platform
         # Note: newer OS don't have 32-bit images usually, so we need to try
