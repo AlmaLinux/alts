@@ -27,7 +27,7 @@ from billiard.exceptions import SoftTimeLimitExceeded
 from filelock import FileLock
 from mako.lookup import TemplateLookup
 from plumbum import ProcessExecutionError, ProcessTimedOut, local
-from sentry_sdk import capture_exception
+from sentry_sdk import capture_message
 
 from alts.shared.constants import COMMAND_TIMEOUT_EXIT_CODE
 from alts.shared.exceptions import (
@@ -604,7 +604,7 @@ class BaseRunner(object):
             stderr = f'Timeout occurred when running ansible command: "{formulated_cmd}"'
             exit_code = COMMAND_TIMEOUT_EXIT_CODE
             exception_happened = True
-            capture_exception(stderr)
+            capture_message(stderr)
         except Exception as e:
             self._logger.exception(
                 'Unknown error happened during execution: %s',
