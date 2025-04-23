@@ -172,6 +172,12 @@
     lock_timeout: 300
   when: centos_7_x32 | bool
 
+- name: Remove cloudlinux-imunify360.repo for CentOS 7 32-bit
+  file:
+    name: "/etc/yum.repos.d/cloudlinux-imunify360.repo"
+    state: absent
+  when: centos_7_x32 | bool
+
 - name: Install ansible
   yum:
     name: ansible
