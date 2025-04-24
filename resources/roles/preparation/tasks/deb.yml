@@ -64,6 +64,37 @@
       - "{{ procps_pkg }}"
     state: present
 
+- name: Set fact about Ubuntu 22.04
+  set_fact:
+    enable_rollout_repos: "{{ (ansible_distribution in ['Ubuntu']) and (ansible_distribution_version in ['22.04']) }}"
+
+- name: Check if cloudlinux-rollout-bypass.list.disabled exists
+  stat:
+    path: /etc/apt/sources.list.d/cloudlinux-rollout-bypass.list.disabled
+  register: rollout_bypass_list
+  when: enable_rollout_repos
+
+- name: Rename cloudlinux-rollout-bypass.list.disabled to cloudlinux-rollout-bypass.list
+  command: mv /etc/apt/sources.list.d/cloudlinux-rollout-bypass.list.disabled /etc/apt/sources.list.d/cloudlinux-rollout-bypass.list
+  when:
+    - enable_rollout_repos
+    - rollout_bypass_list.stat.exists
+
+- name: Uncomment lines in cloudlinux-rollout-bypass.list
+  replace:
+    path: /etc/apt/sources.list.d/cloudlinux-rollout-bypass.list
+    regexp: '^#\s*(deb\s+.*)'
+    replace: '\1'
+  when:
+    - enable_rollout_repos
+    - rollout_bypass_list.stat.exists
+
+- name: Update apt metadata after enabling new repos
+  shell: apt update
+  when:
+    - enable_rollout_repos
+    - rollout_bypass_list.stat.exists
+
 - name: Add required repositories
   apt_repository:
     repo: "{{ item.url }}"
