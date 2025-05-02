@@ -14,6 +14,19 @@ data "opennebula_virtual_network" "test_system_network" {
   name = "${opennebula_network}"
 }
 
+data "opennebula_template" "selected_template" {
+  id = ${template_id}
+}
+
+locals {
+  disk_0 = data.opennebula_template.selected_template.disk[0]
+  disk_size = max(
+    local.disk_0.size,        # Original disk size from template
+    15360,                    # Minimum required size
+    local.disk_0.size + 5120  # Original size + 5GB
+  )
+}
+
 resource "opennebula_virtual_machine" "${vm_name}" {
   name = "${vm_name}"
   template_id = ${template_id}
@@ -25,8 +38,8 @@ resource "opennebula_virtual_machine" "${vm_name}" {
     model = "host-passthrough"
   }
   disk {
-    image_id = ${image_id}
-    size = ${vm_disk_size}
+    image_id = local.disk_0.image_id
+    size = local.disk_size
     target = "sda"
   }
   nic {
