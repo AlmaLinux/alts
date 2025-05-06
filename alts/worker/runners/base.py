@@ -1556,7 +1556,7 @@ class BaseRunner(object):
         try:
             self.stop_env()
         except Exception as e:
-            self._logger.error('Error while stop environment: %s', e)
+            self._logger.exception('Error while stop environment: %s', e)
         if publish_artifacts:
             try:
                 self.publish_artifacts_to_storage()

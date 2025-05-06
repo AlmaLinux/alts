@@ -26,20 +26,23 @@
     procps_pkg: "procps-ng"
   when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version > '6'"
 
-- set_fact:
+- name: Set list of additional packages to install
+  set_fact:
     additional_packages:
       - "{{ bats_package }}"
       - file
       - iproute
       - "{{ procps_pkg }}"
 
-- set_fact:
+- name: Set list of pip packages to install for version 8 or higher
+  set_fact:
     pip_packages:
       - python3-pip
       - python3-setuptools
   when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version >= '8'"
 
-- set_fact:
+- name: Set list of pip packages to install for version lower than 8
+  set_fact:
     pip_packages:
       - python-pip
       - python-setuptools
@@ -147,6 +150,7 @@
   package:
     name: "*"
     state: latest
+    update_cache: yes
     lock_timeout: 300
 
 - name: Remove CentOS-Base.repo file again (just in case)
@@ -163,6 +167,7 @@
     state: present
     enablerepo: epel
     lock_timeout: 300
+    update_cache: yes
   when: centos_7_x32 | bool is false
 
 - name: Install additional packages on CentOS 7 i686
@@ -170,6 +175,7 @@
     name: "{{ additional_packages }}"
     state: present
     lock_timeout: 300
+    update_cache: yes
   when: centos_7_x32 | bool
 
 - name: Remove cloudlinux-imunify360.repo for CentOS 7 32-bit
@@ -184,4 +190,5 @@
     state: present
     enablerepo: epel
     lock_timeout: 300
+    update_cache: yes
   when: pytest_is_needed | bool
