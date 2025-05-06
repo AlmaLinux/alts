@@ -72,6 +72,7 @@ class OpennebulaRunner(GenericVMRunner):
             uri=CONFIG.opennebula_config.rpc_endpoint,
             session=f'{user}:{password}',
         )
+        self._template_not_found = False
 
     def find_template_and_image_ids(
         self,
@@ -131,6 +132,7 @@ class OpennebulaRunner(GenericVMRunner):
                 )
                 template_params += f' channel: {self.package_channel}'
                 if not filtered_templates:
+                    self._template_not_found = True
                     raise VMImageNotFound(
                         'Cannot find a template '
                         f'with the parameters: {template_params}'
@@ -245,6 +247,18 @@ class OpennebulaRunner(GenericVMRunner):
             recover_delete()
 
     def _stop_env(self):
+        if self._template_not_found:
+            err_msg = (
+                'VM is not created because template was not found'
+            )
+            self._logger.warning(err_msg)
+            return 0, err_msg, ''
+        if self.start_env_failed:
+            err_msg = (
+                'VM is not created because start environment step failed'
+            )
+            self._logger.warning(err_msg)
+            return 0, err_msg, ''
         if self._vm_alive:
             return 0, "WARNING: VM won't be destroyed because vm_alive=True was given", ""
         stop_exit_code, stop_out, stop_err = super()._stop_env()
@@ -255,7 +269,7 @@ class OpennebulaRunner(GenericVMRunner):
             'Cannot stop VM conventionally. Output:\n%s\nStderr:\n%s',
             stop_out, stop_err
         )
-        id_exit_code, vm_id, id_stderr = local['terraform'].with_env(TF_LOG='TRACE').with_cwd(
+        id_exit_code, vm_id, id_stderr = local['terraform'].with_cwd(
             self._work_dir).run(
             args=('output', '-raw', '-no-color', 'vm_id'),
             retcode=None,
