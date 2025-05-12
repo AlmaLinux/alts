@@ -1669,6 +1669,7 @@ class GenericVMRunner(BaseRunner):
         self._ssh_client: Optional[Union[AsyncSSHClient, LongRunSSHClient]] = None
         self._vm_ip = None
         self._vm_alive = vm_alive
+        self.start_env_failed = False
 
     def _wait_for_ssh(self, retries=60):
         ansible = local[self.ansible_binary]
@@ -1754,6 +1755,8 @@ class GenericVMRunner(BaseRunner):
         final_exit_code = exit_code or ssh_exit_code
         final_stdout = f'{stdout}\n\n{ssh_stdout}'
         final_stderr = f'{stderr}\n\n{ssh_stderr}'
+        if final_exit_code != 0:
+            self.start_env_failed = True
         return final_exit_code, final_stdout, final_stderr
 
     def setup(self, skip_provision: bool = False):
