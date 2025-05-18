@@ -80,7 +80,8 @@ TESTS_SECTIONS_NAMES = (
     THIRD_PARTY_SECTION_NAME,
 )
 TF_INIT_LOCK_PATH = '/tmp/tf_init_lock'
-BASE_SYSTEM_INFO_COMMANDS = {
+BASE_SYSTEM_INFO_COMMANDS: Dict[str, Tuple[str, ...]] = {
+    'List of block devices': ('lsblk',),
     'Current disk space usage': ('df', '-h'),
     'Kernel version': ('uname', '-a'),
     'Environment IP': ('ip', 'a'),
