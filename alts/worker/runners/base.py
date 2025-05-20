@@ -744,6 +744,8 @@ class BaseRunner(object):
             epel_release_url = CONFIG.epel_release_urls.get(dist_major_version)
             if epel_release_url:
                 var_dict['epel_release_url'] = epel_release_url
+        if CONFIG.epel_mirror_url:
+            var_dict['epel_mirror_url'] = CONFIG.epel_mirror_url
         if CONFIG.centos_baseurl:
             var_dict['centos_repo_baseurl'] = CONFIG.centos_baseurl
         cmd_args = [

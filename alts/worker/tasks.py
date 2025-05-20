@@ -387,7 +387,12 @@ def run_tests(self, task_params: dict):
                 'stats': runner.stats,
             }
             session = requests.Session()
-            retries = Retry(total=5, backoff_factor=3, status_forcelist=[502])
+            retries = Retry(
+                total=5,
+                backoff_factor=5,
+                status_forcelist=[502],
+                allowed_methods=['POST'],
+            )
             retry_adapter = requests.adapters.HTTPAdapter(
                 max_retries=retries
             )
