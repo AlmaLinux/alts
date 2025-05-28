@@ -78,3 +78,7 @@ output "vm_ip" {
 output "vm_id" {
   value = opennebula_virtual_machine.${vm_name}.id
 }
+
+output "template_name" {
+  value = local.selected_template.name
+}
