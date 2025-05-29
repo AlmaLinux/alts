@@ -14,12 +14,29 @@ data "opennebula_virtual_network" "test_system_network" {
   name = "${opennebula_network}"
 }
 
-data "opennebula_template" "selected_template" {
-  id = ${template_id}
+data "opennebula_templates" "filtered_templates" {
+  name_regex = "${template_regex_str}"
+  sort_on    = "register_date"
+  order      = "ASC" # order from newer to older
 }
 
 locals {
-  disk_0 = data.opennebula_template.selected_template.disk[0]
+  all_templates = data.opennebula_templates.filtered_templates.templates
+
+  # filtering through templates with specific channels
+  templates_with_channels = [
+    for t in local.all_templates : t
+    if length(regexall("\\.${channel}\\.", t.name)) > 0
+  ]
+
+  has_templates_with_channels = length(local.templates_with_channels) > 0
+
+  selected_template = (
+    local.has_templates_with_channels ? local.templates_with_channels[0] :
+    local.all_templates[0]
+  )
+
+  disk_0 = local.selected_template.disk[0]
   disk_size = max(
     local.disk_0.size,        # Original disk size from template
     15360,                    # Minimum required size
@@ -29,7 +46,7 @@ locals {
 
 resource "opennebula_virtual_machine" "${vm_name}" {
   name = "${vm_name}"
-  template_id = ${template_id}
+  template_id = local.selected_template.id
   permissions = "660"
   group = "${opennebula_vm_group}"
   memory = "${vm_ram_size}"
@@ -60,4 +77,8 @@ output "vm_ip" {
 
 output "vm_id" {
   value = opennebula_virtual_machine.${vm_name}.id
+}
+
+output "template_name" {
+  value = local.selected_template.name
 }
