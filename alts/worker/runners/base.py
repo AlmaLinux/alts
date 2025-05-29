@@ -1,6 +1,7 @@
 import datetime
 import gzip
 import logging
+import math
 import os
 import random
 import re
@@ -288,6 +289,7 @@ class BaseRunner(object):
         self._verbose = verbose
         self.package_channel = package_channel
         self.vm_alive = vm_alive
+        self._disk_size: int = 0
 
     @property
     def artifacts(self):
@@ -747,6 +749,8 @@ class BaseRunner(object):
                 var_dict['epel_release_url'] = epel_release_url
         if CONFIG.centos_baseurl:
             var_dict['centos_repo_baseurl'] = CONFIG.centos_baseurl
+        if self._disk_size != 0:
+            var_dict['expected_disk_size'] = self._disk_size
         cmd_args = [
             '-i',
             self.ANSIBLE_INVENTORY_FILE,
@@ -1730,17 +1734,33 @@ class GenericVMRunner(BaseRunner):
         # VM gets its IP address only after deploy.
         # To extract it, the `vm_ip` output should be defined
         # in Terraform main file.
-        ip_exit_code, ip_stdout, ip_stderr = local['terraform'].with_env(TF_LOG='TRACE').with_cwd(
-            self._work_dir).run(
-            args=('output', '-raw',  '-no-color', 'vm_ip'),
-            retcode=None,
-            timeout=CONFIG.provision_timeout,
+        ip_exit_code, ip_stdout, ip_stderr = (
+            local['terraform']
+            .with_cwd(self._work_dir)
+            .run(
+                args=('output', '-raw',  '-no-color', 'vm_ip'),
+                retcode=None,
+                timeout=CONFIG.provision_timeout,
+            )
         )
         if ip_exit_code != 0:
-            error_message = f'Cannot get VM IP: {ip_stderr}'
-            self._logger.error(error_message)
+            self._logger.error('Cannot get VM IP:\n%s', ip_stderr)
             return ip_exit_code, ip_stdout, ip_stderr
+        disk_exit_code, disk_stdout, disk_stderr = (
+            local['terraform']
+            .with_cwd(self._work_dir)
+            .run(
+                args=('output', '-raw',  '-no-color', 'disk_size'),
+                retcode=None,
+                timeout=CONFIG.provision_timeout,
+            )
+        )
+        if disk_exit_code != 0:
+            self._logger.error('Cannot get disk size:\n%s', disk_stderr)
+            return disk_exit_code, disk_stdout, disk_stderr
+
         self._vm_ip = ip_stdout
+        self._disk_size = math.floor(int(disk_stdout) / 1024)
         # Because we don't know about a VM's IP before its creating
         # And get an IP after launch of terraform script
         self._create_ansible_inventory_file(vm_ip=self._vm_ip)

@@ -61,3 +61,7 @@ output "vm_ip" {
 output "vm_id" {
   value = opennebula_virtual_machine.${vm_name}.id
 }
+
+output "disk_size" {
+  value = local.disk_size
+}
