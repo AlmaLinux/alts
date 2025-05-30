@@ -20,7 +20,6 @@ from plumbum import local
 from alts.shared.constants import X32_ARCHITECTURES
 from alts.shared.exceptions import (
     OpennebulaVMStopError,
-    VMImageNotFound,
 )
 from alts.shared.uploaders.base import BaseLogsUploader
 from alts.worker import CONFIG
@@ -74,117 +73,43 @@ class OpennebulaRunner(GenericVMRunner):
         )
         self._template_not_found = False
 
-    def find_template_and_image_ids(
-        self,
-    ) -> tuple[Optional[int], Optional[int]]:
-        platform_name_version = f'{self.dist_name}-{self.dist_version}'
-        templates = self.opennebula_client.templatepool.info(-1, -1, -1, -1)
+    def get_opennebula_template_regex(self) -> str:
+        """
+        Generates regex string for Terraform to look up VM templates
+        """
         channels = '|'.join(CONFIG.allowed_channel_names)
-        regex_str = r'(?P<platform_name>\w+(-\w+)?)-(?P<version>\d+(\.\d+)?)-(?P<arch>\w+)'
         flavor = 'base_image'
+        if self.dist_arch == 'i686':
+            arches_to_try = '|'.join(X32_ARCHITECTURES)
+        else:
+            arches_to_try = self.dist_arch
         if self.test_flavor:
             name = self.test_flavor['name']
             version = self.test_flavor['version']
-            flavor = f'(?P<flavor_name>{name})-(?P<flavor_version>{version})'
-        regex_str += f'\.{flavor}\.test_system\.({channels})\.b\d{{8}}-\d+'
-        # Filter images to leave only those that are related to the particular
-        # platform
-        # Note: newer OS don't have 32-bit images usually, so we need to try
-        # to find correct 64-bit replacement
-        if self.dist_arch == 'i686':
-            arches_to_try = X32_ARCHITECTURES
-        else:
-            arches_to_try = [self.dist_arch]
-
-        def search_template(include_channel: bool = True):
-            f_templates = []
-            for arch in arches_to_try:
-                for template in templates.VMTEMPLATE:
-                    conditions = [
-                        bool(re.search(regex_str, template.NAME)),
-                        template.NAME.startswith(platform_name_version),
-                        arch in template.NAME,
-                    ]
-                    if self.package_channel is not None and include_channel:
-                        conditions.append(self.package_channel in template.NAME)
-                    if all(conditions):
-                        f_templates.append(template)
-                        break
-            return f_templates
-
-        filtered_templates = search_template()
-        self._logger.info(
-            'Filtered templates: %s',
-            [i.NAME for i in filtered_templates],
+            flavor = f'{name}-{version}'
+        regex_str = (
+            rf'{self.dist_name}-{self.dist_version}-({arches_to_try})\.{flavor}\.'
+            rf'test_system\.({channels})\.b\d{{8}}-\d+'
         )
-        template_params = (
-            f'distribution: {self.dist_name}, '
-            f'dist version: {self.dist_version}, '
-            f'architecture: {self.dist_arch}'
-        )
-        if not filtered_templates:
-            self._logger.info('Searching new templates without the channel')
-            if self.package_channel is not None and self.package_channel == 'beta':
-                filtered_templates = search_template(include_channel=False)
-                self._logger.info(
-                    'Filtered templates: %s',
-                    [i.NAME for i in filtered_templates],
-                )
-                template_params += f' channel: {self.package_channel}'
-                if not filtered_templates:
-                    self._template_not_found = True
-                    raise VMImageNotFound(
-                        'Cannot find a template '
-                        f'with the parameters: {template_params}'
-                    )
-        # Sort templates in order to get the latest image as first in the list
-        sorted_templates = sorted(
-            filtered_templates,
-            key=lambda i: i.NAME,
-            reverse=True,
-        )
-        if not sorted_templates:
-            return None, None
-        final_template = sorted_templates[0]
-        final_disk = final_template.TEMPLATE.get('DISK', {})
-        final_image_name = final_disk.get('IMAGE')
-        final_image_id = final_disk.get('IMAGE_ID')
-        final_template_id = final_template.ID
-        final_template_name = final_template.NAME
-        if final_image_id:
-            return final_template.ID, int(final_image_id)
-        images_pool = self.opennebula_client.imagepool.info(-2, -1, -1, -1)
-        images = [
-            image
-            for image in images_pool.IMAGE
-            if image.NAME == final_image_name
-        ]
-        if images:
-            final_image_id = images[0].ID
-        self._logger.info(
-            'We found template "%s" with ID "%s" '
-            'and image "%s" with ID "%s" for params: "%s"',
-            final_template_name,
-            final_template_id,
-            final_image_name,
-            final_image_id,
-            template_params,
-        )
-        return final_template_id, final_image_id
+        # Escape backslashes for Terraform HCL string
+        regex_terraform = regex_str.replace('\\', '\\\\')
+        return regex_terraform
 
     def _render_tf_main_file(self):
         """
         Renders Terraform file for creating a template.
         """
         nebula_tf_file = os.path.join(self._work_dir, self.TF_MAIN_FILE)
-        template_id, image_id = self.find_template_and_image_ids()
+        regex_str = self.get_opennebula_template_regex()
         self._render_template(
             template_name=f'{self.TF_MAIN_FILE}.tmpl',
             result_file_path=nebula_tf_file,
             vm_name=self.env_name,
             opennebula_vm_group=CONFIG.opennebula_config.vm_group,
-            image_id=image_id,
-            template_id=template_id,
+            channel=(
+                self.package_channel if self.package_channel is not None else ''
+            ),
+            template_regex_str=regex_str,
             vm_disk_size=self.vm_disk_size,
             vm_ram_size=self.vm_ram_size,
             opennebula_network=CONFIG.opennebula_config.network,

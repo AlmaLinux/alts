@@ -131,6 +131,32 @@
     ansible_facts.os_family == 'RedHat' and
     ansible_facts.distribution_major_version in ('6', '7')
 
+- name: Check if epel.repo exists
+  stat:
+    path: /etc/yum.repos.d/epel.repo
+  register: epel_repo
+
+- name: Comment out metalink lines in epel.repo
+  ansible.builtin.replace:
+    path: /etc/yum.repos.d/epel.repo
+    regexp: '^metalink='
+    replace: '#\g<0>'
+  when: epel_repo.stat.exists
+
+- name: Uncomment baseurl lines in epel.repo
+  ansible.builtin.replace:
+    path: /etc/yum.repos.d/epel.repo
+    regexp: '^#\s*baseurl='
+    replace: 'baseurl='
+  when: epel_repo.stat.exists
+
+- name: Replace baseurl domain prefix in epel.repo
+  ansible.builtin.replace:
+    path: /etc/yum.repos.d/epel.repo
+    regexp: '(?<=baseurl=).+?(?=\/epel\/)'
+    replace: '{{ epel_mirror_url }}'
+  when: epel_repo.stat.exists
+
 - name: Disable epel on 7 version 32-bit
   shell:
     cmd: yum-config-manager --disable epel
