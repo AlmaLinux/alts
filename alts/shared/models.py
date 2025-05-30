@@ -313,6 +313,15 @@ class CeleryConfig(BaseModel):
     provision_timeout: int = 1200  # 20 minutes in seconds
     tests_exec_timeout: int = 1800  # 30 minutes in seconds
     deprecated_ansible_venv: str = get_abspath('~/ansible_env')
+    debian_mirror_replacements: Dict[str, str] = {
+        'http://deb.debian.org/debian': '',
+        'http://deb.debian.org/debian-security': '',
+        'http://archive.debian.org/debian': '',
+    }
+    ubuntu_mirror_replacements: Dict[str, str] = {
+        'http://archive.ubuntu.com/ubuntu/': '',
+        'http://security.ubuntu.com/ubuntu/': '',
+    }
     epel_release_urls: Dict[str, str] = {
         '6': 'http://dl.fedoraproject.org/pub/archive/epel/6/x86_64/'
              'epel-release-6-8.noarch.rpm',
@@ -320,7 +329,7 @@ class CeleryConfig(BaseModel):
              'Packages/e/epel-release-7-14.noarch.rpm',
     }
     centos_baseurl: str = 'http://mirror.centos.org/centos'
-    epel_mirror_url: str = ''
+    epel_mirror_replacement: str = ''
     git_reference_directory: Optional[str] = None
     tests_base_dir: str = '/tests'
     package_proxy: str = ''
