@@ -183,6 +183,42 @@ class DockerRunner(BaseRunner):
             retcode=None,
         )
 
+    def replace_mirrors_for_debian_sources(self):
+        # Debian 9 has its repos in archive now + the archive
+        # does not contain updates repository, so hacking sources.list
+        sources_file = '/etc/apt/sources.list'
+        replacements_dict = {}
+        if self.dist_name == 'debian':
+            replacements_dict = CONFIG.debian_mirror_replacements
+            if self.dist_version.startswith('9'):
+                for pattern in (
+                    r's/.*(stretch-updates).*//',
+                    r's/(deb|security)\.debian\.org/archive\.debian\.org/',
+                ):
+                    self.exec_command(
+                        'sed',
+                        '-E',
+                        '-i',
+                        pattern,
+                        sources_file,
+                    )
+
+            if self.dist_version.startswith('12'):
+                sources_file = '/etc/apt/sources.list.d/debian.sources'
+        elif self.dist_name == 'ubuntu':
+            replacements_dict = CONFIG.ubuntu_mirror_replacements
+            if self.dist_version.startswith('24'):
+                sources_file = '/etc/apt/sources.list.d/ubuntu.sources'
+        for pattern, repl in replacements_dict.items():
+            if not repl:
+                continue
+            self.exec_command(
+                'sed',
+                '-i',
+                f's|{pattern}|{repl}|g',
+                sources_file,
+            )
+
     @command_decorator(
         'initial_provision',
         'Cannot run initial provision',
@@ -211,23 +247,7 @@ class DockerRunner(BaseRunner):
         # This is needed because Debian/Ubuntu docker images
         # may not have python as pre-installed package
         if self._dist_name in CONFIG.debian_flavors:
-            # Debian 9 has its repos in archive now + the archive
-            # does not contain updates repository, so hacking sources.list
-            if self.dist_name == 'debian' and self.dist_version.startswith('9'):
-                self.exec_command(
-                    'sed',
-                    '-E',
-                    '-i',
-                    r's/.*(stretch-updates).*//',
-                    '/etc/apt/sources.list',
-                )
-                self.exec_command(
-                    'sed',
-                    '-E',
-                    '-i',
-                    r's/(deb|security)\.debian\.org/archive\.debian\.org/',
-                    '/etc/apt/sources.list',
-                )
+            self.replace_mirrors_for_debian_sources()
             self._logger.info('Installing python3 package...')
             exit_code, stdout, stderr = self.exec_command(
                 self.pkg_manager, 'update',

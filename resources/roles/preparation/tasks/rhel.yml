@@ -154,7 +154,7 @@
   ansible.builtin.replace:
     path: /etc/yum.repos.d/epel.repo
     regexp: '(?<=baseurl=).+?(?=\/epel\/)'
-    replace: '{{ epel_mirror_url }}'
+    replace: '{{ epel_mirror_replacement }}'
   when: epel_repo.stat.exists
 
 - name: Disable epel on 7 version 32-bit
