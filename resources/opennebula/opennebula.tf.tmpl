@@ -79,6 +79,10 @@ output "vm_id" {
   value = opennebula_virtual_machine.${vm_name}.id
 }
 
+output "disk_size" {
+  value = local.disk_size
+}
+
 output "template_name" {
   value = local.selected_template.name
 }
