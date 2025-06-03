@@ -1,11 +1,5 @@
 ---
 
-- name: Pre-provision for test environment
-  include_tasks:
-    file: pre_provision.yml
-  tags:
-    - initial_provision
-
 - name: Initial provision for RPM distributions
   include_tasks:
     file: rhel.yml
