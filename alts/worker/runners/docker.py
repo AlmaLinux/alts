@@ -184,12 +184,12 @@ class DockerRunner(BaseRunner):
         )
 
     def replace_mirrors_for_debian_sources(self):
-        # Debian 9 has its repos in archive now + the archive
-        # does not contain updates repository, so hacking sources.list
         sources_file = '/etc/apt/sources.list'
         replacements_dict = {}
         if self.dist_name == 'debian':
             replacements_dict = CONFIG.debian_mirror_replacements
+            # Debian 9 has its repos in archive now + the archive
+            # does not contain updates repository, so hacking sources.list
             if self.dist_version.startswith('9'):
                 for pattern in (
                     r's/.*(stretch-updates).*//',
@@ -205,6 +205,14 @@ class DockerRunner(BaseRunner):
 
             if self.dist_version.startswith('12'):
                 sources_file = '/etc/apt/sources.list.d/debian.sources'
+                self.exec_command('sed', '-i', 's|Signed-By.*||g', sources_file)
+            self.exec_command(
+                'sed',
+                '-E',
+                '-i',
+                r's/(debian|debian-security)(\s|$)/\1\/\2/g',
+                sources_file,
+            )
         elif self.dist_name == 'ubuntu':
             replacements_dict = CONFIG.ubuntu_mirror_replacements
             if self.dist_version.startswith('24'):
@@ -312,27 +320,6 @@ class DockerRunner(BaseRunner):
             self.env_name,
         )
         return self.exec_command(*cmd_args, workdir=remote_tests_path)
-
-    @command_decorator(
-        '',
-        'Third party tests failed',
-        exception_class=ThirdPartyTestError,
-    )
-    def run_third_party_test(
-        self,
-        executor: Union[AnsibleExecutor, BatsExecutor, CommandExecutor, ShellExecutor],
-        cmd_args: List[str],
-        docker_args: Optional[List[str]] = None,
-        workdir: str = '',
-        artifacts_key: str = '',
-        additional_section_name: str = '',
-        env_vars: Optional[List[str]] = None,
-    ):
-        return executor.run_docker_command(
-            cmd_args=cmd_args,
-            docker_args=docker_args,
-            env_vars=env_vars,
-        ).model_dump().values()
 
     @command_decorator(
         '',

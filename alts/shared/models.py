@@ -314,9 +314,9 @@ class CeleryConfig(BaseModel):
     tests_exec_timeout: int = 1800  # 30 minutes in seconds
     deprecated_ansible_venv: str = get_abspath('~/ansible_env')
     debian_mirror_replacements: Dict[str, str] = {
-        'http://deb.debian.org/debian': '',
-        'http://deb.debian.org/debian-security': '',
-        'http://archive.debian.org/debian': '',
+        'http://deb.debian.org/debian/': '',
+        'http://deb.debian.org/debian-security/': '',
+        'http://archive.debian.org/debian/': '',
     }
     ubuntu_mirror_replacements: Dict[str, str] = {
         'http://archive.ubuntu.com/ubuntu/': '',
