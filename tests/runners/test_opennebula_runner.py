@@ -32,4 +32,3 @@ class TestOpennebulaRunner:
         mock_one_server.assert_called_once_with(
             uri='http://example.com/RPC2', session='testuser:testpass'
         )
-
