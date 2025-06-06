@@ -99,34 +99,27 @@ class OpennebulaRunner(GenericVMRunner):
         """
         Renders Terraform file for creating a template.
         """
-        nebula_tf_file = os.path.join(self._work_dir, self.TF_MAIN_FILE)
-        regex_str = self.get_opennebula_template_regex()
-        self._render_template(
-            template_name=f'{self.TF_MAIN_FILE}.tmpl',
-            result_file_path=nebula_tf_file,
-            vm_name=self.env_name,
-            opennebula_vm_group=CONFIG.opennebula_config.vm_group,
-            channel=(
+        channel = (
                 self.package_channel if self.package_channel is not None else ''
-            ),
-            template_regex_str=regex_str,
+            )
+        self._renderer.render_tf_main_file(
+            self.dist_name,
+            self.dist_version,
+            self.dist_arch,
             vm_disk_size=self.vm_disk_size,
             vm_ram_size=self.vm_ram_size,
+            vm_name=self.env_name,
             opennebula_network=CONFIG.opennebula_config.network,
+            package_channel=channel,
+            test_flavor_name=self.test_flavor.get('name'),
+            test_flavor_version=self.test_flavor.get('version'),
         )
 
     def _render_tf_variables_file(self):
         """
         Renders Terraform file for getting variables used for a template.
         """
-        vars_file = os.path.join(self._work_dir, self.TF_VARIABLES_FILE)
-        self._render_template(
-            f'{self.TF_VARIABLES_FILE}.tmpl',
-            vars_file,
-            opennebula_rpc_endpoint=CONFIG.opennebula_config.rpc_endpoint,
-            opennebula_username=CONFIG.opennebula_config.username,
-            opennebula_password=CONFIG.opennebula_config.password,
-        )
+        self._renderer.render_tf_variables_file()
 
     def destroy_vm_via_api(self, vm_id: int):
         def vm_info():
