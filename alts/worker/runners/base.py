@@ -629,7 +629,7 @@ class BaseRunner(object):
         if not self._work_dir or not os.path.exists(self._work_dir):
             self._work_dir = self._create_work_dir()
             self._artifacts_dir = self._create_artifacts_dir()
-        self._renderer = get_renderer(self._work_dir)
+        self._renderer = get_renderer(self._work_dir, self.TYPE)
         try:
             # Write resources that are not templated into working directory
             for ansible_file in self.ANSIBLE_FILES:

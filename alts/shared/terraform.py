@@ -1,6 +1,7 @@
 import os
 
 from abc import abstractmethod
+from typing import Union
 
 from mako.lookup import TemplateLookup
 from alts.shared.constants import X32_ARCHITECTURES
@@ -16,7 +17,7 @@ __all__ = [
 ]
 
 
-class BaseTfRenderer():
+class BaseTfRenderer:
     """
     This class describes a basic interface of terraform renderer class
     """
@@ -130,13 +131,13 @@ class OpennebulaTfRenderer(BaseTfRenderer):
         super().__init__(workdir)
 
     def get_opennebula_template_regex(
-            self,
-            dist_name,
-            dist_version,
-            dist_arch,
-            test_flavor_name,
-            test_flavor_version
-            ) -> str:
+        self,
+        dist_name,
+        dist_version,
+        dist_arch,
+        test_flavor_name,
+        test_flavor_version
+    ) -> str:
         """
         Generates regex string for Terraform to look up VM templates
         """
@@ -157,17 +158,17 @@ class OpennebulaTfRenderer(BaseTfRenderer):
         return regex_terraform
     
     def render_tf_main_file(
-            self,
-            dist_name,
-            dist_version,
-            dist_arch,
-            vm_disk_size,
-            vm_ram_size,
-            vm_name,
-            package_channel: str = None,
-            test_flavor_name: str = None,
-            test_flavor_version: str = None,
-        ):
+        self,
+        dist_name,
+        dist_version,
+        dist_arch,
+        vm_disk_size,
+        vm_ram_size,
+        vm_name,
+        package_channel: str = None,
+        test_flavor_name: str = None,
+        test_flavor_version: str = None,
+    ):
         """
         Renders Terraform file for creating a template.
         """
@@ -205,7 +206,11 @@ class OpennebulaTfRenderer(BaseTfRenderer):
         )
 
 
-def get_renderer(workdir, renderer_type: str = 'base') -> BaseTfRenderer:
+def get_renderer(workdir, renderer_type: str = 'base') -> Union[
+    BaseTfRenderer,
+    DockerTfRenderer,
+    OpennebulaTfRenderer,
+]:
     TF_RENDERER_MAPPING = {
         'docker': DockerTfRenderer,
         'opennebula': OpennebulaTfRenderer,
