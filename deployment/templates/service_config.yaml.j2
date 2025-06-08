@@ -10,11 +10,23 @@ ssl_config:
 broker_config:
 {% if broker_type == 'rabbitmq' %}
   rabbitmq_host: {{ rabbitmq_host }}
-  rabbitmq_port: {{ rabbitmq_ssl_port if celery_ssl else  rabbitmq_port }}
+  rabbitmq_port: {{ rabbitmq_port }}
+{% if celery_ssl %}
+  use_ssl: true
+  rabbitmq_ssl_port: {{ rabbitmq_ssl_port }}
+{% endif %}
   rabbitmq_user: {{ test_system_user }}
   rabbitmq_password: {{ test_system_password }}
   rabbitmq_vhost: {{ test_system_vhost }}
+{% elif broker_type == 'redis' and alts_redis_host and alts_redis_port %}
+  redis_host: "{{ alts_redis_host }}"
+  redis_port: {{ alts_redis_port }}
+  redis_db_number: {{ alts_redis_results_db | default(0) }}
+{% if redis_requirepass %}
+  redis_password: "{{ redis_requirepass }}"
 {% endif %}
+{% endif %}
+broker_pool: {{ broker_pool }}
 
 results_backend_config:
 {% if result_backend_name == 'local' and celery_result_folder %}
@@ -30,49 +42,79 @@ results_backend_config:
   s3_base_path: 'celery_result_backend/'
   s3_region: {{ s3_region }}
   s3_endpoint_url:
+{% elif result_backend_name == 'redis' and alts_redis_host and alts_redis_port %}
+  redis_host: "{{ alts_redis_host }}"
+  redis_port: {{ alts_redis_port }}
+  redis_db_number: {{ alts_redis_results_db | default(1) }}
+{% if redis_requirepass %}
+  redis_password: "{{ redis_requirepass }}"
+{% endif %}
 {% else %}
-  result_backend: result_backend_name
+  result_backend: "{{ result_backend_name }}"
 {% endif %}
 
 task_default_queue: 'default'
 task_acks_late: true
 task_track_started: true
 artifacts_root_directory: 'test_system_artifacts'
-worker_prefetch_multiplier: 1
+worker_prefetch_multiplier: {{ worker_prefetch_multiplier }}
+result_expires: {{ result_expires }}
 
-{% if opennebula_endpoint and opennebula_user and opennebula_password and opennebula_vm_group and opennebula_templates %}
-opennebula_rpc_endpoint: {{ opennebula_endpoint }}
-opennebula_username: {{ opennebula_user }}
-opennebula_password: {{ opennebula_password }}
-opennebula_vm_group: {{ opennebula_vm_group }}
-
+{% if buildsys_url | default('') %}
+bs_host: "{{ buildsys_url }}"
 {% endif %}
-{% if scheduler_working_directory | default('') %}
-working_directory: {{ scheduler_working_directory }}
-{% endif %}
-{% if uploader_concurrency | default('') %}
-uploader_concurrency: {{ uploader_concurrency | int }}
-{% endif %}
-{% if bs_host | default('') %}
-bs_host: {{ bs_host }}
-{% endif %}
-{% if bs_token | default('') %}
-bs_token: {{ bs_token }}
+{% if buildsys_api_token | default('') %}
+bs_token: "{{ buildsys_api_token }}"
 {% endif %}
 logs_uploader_config:
-{% if logs_uploader_type == 'pulp' %}
-{% if pulp_host | default('') %}
   pulp_host: {{ pulp_host }}
-{% endif %}
-{% if pulp_user | default('') %}
   pulp_user: {{ pulp_user }}
-{% endif %}
-{% if pulp_password | default('') %}
   pulp_password: {{ pulp_password }}
+{% if alts_rhel_flavors is defined %}
+rhel_flavors: {{ alts_rhel_flavors }}
+{% endif %}
+{% if alts_debian_flavors is defined %}
+debian_flavors: {{ alts_debian_flavors }}
+{% endif %}
+{% if alts_uninstall_excluded_pkgs is defined %}
+uninstall_excluded_pkgs: {{ alts_uninstall_excluded_pkgs }}
+{% endif %}
+enable_integrity_tests: False
+{% if deprecated_ansible_virtualenv_directory  is defined %}
+deprecated_ansible_venv: "{{ deprecated_ansible_virtualenv_directory }}"
+{% endif %}
+{% if package_proxy is defined %}
+package_proxy: "{{ package_proxy }}"
+{% endif %}
+{% if worker_type == 'opennebula' %}
+tests_base_dir: "{{ opennebula_tests_base_dir }}"
+{% if opennebula_rpc_endpoint and opennebula_username and opennebula_password and opennebula_vm_group and opennebula_network %}
+opennebula_config:
+  rpc_endpoint: "{{ opennebula_rpc_endpoint }}"
+  username: "{{ opennebula_username }}"
+  password: "{{ opennebula_password }}"
+  vm_group: "{{ opennebula_vm_group }}"
+  network: "{{ opennebula_network }}"
 {% endif %}
 {% endif %}
-
-{% if jwt_secret | default('') %}
-jwt_secret: {{ jwt_secret }}
-
+tests_exec_timeout: {{ tests_exec_timeout }}
+{% if centos_baseurl is defined %}
+centos_baseurl: "{{ centos_baseurl }}"
+{% endif %}
+{% if repositories_reference_directory is defined %}
+git_reference_directory: "{{ repositories_reference_directory }}"
+{% endif %}
+authorize_build_repositories: True
+sentry_dsn: "{{ alts_sentry_node_dsn }}"
+sentry_environment: "{{ alts_sentry_env }}"
+sentry_traces_sample_rate: {{ alts_sentry_traces_rate | float }}
+sentry_profiles_sample_rate: {{ alts_sentry_profiles_rate | float }}
+{% if epel_mirror_url is defined %}
+epel_mirror_url: "{{ epel_mirror_url }}"
+{% endif %}
+{% if epel_release_urls is defined %}
+epel_release_urls:
+{% for version, url in epel_release_urls.items() %}
+  "{{ version }}": "{{ url }}"
+{% endfor %}
 {% endif %}

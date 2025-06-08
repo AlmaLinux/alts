@@ -2,9 +2,15 @@
 
 - name: Install Celery
   hosts: celery
+  vars:
+    docker_users:
+      - "{{ test_system_user }}"
   roles:
     - base
-    - docker
+    # TODO: add role for building docker for s390x
+    - geerlingguy.docker
     - docker_customization
-    - terraform
+    - role: terraform
+      tags:
+        - terraform
     - celery

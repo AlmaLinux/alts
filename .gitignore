@@ -135,6 +135,7 @@ terraform.rc
 
 # Ignore sensitive files from deployment
 deployment/hosts
+deployment/ansible
 deployment/hosts.*
 deployment/files/*.pem
 deployment/files/*.crt

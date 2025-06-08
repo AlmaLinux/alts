@@ -12,7 +12,7 @@
 
 
 - name: Install needed packages
-  dnf:
+  ansible.builtin.dnf:
     name: [
       "python3-pip", "python3-virtualenv", "librabbitmq",
       "cmake", "libtool", "autoconf", "git", "ansible", "python3-devel",
@@ -28,17 +28,17 @@
   become_user: "{{ test_system_user }}"
   block:
     - name: Clone ALTS repository
-      git:
+      ansible.builtin.git:
         repo: https://github.com/AlmaLinux/alts
         dest: /home/{{ test_system_user }}/alts
 
     - name: Install Celery dependencies
-      pip:
+      ansible.builtin.pip:
         virtualenv: "{{ celery_venv_dir }}"
         requirements: /home/{{ test_system_user }}/alts/requirements/celery.txt
 
     - name: Create config and SSL folder
-      file:
+      ansible.builtin.file:
         path: "{{ item }}"
         mode: 0755
         state: directory
@@ -47,7 +47,7 @@
         - "{{ celery_ssl_dir }}"
 
     - name: Copy the ssl certificates
-      copy:
+      ansible.builtin.copy:
         src: "{{ item.src }}"
         dest: "{{ item.dest }}"
         owner: "{{ test_system_user }}"
@@ -61,18 +61,20 @@
       when: celery_ssl
 
     - name: Create Celery config
-      template:
+      ansible.builtin.template:
         src: service_config.yaml.j2
         dest: "{{ test_system_config_dir }}/celery.yaml"
+      tags:
+        - celery-config
 
 - name: Create Celery Systemd service file
-  template:
+  ansible.builtin.template:
     src: alts-celery.service.j2
     dest: /etc/systemd/system/alts-celery.service
     mode: 0644
 
 - name: Create log files directory for Celery service
-  file:
+  ansible.builtin.file:
     path: "{{ celery_log_file_dir }}"
     mode: 0755
     owner: "{{ test_system_user }}"
@@ -80,7 +82,7 @@
     state: directory
 
 - name: Create folder for Celery local results
-  file:
+  ansible.builtin.file:
     path: "{{ celery_result_folder }}"
     mode: 0755
     owner: "{{ test_system_user }}"
@@ -88,11 +90,18 @@
     state: directory
   when: result_backend_name is defined and result_backend_name == 'local'
 
-- name: Reload Celery service file
-  command: systemctl daemon-reload
+- name: Create logrotate config
+  ansible.builtin.template:
+    src: celery-logrotate.j2
+    dest: /etc/logrotate.d/celery
+    owner: root
+    group: root
+    mode: 0644
 
 - name: Enable and start Celery service
-  service:
+  ansible.builtin.systemd:
     name: alts-celery
+    masked: no
+    state: restarted
+    daemon_reload: yes
     enabled: yes
-    state: stopped

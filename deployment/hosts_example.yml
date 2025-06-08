@@ -1,0 +1,23 @@
+---
+all:
+  children:
+    celery:
+      hosts:
+        x86_64-node01:
+          celery_queues:
+            - "docker-x86_64-0"
+        aarch64-node01:
+          terraform_arch: arm
+          celery_queues:
+            - "docker-aarch64-0"
+          build_terraform: true
+          node_arch: aarch64
+          terraform_build_ver: v1.11.4
+          docker_build_ver: 3.6.1
+        s390x-node01:
+          celery_queues:
+            - "docker-s390x-0"
+          build_terraform: true
+          node_arch: s390x
+          terraform_build_ver: v1.11.4
+          docker_build_ver: 3.6.1
