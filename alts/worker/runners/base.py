@@ -177,6 +177,7 @@ class BaseRunner(object):
     ARCHITECTURES_MAPPING = ImmutableDict(
         aarch64=['arm64', 'aarch64'],
         x86_64=['x86_64', 'amd64', 'i686', 'i386', 'i486', 'i586'],
+        x86_64_v2=['x86_64_v2'],
         ppc64le=['ppc64le'],
         s390x=['s390x'],
     )

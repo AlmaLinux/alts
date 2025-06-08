@@ -44,6 +44,7 @@ ARCH_PLATFORM_MAPPING = {
     'i686': 'linux/386',
     'amd64': 'linux/amd64',
     'x86_64': 'linux/amd64',
+    'x86_64_v2': 'linux/amd64/v2',
     'arm64': 'linux/arm64/v8',
     'aarch64': 'linux/arm64/v8',
     'ppc64le': 'linux/ppc64le',
