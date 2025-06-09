@@ -21,7 +21,13 @@ __all__ = [
 # YYYYMMDD format for API version
 API_VERSION = '20210512'
 COSTS = [str(i) for i in range(5)]
-ARCHITECTURES = ('x86_64', 'aarch64', 'ppc64le', 's390x')
+ARCHITECTURES = (
+    'x86_64',
+    'x86_64_v2',
+    'aarch64',
+    'ppc64le',
+    's390x',
+)
 DRIVERS = ('docker', 'opennebula')
 X32_ARCHITECTURES = [
     'i386',
@@ -31,6 +37,7 @@ X32_ARCHITECTURES = [
 ]
 X64_ARCHITECTURES = [
     'x86_64',
+    'x86_64_v2',
     'amd64',
     'arm64',
     'aarch64',
