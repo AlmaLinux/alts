@@ -25,6 +25,11 @@ result_backend_name: local
 celery_result_folder: /srv/celery_results
 celery_pool_type: prefork
 
+worker_prefetch_multiplier: 1
+result_expires: 3600
+tests_exec_timeout: 3600
+broker_pool: 30
+
 celery_log_file_dir: /var/log/celery
 celery_log_file: "{{ celery_log_file_dir }}/celery.log"
 celery_concurrency: 10

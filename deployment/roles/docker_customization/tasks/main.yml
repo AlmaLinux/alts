@@ -12,7 +12,7 @@
   when: "ansible_facts.os_family == 'RedHat'"
 
 - name: Deploy docker options file
-  template:
+  ansible.builtin.template:
     src: docker-options.j2
     dest: /etc/sysconfig/docker
     mode: 0644
@@ -20,7 +20,7 @@
     group: root
 
 - name: Create docker service config directory
-  file:
+  ansible.builtin.file:
     path: /etc/systemd/system/docker.service.d
     state: directory
     mode: 0755
@@ -28,7 +28,7 @@
     group: root
 
 - name: Deploy custom docker service configuration
-  copy:
+  ansible.builtin.copy:
     src: docker-moby.conf
     dest: /etc/systemd/system/docker.service.d/docker-moby.conf
     mode: 0644
@@ -41,7 +41,7 @@
   when: "config_deploy.changed"
 
 - name: Restart docker service if needed
-  systemd:
+  ansible.builtin.systemd:
     name: docker
     state: "{{ docker_service_state }}"
     enabled: yes

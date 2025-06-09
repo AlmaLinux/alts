@@ -7,9 +7,14 @@ User={{ test_system_user }}
 Group={{ test_system_user }}
 WorkingDirectory=/home/{{ test_system_user }}/alts
 Environment=CELERY_CONFIG_PATH={{ test_system_config_dir }}/celery.yaml
+ExecStartPre=-/usr/bin/find /tmp -maxdepth 1 -type d -name {{ worker_type }}_test_runner* -exec rm -rf {} +
 ExecStart={{ celery_venv_dir }}/bin/celery -A alts.worker.app worker \
-    --pool={{ celery_pool_type }} --concurrency={{ celery_concurrency }} --loglevel={{ celery_loglevel }} \
-    -Q {{ celery_queues|join(",") }} --logfile={{ celery_log_file }}
+    --pool={{ celery_pool_type }} \
+    --concurrency={{ celery_concurrency }} \
+    -O fair \
+    -Q {{ celery_queues|join(",") }} \
+    --loglevel={{ celery_loglevel }} \
+    --logfile {{ celery_log_file }}
 
 [Install]
 WantedBy=multi-user.target

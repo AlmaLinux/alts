@@ -1,28 +1,114 @@
 ---
 
 - name: Install unzip package
-  yum:
+  ansible.builtin.yum:
     name: unzip
     state: present
+  when: build_terraform is not defined
 
 - name: Download Terraform
-  get_url:
+  ansible.builtin.get_url:
     url: "https://releases.hashicorp.com/terraform/{{ terraform_version }}/terraform_{{ terraform_version }}_linux_{{ terraform_arch }}.zip"
     dest: /tmp/terraform.zip
+  when: build_terraform is not defined
 
 - name: Unpack Terraform
-  unarchive:
+  ansible.builtin.unarchive:
     src: /tmp/terraform.zip
     dest: /usr/local/bin
     remote_src: yes
+  when: build_terraform is not defined
 
 - name: Delete archive
-  file:
+  ansible.builtin.file:
     path: /tmp/terraform.zip
     state: absent
+  when: build_terraform is not defined
+
+- name: Install golang
+  ansible.builtin.yum:
+    name: golang
+    state: present
+  when: build_terraform is defined
+  tags:
+    - build-terraform
+
+- name: Clone terraform repository
+  ansible.builtin.git:
+    repo: https://github.com/hashicorp/terraform.git
+    dest: /tmp/terraform
+    version: "{{ terraform_build_ver }}"
+  when: build_terraform is defined
+  tags:
+    - build-terraform
+
+- name: Build terraform
+  ansible.builtin.shell: |
+    cd /tmp/terraform
+    GOBIN="/usr/local/bin/" go install .
+  when: build_terraform is defined
+  tags:
+    - build-terraform
+
+- name: Verify terraform installation
+  ansible.builtin.command: terraform version
+
+- name: Remove terraform git directory
+  ansible.builtin.file:
+    path: /tmp/terraform
+    state: absent
+  when: build_terraform is defined
+  tags:
+    - build-terraform
+
+- name: Clone docker provider
+  ansible.builtin.git:
+    repo: https://github.com/kreuzwerker/terraform-provider-docker.git
+    dest: /tmp/docker-provider
+    version: v"{{ docker_build_ver }}"
+  when: build_terraform is defined
+  tags:
+    - build-terraform
+
+- name: Prepare dir for docker provider
+  ansible.builtin.file:
+    path: /home/{{ test_system_user }}/.terraform.d/plugins-cache/registry.terraform.io/kreuzwerker/docker/{{ docker_build_ver }}/linux_{{ node_arch }}/
+    state: directory
+    mode: 0755
+    owner: "{{ test_system_user }}"
+    group: "{{ test_system_user }}"
+  when: build_terraform is defined
+  tags:
+    - build-terraform
+
+- name: Build docker provider
+  ansible.builtin.shell: |
+    cd /tmp/docker-provider
+    go build -o /home/{{ test_system_user }}/.terraform.d/plugins-cache/registry.terraform.io/kreuzwerker/docker/{{ docker_build_ver }}/linux_{{ node_arch }}/terraform-provider-docker_{{ docker_build_ver }}
+  when: build_terraform is defined
+  tags:
+    - build-terraform
+
+- name: Change provider ownership and permissions
+  ansible.builtin.file:
+    path: /home/{{ test_system_user }}/.terraform.d/plugins-cache/registry.terraform.io/kreuzwerker/docker/{{ docker_build_ver }}/linux_{{ node_arch }}/terraform-provider-docker_{{ docker_build_ver }}
+    mode: 0755
+    owner: "{{ test_system_user }}"
+    group: "{{ test_system_user }}"
+  when: build_terraform is defined
+  tags:
+    - build-terraform
+
+- name: Remove docker provider git directory
+  ansible.builtin.file:
+    path: /tmp/docker-provider
+    state: absent
+  when: build_terraform is defined
+  tags:
+    - build-terraform
 
 - name: Add Terraform plugin cache directory
-  file:
+  ansible.builtin.file:
     path: "{{ terraform_plugin_cache_dir }}"
     owner: "{{ test_system_user }}"
     group: "{{ test_system_user }}"
@@ -30,7 +116,7 @@
     state: directory
 
 - name: Create Terraform configuration file
-  template:
+  ansible.builtin.template:
     src: terraformrc.j2
     dest: /home/{{ test_system_user }}/.terraformrc
     owner: "{{ test_system_user }}"

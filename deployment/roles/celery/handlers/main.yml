@@ -1,6 +1,6 @@
 ---
 
 - name: Reload Celery service file
-  systemd:
+  ansible.builtin.systemd:
     service: alts-celery
     state: reloaded
