@@ -245,6 +245,11 @@ class CeleryConfig(BaseModel):
             ):
                 setattr(self, field_name, field)
 
+    # Sentry params
+    sentry_dsn: str = ''
+    sentry_traces_sample_rate: float = 0.2
+    sentry_profiles_sample_rate: float = 0.2
+    sentry_environment: str = 'dev'
     # Whether to setup Celery SSL
     use_ssl: bool = False
     # SSL configuration section
