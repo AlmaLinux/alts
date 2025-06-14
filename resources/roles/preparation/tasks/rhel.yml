@@ -24,7 +24,7 @@
 - name: Re-define procps package name
   set_fact:
     procps_pkg: "procps-ng"
-  when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version > '6'"
+  when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version | int > 6"
 
 - name: Set list of additional packages to install
   set_fact:
@@ -39,14 +39,14 @@
     pip_packages:
       - python3-pip
       - python3-setuptools
-  when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version >= '8'"
+  when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version | int >= 8"
 
 - name: Set list of pip packages to install for version lower than 8
   set_fact:
     pip_packages:
       - python-pip
       - python-setuptools
-  when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version < '8'"
+  when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version | int < 8"
 
 - name: Add os and updates repositories for version 6
   yum_repository:
@@ -118,7 +118,7 @@
     name: epel-release
     state: present
     lock_timeout: 300
-  when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version >= '8'"
+  when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version | int >= 8"
 
 - name: Install epel-release (7 and less)
   yum:
