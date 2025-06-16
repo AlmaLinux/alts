@@ -115,25 +115,11 @@ class DockerRunner(BaseRunner):
             Raised if cannot map distribution architecture
             with image architecture.
         """
-        docker_tf_file = os.path.join(self._work_dir, self.TF_MAIN_FILE)
-        image_name = f'{self.dist_name}:{self.dist_version}'
-        image_platform = ARCH_PLATFORM_MAPPING.get(self.dist_arch)
-        external_network = os.environ.get('EXTERNAL_NETWORK', None)
-        http_proxy = os.environ.get('http_proxy', None)
-        https_proxy = os.environ.get('https_proxy', None)
-        no_proxy = os.environ.get('no_proxy', None)
-
-        self._render_template(
-            f'{self.TF_MAIN_FILE}.tmpl',
-            docker_tf_file,
-            container_name=self.env_name,
-            external_network=external_network,
-            dist_name=self.dist_name,
-            image_name=image_name,
-            image_platform=image_platform,
-            http_proxy=http_proxy,
-            https_proxy=https_proxy,
-            no_proxy=no_proxy,
+        self._renderer.render_tf_main_file(
+            self.dist_name,
+            self.dist_version,
+            self.dist_arch,
+            self.env_name
         )
 
     def _render_tf_variables_file(self):
