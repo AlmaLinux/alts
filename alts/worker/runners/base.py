@@ -1737,6 +1737,7 @@ class GenericVMRunner(BaseRunner):
         )
         if ip_exit_code != 0:
             error_message = f'Cannot get VM IP: {ip_stderr}'
+            self.start_env_failed = True
             self._logger.error(error_message)
             return ip_exit_code, ip_stdout, ip_stderr
         self._vm_ip = ip_stdout
@@ -1755,8 +1756,6 @@ class GenericVMRunner(BaseRunner):
         final_exit_code = exit_code or ssh_exit_code
         final_stdout = f'{stdout}\n\n{ssh_stdout}'
         final_stderr = f'{stderr}\n\n{ssh_stderr}'
-        if final_exit_code != 0:
-            self.start_env_failed = True
         return final_exit_code, final_stdout, final_stderr
 
     def setup(self, skip_provision: bool = False):
