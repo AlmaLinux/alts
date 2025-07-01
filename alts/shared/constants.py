@@ -63,6 +63,10 @@ DEFAULT_SSH_AUTH_METHODS = [
     'publickey',
 ]
 
+ERROR_STRINGS = (
+    'Error: Failed to wait virtual machine to be in RUNNING state',
+)
+
 
 class TapStatusEnum(IntEnum):
     FAILED = 0

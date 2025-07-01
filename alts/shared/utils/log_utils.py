@@ -2,6 +2,7 @@ import os
 from tempfile import NamedTemporaryFile
 from typing import IO, Tuple
 
+from alts.shared.constants import ERROR_STRINGS
 
 def get_temp_log_files(prefix: str) -> Tuple[IO, IO]:
     temp_file_kwargs = {
@@ -27,3 +28,22 @@ def read_and_cleanup_temp_log_files(
         file.close()
         os.unlink(file.name)
     return out, err
+
+
+def check_for_error_string(stage_data: dict) -> bool:
+    """
+    Checks if we encounter errors during testing that worth keepin VM alive.
+
+    Parameters
+    ----------
+    stage_data: dict
+
+    Returns
+    -------
+    bool
+        True if we encounter any error from the list. False otherwise
+    """
+    err = stage_data.get('stderr', '')
+    if any(error_str in err for error_str in ERROR_STRINGS):
+        return True
+    return False

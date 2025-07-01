@@ -57,6 +57,7 @@ from alts.shared.utils.git_utils import (
 from alts.shared.utils.log_utils import (
     get_temp_log_files,
     read_and_cleanup_temp_log_files,
+    check_for_error_string,
 )
 from alts.shared.utils.plumbum_utils import wait_bg_process
 from alts.worker import CONFIG, RESOURCES_DIR
@@ -1554,6 +1555,11 @@ class BaseRunner(object):
 
     def teardown(self, publish_artifacts: bool = True):
         try:
+            if not self.vm_alive:
+                for _, stage_data in self.artifacts.items():
+                    self.vm_alive = check_for_error_string(stage_data)
+                    for _, inner_data in stage_data.items():
+                        self.vm_alive = check_for_error_string(inner_data)
             self.stop_env()
         except Exception as e:
             self._logger.exception('Error while stop environment: %s', e)
