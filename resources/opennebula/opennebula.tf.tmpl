@@ -3,6 +3,11 @@ variable "one_username" {}
 variable "one_password" {
   sensitive = true
 }
+variable "load_all_templates" {
+  type        = bool
+  default     = false
+  description = "If true, output all matching templates; otherwise, only one"
+}
 
 provider "opennebula" {
   endpoint      = var.one_endpoint
@@ -31,10 +36,15 @@ locals {
 
   has_templates_with_channels = length(local.templates_with_channels) > 0
 
-  selected_template = (
-    local.has_templates_with_channels ? local.templates_with_channels[0] :
-    local.all_templates[0]
+  candidate_templates = (
+    local.has_templates_with_channels ? local.templates_with_channels : local.all_templates
   )
+
+  selected_templates = (
+    var.load_all_templates ? local.candidate_templates : [local.candidate_templates[0]]
+  )
+
+  selected_template = local.selected_templates[0]
 
   disk_0 = local.selected_template.disk[0]
   disk_size = max(
@@ -79,6 +89,7 @@ output "vm_id" {
   value = opennebula_virtual_machine.${vm_name}.id
 }
 
-output "template_name" {
-  value = local.selected_template.name
+output "template_names" {
+  value       = [for t in local.selected_templates : t.name]
+  description = "Array of selected template names (1 or many depending on flag)"
 }

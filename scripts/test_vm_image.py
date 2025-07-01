@@ -5,20 +5,33 @@ import os
 import re
 import shutil
 import tempfile
+
+from collections import namedtuple
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List, Set
 
 from plumbum import local
 
+from alts.shared.constants import SUPPORTED_ARCHITECTURES
 from alts.shared.models import OpennebulaConfig
 from alts.shared.terraform import OpennebulaTfRenderer
 from alts.worker import CONFIG, RESOURCES_DIR
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
+PlatformInfo = namedtuple(
+    "PlatformInfo",
+    [
+        "platform_name",
+        "version",
+        "arch",
+        "flavor_name",
+        "flavor_version"
+    ]
+)
 
 @contextmanager
 def temporary_workdir():
@@ -52,11 +65,12 @@ def temporary_workdir():
             logger.error(f"Error while erasing working directory: {e}")
 
 
-def load_platform_configs(path: Path) -> list[dict]:
+def load_platform_configs(path: Path) -> Set[PlatformInfo]:
     """
     Extract bs_platforms data from all JSON config files under the given path.
+    Parses it into a set of PlaformInfo structure.
     """
-    data_entries = []
+    data_entries = set()
 
     for config_file in path.glob("*.json"):
         with config_file.open("r") as f:
@@ -72,31 +86,17 @@ def load_platform_configs(path: Path) -> list[dict]:
             if not distro.get("opennebula_image_name"):
                 continue
             for arch in distro.get("architectures", {}):
-                data_entries.append({
-                    "opennebula_image_name": distro["opennebula_image_name"],
-                    "distr_version": distro["distr_version"],
-                    "architecture": arch,
-                    "test_flavor_name": distro.get("test_flavor_name"),
-                    "test_flavor_version": distro.get("test_flavor_version"),
-                })
+                platform_info = PlatformInfo(
+                    platform_name=distro["opennebula_image_name"],
+                    version=distro["distr_version"],
+                    arch=arch,
+                    flavor_name=distro.get("test_flavor_name"),
+                    flavor_version=distro.get("test_flavor_version")
+                )
+                data_entries.add(platform_info)
     return data_entries
 
-
-def deduplicate(data: list[dict]) -> list[dict]:
-    """
-    Remove duplicate dictionaries based on their JSON content.
-    """
-    seen = set()
-    unique_data = []
-    for entry in data:
-        key = json.dumps(entry, sort_keys=True)
-        if key not in seen:
-            seen.add(key)
-            unique_data.append(entry)
-    return unique_data
-
-
-def extract_template_name(stdout) -> Optional[str]:
+def extract_template_names(stdout) -> Optional[str]:
     """
     Extract the template_name value from Terraform plan stdout.
 
@@ -106,13 +106,12 @@ def extract_template_name(stdout) -> Optional[str]:
     Returns:
         Optional[str]: The extracted template name, or None if not found.
     """
-    # Looking for [template_name = "..."] in stdout of terraform plan
-    match = re.search(
-        r'\+\s*template_name\s*=\s*"([^"]+)"', stdout, re.MULTILINE
-    )
+    # Looking for template_names = [list_of_templates] in stdout of terraform plan
+    match = re.search(r'\+ template_names\s*=\s*\[\n(.*?)\n\s*\]', stdout, re.DOTALL)
     if match:
-        return match.group(1)
-    logger.warning("template_name output not found in terraform plan output.")
+        block = match.group(1)
+        return re.findall(r'\+\s*"([^"]+)"', block)
+    logger.warning("template_names output not found in terraform plan output.")
     return None
 
 
@@ -171,12 +170,14 @@ def run_terraform_plan(workdir: Path) -> Optional[str]:
         Optional[str]: Extracted template name if successful, otherwise None.
     """
     code, stdout, stderr = (
-        local['terraform']
+        local['terraform'].
+        with_env(TF_LOG='TRACE', TF_LOG_PROVIDER='TRACE', TF_LOG_PATH='terraform.log')
         .with_cwd(workdir)
         .run(
             args=(
                 'plan',
                 '-no-color',
+                '-var=load_all_templates=true',
                 '--var-file',
                 OpennebulaTfRenderer.TF_VARIABLES_FILE,
             ),
@@ -187,15 +188,16 @@ def run_terraform_plan(workdir: Path) -> Optional[str]:
     if code != 0:
         logger.error(f"Terraform plan failed: {stderr}")
         return None
-    return extract_template_name(stdout)
+    return extract_template_names(stdout)
 
 
 def check_template_for_platform(
-    renderer: OpennebulaTfRenderer, platform: dict
-) -> list[str]:
+    renderer: OpennebulaTfRenderer, platforms: Set[PlatformInfo], workdir
+) -> Set[str]:
     """
-    Get Terraform template names for a specific platform across channels.
+    Get Terraform template names for a all platforms.
 
+    Builds terraform regex that matches all platforms data regex
     Renders and runs Terraform plans for 'beta' and 'stable' channels.
 
     Args:
@@ -205,28 +207,65 @@ def check_template_for_platform(
     Returns:
         list[str]: List of found template names (may be empty).
     """
-    templates = []
-    # build-systems-configs might only have the major distr version
-    # so we need to accept any minor versions in vm templates
-    dist_version = platform['distr_version']
-    if not '.' in dist_version:
-        dist_version = f"{platform['distr_version']}\.\d+"
+    all_templates = set()
+
+    # Create regex strings to look for all suitable VM templates
+    all_dist_versions = r'\d+(?:\.\d+)?'
+    all_image_names = '|'.join(set([pl.platform_name for pl in platforms]))
+    all_architectures = '|'.join(SUPPORTED_ARCHITECTURES)
+    all_test_flavor_names = '|'.join(set(pl.flavor_name for pl in platforms if pl.flavor_name))
+    all_test_flavor_names += '|base_image'
+    optional_test_flavor_version = r'(\d+(?:\.\d+)?)?'
+
     for channel in CONFIG.allowed_channel_names:
         renderer.render_tf_main_file(
-            dist_name=platform["opennebula_image_name"],
-            dist_version=dist_version,
-            dist_arch=platform["architecture"],
+            dist_name=f"({all_image_names})",
+            dist_version=all_dist_versions,
+            dist_arch=f"({all_architectures})",
             vm_disk_size=0,
             vm_ram_size=0,
             vm_name='vm',
             package_channel=channel,
-            test_flavor_name=platform.get("test_flavor_name"),
-            test_flavor_version=platform.get("test_flavor_version"),
+            test_flavor_name=f'({all_test_flavor_names})',
+            test_flavor_version=f'({optional_test_flavor_version})',
         )
-        template = run_terraform_plan(renderer.work_dir)
-        if template:
-            templates.append(template)
-    return templates
+        templates = run_terraform_plan(workdir)
+        if templates:
+            all_templates.update(templates)
+    return all_templates
+
+
+def get_found_platforms(found_templates: List[str]) -> Set[PlatformInfo]:
+    """
+    Parses template names into PlatformInfo structure and deduplicates
+
+    Arguments:
+        List[str] - list of templates' names returned by terraform
+
+    Returns:
+        Set[PlatformInfo]
+    """
+    pattern = re.compile(
+        r'^'  # Anchor to start
+        r'(?P<platform_name>\w+(?:-\w+)?)'
+        r'-(?P<version>\d+(?:\.\d+)?)'
+        r'-(?P<arch>\w+)'
+        r'\.(?P<flavor_name>\w+(?:-\w+)?)'
+        r'-?(?P<flavor_version>\d+(?:\.\d+)?)?'
+    )
+
+    result = set()
+    for tmpl in found_templates:
+        match = pattern.search(tmpl)
+        if match:
+            result.add(PlatformInfo(
+                platform_name=match.group("platform_name"),
+                version=match.group("version"),
+                arch=match.group("arch"),
+                flavor_name=match.group("flavor_name"),
+                flavor_version=match.group("flavor_version"),
+            ))
+    return result
 
 
 def test_for_outdated_templates(workdir: str, bs_configs_path: Path):
@@ -243,9 +282,8 @@ def test_for_outdated_templates(workdir: str, bs_configs_path: Path):
     Raises:
         RuntimeError: If any templates are missing or outdated.
     """
-
     bs_configs_path = bs_configs_path / 'build_platforms'
-    bs_data = deduplicate(load_platform_configs(bs_configs_path))
+    bs_data = load_platform_configs(bs_configs_path)
 
     renderer = OpennebulaTfRenderer(workdir)
     renderer.render_tf_variables_file()
@@ -257,15 +295,9 @@ def test_for_outdated_templates(workdir: str, bs_configs_path: Path):
     outdated_templates = []
     not_found_platforms = []
 
-    for platform in bs_data:
-        logger.info(
-            f"Checking images for {platform['opennebula_image_name']}-{platform['distr_version']}-{platform['architecture']}"
-        )
-        templates = check_template_for_platform(renderer, platform)
-        if not templates:
-            not_found_platforms.append(platform)
-            continue
-        found_templates.extend(templates)
+    found_templates = check_template_for_platform(renderer, bs_data, workdir)
+    found_platforms = get_found_platforms(found_templates)
+    not_found_platforms = bs_data - found_platforms
 
     for template in found_templates:
         template_date = extract_template_date(template)
@@ -283,14 +315,13 @@ def test_for_outdated_templates(workdir: str, bs_configs_path: Path):
 
 
 def init_celery_config(args):
-    if not CONFIG.opennebula_config:
-        CONFIG.opennebula_config = OpennebulaConfig(
-            rpc_endpoint=args.rpc_endpoint,
-            username=args.opennebula_user,
-            password=args.opennebula_password,
-            vm_group=args.vm_group,
-            network=args.opennebula_network,
-        )
+    CONFIG.opennebula_config = OpennebulaConfig(
+        rpc_endpoint=args.rpc_endpoint,
+        username=args.opennebula_user,
+        password=args.opennebula_password,
+        vm_group=args.vm_group,
+        network=args.opennebula_network,
+    )
 
 
 def init_parser():
