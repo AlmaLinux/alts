@@ -3,7 +3,6 @@
 # created: 2021-04-13
 
 """AlmaLinux Test System package testing tasks running."""
-
 import logging
 import traceback
 import random
@@ -25,6 +24,7 @@ from requests.exceptions import (
 from urllib3 import Retry
 from urllib3.exceptions import TimeoutError
 
+from alts.shared.utils.file_utils import file_url_exists
 from alts.shared.constants import API_VERSION, DEFAULT_REQUEST_TIMEOUT
 from alts.shared.exceptions import (
     InstallPackageError,
@@ -120,6 +120,12 @@ def run_tests(self, task_params: dict):
             return False
         return stage_data_['exit_code'] == 0
 
+    def should_skip_test(package, test_name, skipped_tests_map):
+        for pkg_pattern, tests in skipped_tests_map.items():
+            if package.startswith(pkg_pattern) and test_name in tests:
+                return True
+        return False
+
     def set_artifacts_when_stage_has_unexpected_exception(
         _artifacts: dict,
         error_message: str,
@@ -175,29 +181,52 @@ def run_tests(self, task_params: dict):
     module_name = task_params.get('module_name')
     module_stream = task_params.get('module_stream')
     module_version = task_params.get('module_version')
+
+    def get_excluded_packages():
+        uri = 'https://git.almalinux.org/almalinux/alts-exclusions/raw/branch/main/skipped_tests.json'
+        try:
+            response = requests.get(uri)
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException:
+            return {}
+
     try:
         # Wait a bit to not spawn all environments at once when
         # a lot of tasks are coming to the machine
         time.sleep(random.randint(5, 10))
-        runner.setup()
-        runner.run_system_info_commands()
-        runner.install_package(
-            package_name,
-            package_version=package_version,
-            package_epoch=package_epoch,
-            module_name=module_name,
-            module_stream=module_stream,
-            module_version=module_version,
-            semi_verbose=True,
-        )
-        if CONFIG.enable_integrity_tests:
-            runner.run_package_integrity_tests(package_name, package_version)
-        runner.run_third_party_tests(
-            package_name,
-            package_version=package_version,
-            package_epoch=package_epoch,
-        )
-        runner.uninstall_package(package_name)
+
+        test_steps = [
+            ("setup", runner.setup, [], {}),
+            ("run_system_info_commands", runner.run_system_info_commands, [], {}),
+            ("install_package", runner.install_package, [
+                package_name
+            ], {
+                 "package_version": package_version,
+                 "package_epoch": package_epoch,
+                 "module_name": module_name,
+                 "module_stream": module_stream,
+                 "module_version": module_version,
+                 "semi_verbose": True,
+             }),
+            ("run_package_integrity_tests", runner.run_package_integrity_tests, [
+                package_name, package_version
+            ], {}),
+            ("run_third_party_tests", runner.run_third_party_tests, [
+                package_name
+            ], {
+                 "package_version": package_version,
+                 "package_epoch": package_epoch,
+             }),
+            ("uninstall_package", runner.uninstall_package, [package_name], {})
+        ]
+        packages_to_skip = get_excluded_packages()
+        for test_name, func, args, kwargs in test_steps:
+            if test_name == "run_package_integrity_tests" and not CONFIG.enable_integrity_tests:
+                continue
+            if should_skip_test(package_name, test_name, packages_to_skip):
+                continue
+            func(*args, **kwargs)
     except VMImageNotFound as exc:
         logging.exception('Cannot find VM image: %s', exc)
     except WorkDirPreparationError:
