@@ -1,0 +1,11 @@
+FROM python:3.10
+
+# Download Terraform
+RUN apt-get update && \
+    apt-get install -y wget unzip gnupg software-properties-common && \
+    wget -O terraform.zip https://releases.hashicorp.com/terraform/1.12.1/terraform_1.12.1_linux_amd64.zip && \
+    unzip terraform.zip && mv terraform /usr/local/bin/ && \
+    rm terraform.zip && terraform -version
+
+COPY ../requirements/base.txt /tmp/requirements.txt
+RUN pip install -r /tmp/requirements.txt
