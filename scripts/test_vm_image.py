@@ -90,8 +90,8 @@ def load_platform_configs(path: Path) -> Set[PlatformInfo]:
                     platform_name=distro["opennebula_image_name"],
                     version=distro["distr_version"],
                     arch=arch,
-                    flavor_name=distro.get("test_flavor_name"),
-                    flavor_version=distro.get("test_flavor_version")
+                    flavor_name=distro.get("test_flavor_name", "base_image"),
+                    flavor_version=distro.get("test_flavor_version", None)
                 )
                 data_entries.add(platform_info)
     return data_entries
@@ -187,7 +187,7 @@ def run_terraform_plan(workdir: Path) -> Optional[str]:
     )
     if code != 0:
         logger.error(f"Terraform plan failed: {stderr}")
-        return None
+        raise RuntimeError("Terraform plan failed.")
     return extract_template_names(stdout)
 
 
@@ -215,7 +215,7 @@ def check_template_for_platform(
     all_architectures = '|'.join(SUPPORTED_ARCHITECTURES)
     all_test_flavor_names = '|'.join(set(pl.flavor_name for pl in platforms if pl.flavor_name))
     all_test_flavor_names += '|base_image'
-    optional_test_flavor_version = r'(\d+(?:\.\d+)?)?'
+    optional_test_flavor_version = '|'.join(set(pl.flavor_version for pl in platforms if pl.flavor_version))
 
     for channel in CONFIG.allowed_channel_names:
         renderer.render_tf_main_file(
@@ -227,7 +227,7 @@ def check_template_for_platform(
             vm_name='vm',
             package_channel=channel,
             test_flavor_name=f'({all_test_flavor_names})',
-            test_flavor_version=f'({optional_test_flavor_version})',
+            test_flavor_version=f'({optional_test_flavor_version})?',
         )
         templates = run_terraform_plan(workdir)
         if templates:
@@ -246,12 +246,13 @@ def get_found_platforms(found_templates: List[str]) -> Set[PlatformInfo]:
         Set[PlatformInfo]
     """
     pattern = re.compile(
-        r'^'  # Anchor to start
+        r'^'
         r'(?P<platform_name>\w+(?:-\w+)?)'
         r'-(?P<version>\d+(?:\.\d+)?)'
-        r'-(?P<arch>\w+)'
-        r'\.(?P<flavor_name>\w+(?:-\w+)?)'
-        r'-?(?P<flavor_version>\d+(?:\.\d+)?)?'
+        r'-(?P<arch>[\w]+)'
+        r'\.(?P<flavor_name>\w+)'
+        r'(?:-(?P<flavor_version>.+))?'
+        r'\.test_system\b'
     )
 
     result = set()
