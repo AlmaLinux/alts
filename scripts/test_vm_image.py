@@ -6,7 +6,7 @@ import re
 import shutil
 import tempfile
 
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -29,9 +29,10 @@ PlatformInfo = namedtuple(
         "version",
         "arch",
         "flavor_name",
-        "flavor_version"
-    ]
+        "flavor_version",
+    ],
 )
+
 
 @contextmanager
 def temporary_workdir():
@@ -91,10 +92,11 @@ def load_platform_configs(path: Path) -> Set[PlatformInfo]:
                     version=distro["distr_version"],
                     arch=arch,
                     flavor_name=distro.get("test_flavor_name", "base_image"),
-                    flavor_version=distro.get("test_flavor_version", None)
+                    flavor_version=distro.get("test_flavor_version", None),
                 )
                 data_entries.add(platform_info)
     return data_entries
+
 
 def extract_template_names(stdout) -> Optional[str]:
     """
@@ -107,7 +109,9 @@ def extract_template_names(stdout) -> Optional[str]:
         Optional[str]: The extracted template name, or None if not found.
     """
     # Looking for template_names = [list_of_templates] in stdout of terraform plan
-    match = re.search(r'\+ template_names\s*=\s*\[\n(.*?)\n\s*\]', stdout, re.DOTALL)
+    match = re.search(
+        r'\+ template_names\s*=\s*\[\n(.*?)\n\s*\]', stdout, re.DOTALL
+    )
     if match:
         block = match.group(1)
         return re.findall(r'\+\s*"([^"]+)"', block)
@@ -170,8 +174,10 @@ def run_terraform_plan(workdir: Path) -> Optional[str]:
         Optional[str]: Extracted template name if successful, otherwise None.
     """
     code, stdout, stderr = (
-        local['terraform'].
-        with_env(TF_LOG='TRACE', TF_LOG_PROVIDER='TRACE', TF_LOG_PATH='terraform.log')
+        local['terraform']
+        .with_env(
+            TF_LOG='TRACE', TF_LOG_PROVIDER='TRACE', TF_LOG_PATH='terraform.log'
+        )
         .with_cwd(workdir)
         .run(
             args=(
@@ -213,9 +219,13 @@ def check_template_for_platform(
     all_dist_versions = r'\d+(?:\.\d+)?'
     all_image_names = '|'.join(set([pl.platform_name for pl in platforms]))
     all_architectures = '|'.join(SUPPORTED_ARCHITECTURES)
-    all_test_flavor_names = '|'.join(set(pl.flavor_name for pl in platforms if pl.flavor_name))
+    all_test_flavor_names = '|'.join(
+        set(pl.flavor_name for pl in platforms if pl.flavor_name)
+    )
     all_test_flavor_names += '|base_image'
-    optional_test_flavor_version = '|'.join(set(pl.flavor_version for pl in platforms if pl.flavor_version))
+    optional_test_flavor_version = '|'.join(
+        set(pl.flavor_version for pl in platforms if pl.flavor_version)
+    )
 
     for channel in CONFIG.allowed_channel_names:
         renderer.render_tf_main_file(
@@ -247,7 +257,7 @@ def get_found_platforms(found_templates: List[str]) -> Set[PlatformInfo]:
     """
     pattern = re.compile(
         r'^'
-        r'(?P<platform_name>\w+(?:-\w+)?)'
+        r'(?P<platform_name>\w+(?:-\w+)*)'
         r'-(?P<version>\d+(?:\.\d+)?)'
         r'-(?P<arch>[\w]+)'
         r'\.(?P<flavor_name>\w+)'
@@ -259,14 +269,55 @@ def get_found_platforms(found_templates: List[str]) -> Set[PlatformInfo]:
     for tmpl in found_templates:
         match = pattern.search(tmpl)
         if match:
-            result.add(PlatformInfo(
-                platform_name=match.group("platform_name"),
-                version=match.group("version"),
-                arch=match.group("arch"),
-                flavor_name=match.group("flavor_name"),
-                flavor_version=match.group("flavor_version"),
-            ))
+            result.add(
+                PlatformInfo(
+                    platform_name=match.group("platform_name"),
+                    version=match.group("version"),
+                    arch=match.group("arch"),
+                    flavor_name=match.group("flavor_name"),
+                    flavor_version=match.group("flavor_version"),
+                )
+            )
     return result
+
+
+def check_minor_versions(
+    not_found_platforms: Set[PlatformInfo],
+    found_platforms: Set[PlatformInfo],
+):
+    """
+    Gets plaforms with only major version specified
+    in the list of not found plaforms
+    When corresponding templates with minor versions are found,
+    excludes the plaform from not_found_plaforms list
+    """
+    platforms_major_versions = {
+        pl for pl in not_found_platforms if '.' not in pl.version
+    }
+    found_index = defaultdict(list)
+    for pl in found_platforms:
+        key = (pl.platform_name, pl.arch, pl.flavor_name, pl.flavor_version)
+        found_index[key].append(pl)
+
+    for major in platforms_major_versions:
+        result = set()
+        key = (
+            major.platform_name,
+            major.arch,
+            major.flavor_name,
+            major.flavor_version,
+        )
+        candidates = found_index.get(key, [])
+        for found in candidates:
+            if found.version == major.version or found.version.startswith(
+                major.version + "."
+            ):
+                result.add(found.version)
+        if result:
+            logging.warning(
+                f"Platform template not found: {major}\nCorresponding minor versions: {result}"
+            )
+            not_found_platforms.discard(major)
 
 
 def test_for_outdated_templates(workdir: str, bs_configs_path: Path):
@@ -299,6 +350,7 @@ def test_for_outdated_templates(workdir: str, bs_configs_path: Path):
     found_templates = check_template_for_platform(renderer, bs_data, workdir)
     found_platforms = get_found_platforms(found_templates)
     not_found_platforms = bs_data - found_platforms
+    check_minor_versions(not_found_platforms, found_platforms)
 
     for template in found_templates:
         template_date = extract_template_date(template)
@@ -312,7 +364,11 @@ def test_for_outdated_templates(workdir: str, bs_configs_path: Path):
         logger.warning(f"{i}. Outdated template found: {template}")
 
     if outdated_templates or not_found_platforms:
-        raise RuntimeError("Some templates are missing or outdated.")
+        error_message = (
+            f"{len(not_found_platforms)} templates are missing; "
+            f"{len(outdated_templates)} are outdated."
+        )
+        raise RuntimeError(error_message)
 
 
 def init_celery_config(args):
