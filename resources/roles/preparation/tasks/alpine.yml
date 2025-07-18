@@ -1,0 +1,28 @@
+---
+- name: Update Alpine packages
+  apk:
+    update_cache: yes
+    upgrade: yes
+
+- name: Add custom APK repository to /etc/apk/repositories
+  lineinfile:
+    path: /etc/apk/repositories
+    line: "{{ item.url }}"
+    state: present
+  with_items: "{{ repositories }}"
+  when: repositories is defined and repositories | length > 0
+
+- name: Update APK index cache
+  command: apk update
+
+- name: Install required packages on Alpine
+  apk:
+    name:
+      - ansible
+      - bats
+      - py3-pip
+      - ca-certificates
+      - procps
+      - file
+      - iproute2
+    state: present
