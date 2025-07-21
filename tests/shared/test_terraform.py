@@ -21,8 +21,8 @@ class TestOpenNebulaTfRenderer:
 
         # It should be a Terraform-safe regex string with escaped backslashes
         unescaped_expected_regex = (
-            rf'{opennebula_tf_renderer_payload["dist_name"]}-{opennebula_tf_renderer_payload["dist_version"]}-'
-            rf'({opennebula_tf_renderer_payload["dist_arch"]})\.{opennebula_tf_renderer_payload["test_flavor_name"]}-'
+            rf'^{opennebula_tf_renderer_payload["dist_name"]}-{opennebula_tf_renderer_payload["dist_version"]}-'
+            rf'({opennebula_tf_renderer_payload["dist_arch"]})\.{opennebula_tf_renderer_payload["test_flavor_name"]}-?'
             rf'{opennebula_tf_renderer_payload["test_flavor_version"]}\.test_system\.'
             rf'({channels_string})\.b\d{{8}}-\d+'
         )
@@ -75,8 +75,8 @@ class TestOpenNebulaTfRenderer:
 
         # Check regex for VM template search
         regex_base = (
-            rf'{opennebula_tf_renderer_payload["dist_name"]}-{opennebula_tf_renderer_payload["dist_version"]}-'
-            rf'({opennebula_tf_renderer_payload["dist_arch"]})\.{opennebula_tf_renderer_payload["test_flavor_name"]}-'
+            rf'^{opennebula_tf_renderer_payload["dist_name"]}-{opennebula_tf_renderer_payload["dist_version"]}-'
+            rf'({opennebula_tf_renderer_payload["dist_arch"]})\.{opennebula_tf_renderer_payload["test_flavor_name"]}-?'
             rf'{opennebula_tf_renderer_payload["test_flavor_version"]}\.test_system\.'
             rf'({channels_string})\.b\d{{8}}-\d+'
         )

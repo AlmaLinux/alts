@@ -1,0 +1,11 @@
+---
+
+broker_config:
+  rabbitmq_host: localhost
+  rabbitmq_port: 5671
+  rabbitmq_user: albs
+  rabbitmq_password: some-another-secret-password
+  rabbitmq_vhost: test_system
+
+results_backend_config:
+  path: file:///srv/celery_results

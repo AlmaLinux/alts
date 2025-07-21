@@ -148,9 +148,9 @@ class OpennebulaTfRenderer(BaseTfRenderer):
         else:
             arches_to_try = dist_arch
         if test_flavor_name and test_flavor_version:
-            flavor = f'{test_flavor_name}-{test_flavor_version}'
+            flavor = f'{test_flavor_name}-?{test_flavor_version}'
         regex_str = (
-            rf'{dist_name}-{dist_version}-({arches_to_try})\.{flavor}\.'
+            rf'^{dist_name}-{dist_version}-({arches_to_try})\.{flavor}\.'
             rf'test_system\.({channels})\.b\d{{8}}-\d+'
         )
         # Escape backslashes for Terraform HCL string
