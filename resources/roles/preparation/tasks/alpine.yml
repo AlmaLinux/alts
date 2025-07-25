@@ -20,9 +20,23 @@
     name:
       - ansible
       - bats
+      - python3
       - py3-pip
       - ca-certificates
       - procps
       - file
       - iproute2
     state: present
+
+- name: Install test tools in virtualenv (Alpine)
+  pip:
+    name:
+      - pytest
+      - pytest-testinfra
+      - pytest-check
+      - pytest-tap
+    virtualenv: /opt/testenv
+    virtualenv_command: python3 -m venv
+  when: ansible_facts.os_family == 'Alpine' and pytest_is_needed | bool
+  tags:
+    - initial_provision

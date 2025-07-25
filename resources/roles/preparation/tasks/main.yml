@@ -36,7 +36,7 @@
       - pytest-testinfra
       - pytest-check
       - pytest-tap
-  when: pytest_is_needed | bool
+  when: ansible_facts.os_family != 'Alpine' and pytest_is_needed | bool
   tags:
     - initial_provision
 
