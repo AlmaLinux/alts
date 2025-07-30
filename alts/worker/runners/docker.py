@@ -261,7 +261,7 @@ class DockerRunner(BaseRunner):
             )
         if self.dist_name in CONFIG.alpine_flavors:
             self._logger.info('Installing python3 apk package for alpine...')
-            self.exec_command('apk', 'add', 'python3')
+            self.exec_command('apk', '--allow-untrusted', 'add', 'python3')
         return super().initial_provision(verbose=verbose)
 
     @command_decorator(

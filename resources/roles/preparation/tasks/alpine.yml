@@ -1,8 +1,6 @@
 ---
 - name: Update Alpine packages
-  apk:
-    update_cache: yes
-    upgrade: yes
+  command: apk --allow-untrusted update && apk --allow-untrusted upgrade
 
 - name: Add custom APK repository to /etc/apk/repositories
   lineinfile:
@@ -13,20 +11,10 @@
   when: repositories is defined and repositories | length > 0
 
 - name: Update APK index cache
-  command: apk update
+  command: apk --allow-untrusted update
 
 - name: Install required packages on Alpine
-  apk:
-    name:
-      - ansible
-      - bats
-      - python3
-      - py3-pip
-      - ca-certificates
-      - procps
-      - file
-      - iproute2
-    state: present
+  command: apk --allow-untrusted add ansible bats python3 py3-pip ca-certificates procps file iproute2
 
 - name: Install test tools in virtualenv (Alpine)
   pip:

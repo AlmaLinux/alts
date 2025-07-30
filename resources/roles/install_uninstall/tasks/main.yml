@@ -91,16 +91,14 @@
     - uninstall_package
 
 - name: Install APK package
-  apk:
-    name: "{{ pkg_name }}"
-    state: present
-    update_cache: true
+  shell:
+    cmd: "apk --allow-untrusted add {{ pkg_name }}"
   when: ansible_facts['os_family'] == 'Alpine'
   tags:
     - install_package
 
 - name: Check APK package is installed
-  shell: "apk info -e {{ short_apk_pkg_name }}"
+  shell: "apk --allow-untrusted info -e {{ short_apk_pkg_name }}"
   register: apk_installed
   failed_when: apk_installed.rc not in [0, 1]
   when: ansible_facts['os_family'] == 'Alpine'
@@ -108,9 +106,8 @@
     - uninstall_package
 
 - name: Uninstall APK package
-  apk:
-    name: "{{ short_apk_pkg_name }}"
-    state: absent
+  shell:
+    cmd: "apk --allow-untrusted del {{ pkg_name }}"
   when: ansible_facts['os_family'] == 'Alpine' and apk_installed.rc == 0
   tags:
     - uninstall_package

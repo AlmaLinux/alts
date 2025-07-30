@@ -789,7 +789,7 @@ class BaseRunner(object):
                 '-exec', 'cat', '{}', '+'
             )
         elif self._dist_name in CONFIG.alpine_flavors:
-            basic_commands['Installed packages'] = ('apk', 'info', '-vv')
+            basic_commands['Installed packages'] = ('apk', '--allow-untrusted', 'info', '-vv')
             basic_commands['Repositories list'] = ('cat', '/etc/apk/repositories')
         else:
             basic_commands['Installed packages'] = ('dpkg', '-l')
@@ -1181,7 +1181,7 @@ class BaseRunner(object):
             cmd = ('dpkg-query', '-Wf', r'${db:Status-Status} ${Package}\n',
                    package_name)
         elif self.dist_name in CONFIG.alpine_flavors:
-            cmd = ('apk', 'info', '-e', package_name)
+            cmd = ('apk', '--allow-untrusted', 'info', '-e', package_name)
         else:
             raise ValueError(f'Unknown distribution: {self.dist_name}')
         exit_code, stdout, stderr = self.exec_command(*cmd)
