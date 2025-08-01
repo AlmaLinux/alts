@@ -259,6 +259,9 @@ class DockerRunner(BaseRunner):
                 'find', '/etc/yum.repos.d', '-type', 'f', '-exec',
                 'rm', '-f', '{}', '+',
             )
+        if self.dist_name in CONFIG.alpine_flavors:
+            self._logger.info('Installing python3 apk package for alpine...')
+            self.exec_command('apk', '--allow-untrusted', 'add', 'python3')
         return super().initial_provision(verbose=verbose)
 
     @command_decorator(

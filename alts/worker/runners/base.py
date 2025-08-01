@@ -311,6 +311,8 @@ class BaseRunner(object):
             return 'yum'
         if self._dist_name in CONFIG.debian_flavors:
             return 'apt-get'
+        if self._dist_name in CONFIG.alpine_flavors:
+            return 'apk'
         raise ValueError(f'Unknown distribution: {self._dist_name}')
 
     @property
@@ -786,6 +788,9 @@ class BaseRunner(object):
                 'find', '/etc/yum.repos.d/', '-type', 'f',
                 '-exec', 'cat', '{}', '+'
             )
+        elif self._dist_name in CONFIG.alpine_flavors:
+            basic_commands['Installed packages'] = ('apk', '--allow-untrusted', 'info', '-vv')
+            basic_commands['Repositories list'] = ('cat', '/etc/apk/repositories')
         else:
             basic_commands['Installed packages'] = ('dpkg', '-l')
             basic_commands['Repositories list'] = ('apt-cache', 'policy')
@@ -1175,6 +1180,8 @@ class BaseRunner(object):
         elif self.dist_name in CONFIG.debian_flavors:
             cmd = ('dpkg-query', '-Wf', r'${db:Status-Status} ${Package}\n',
                    package_name)
+        elif self.dist_name in CONFIG.alpine_flavors:
+            cmd = ('apk', '--allow-untrusted', 'info', '-e', package_name)
         else:
             raise ValueError(f'Unknown distribution: {self.dist_name}')
         exit_code, stdout, stderr = self.exec_command(*cmd)

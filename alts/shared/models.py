@@ -290,6 +290,7 @@ class CeleryConfig(BaseModel):
     # Supported architectures and distributions
     supported_architectures: List[str] = constants.SUPPORTED_ARCHITECTURES
     rhel_flavors: List[str] = constants.RHEL_FLAVORS
+    alpine_flavors: List[str] = constants.ALPINE_FLAVORS
     debian_flavors: List[str] = constants.DEBIAN_FLAVORS
     supported_runners: Union[List[str], str] = 'all'
     allowed_channel_names: List[str] = constants.ALLOWED_CHANNELS
@@ -356,7 +357,7 @@ class CeleryConfig(BaseModel):
     @computed_field(return_type=Set[str])
     @property
     def supported_distributions(self):
-        return set(self.rhel_flavors + self.debian_flavors)
+        return set(self.rhel_flavors + self.debian_flavors + self.alpine_flavors)
 
     def get_celery_config_dict(self) -> Dict[str, Any]:
         config_dict = {

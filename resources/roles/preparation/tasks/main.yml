@@ -14,6 +14,13 @@
   tags:
     - initial_provision
 
+- name: Initial provision for Alpine distributions
+  include_tasks:
+    file: alpine.yml
+  when: ansible_facts.os_family == 'Alpine'
+  tags:
+    - initial_provision
+
 - name: Copy tests to test environment
   copy:
     src: "{{ integrity_tests_dir }}"
@@ -29,7 +36,7 @@
       - pytest-testinfra
       - pytest-check
       - pytest-tap
-  when: pytest_is_needed | bool
+  when: ansible_facts.os_family != 'Alpine' and pytest_is_needed | bool
   tags:
     - initial_provision
 
@@ -44,10 +51,25 @@
   with_items:
     - "/usr/lib64/firefox"
     - "/usr/lib64/thunderbird"
+  when: ansible_facts['distribution'] != 'Alpine'
   tags:
     - initial_provision
 
 - name: Reload ldconfig
   shell: ldconfig
+  tags:
+    - initial_provision
+  when: ansible_facts['distribution'] != 'Alpine'
+
+
+- name: Add custom LD_LIBRARY_PATH for Alpine
+  copy:
+    dest: /etc/profile.d/custom-libs.sh
+    content: |
+      export LD_LIBRARY_PATH=/usr/lib/firefox:/usr/lib/thunderbird:$LD_LIBRARY_PATH
+    owner: root
+    group: root
+    mode: 0644
+  when: ansible_facts['distribution'] == 'Alpine'
   tags:
     - initial_provision

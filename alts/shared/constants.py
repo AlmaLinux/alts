@@ -1,6 +1,7 @@
 from enum import IntEnum
 
 __all__ = [
+    'ALPINE_FLAVORS',
     'API_VERSION',
     'ARCHITECTURES',
     'ALLOWED_CHANNELS',
@@ -39,13 +40,14 @@ X64_ARCHITECTURES = [
     'ppc64le',
 ]
 SUPPORTED_ARCHITECTURES = X32_ARCHITECTURES + X64_ARCHITECTURES + ['s390x']
-SUPPORTED_DISTRIBUTIONS = ['almalinux', 'centos', 'ubuntu', 'debian']
+SUPPORTED_DISTRIBUTIONS = ['almalinux', 'centos', 'ubuntu', 'debian', 'alpine']
 RHEL_FLAVORS = [
     'rhel',
     'fedora',
     'centos',
     'almalinux',
 ]
+ALPINE_FLAVORS = ['alpine']
 DEBIAN_FLAVORS = ['debian', 'ubuntu', 'raspbian']
 ALLOWED_CHANNELS = ['stable', 'beta']
 
