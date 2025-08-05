@@ -1562,11 +1562,6 @@ class BaseRunner(object):
 
     def teardown(self, publish_artifacts: bool = True):
         try:
-            if not self.vm_alive:
-                for _, stage_data in self.artifacts.items():
-                    self.vm_alive = check_for_error_string(stage_data)
-                    for _, inner_data in stage_data.items():
-                        self.vm_alive = check_for_error_string(inner_data)
             self.stop_env()
         except Exception as e:
             self._logger.exception('Error while stop environment: %s', e)
@@ -1681,7 +1676,7 @@ class GenericVMRunner(BaseRunner):
         self._tests_dir = CONFIG.tests_base_dir
         self._ssh_client: Optional[Union[AsyncSSHClient, LongRunSSHClient]] = None
         self._vm_ip = None
-        self._vm_alive = vm_alive
+        self.vm_alive = vm_alive
         self.start_env_failed = False
 
     def _wait_for_ssh(self, retries=60):
@@ -1769,6 +1764,8 @@ class GenericVMRunner(BaseRunner):
         final_exit_code = exit_code or ssh_exit_code
         final_stdout = f'{stdout}\n\n{ssh_stdout}'
         final_stderr = f'{stderr}\n\n{ssh_stderr}'
+        if not self.vm_alive:
+            self.vm_alive = check_for_error_string(final_stderr)
         return final_exit_code, final_stdout, final_stderr
 
     def setup(self, skip_provision: bool = False):

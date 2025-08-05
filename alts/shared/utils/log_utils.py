@@ -30,20 +30,19 @@ def read_and_cleanup_temp_log_files(
     return out, err
 
 
-def check_for_error_string(stage_data: dict) -> bool:
+def check_for_error_string(stderr: str) -> bool:
     """
     Checks if we encounter errors during testing that worth keepin VM alive.
 
     Parameters
     ----------
-    stage_data: dict
+    stderr: str
 
     Returns
     -------
     bool
         True if we encounter any error from the list. False otherwise
     """
-    err = stage_data.get('stderr', '')
-    if any(error_str in err for error_str in ERROR_STRINGS):
+    if stderr and any(error_str in stderr for error_str in ERROR_STRINGS):
         return True
     return False
