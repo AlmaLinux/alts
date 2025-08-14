@@ -58,25 +58,3 @@ def hash_file(file_path, hasher=None, hash_type=None, buff_size=1048576):
         file_path.seek(0)
         feed_hasher(file_path)
     return hasher.hexdigest()
-
-
-def file_url_exists(url):
-
-    """
-    Check if a file exists at the specified URL using a HEAD request.
-
-    Parameters
-    ----------
-    url : str
-        The URL to check.
-    
-    Returns
-    -------
-    bool
-        True if the file exists, False otherwise.
-    """
-    try:
-        response = requests.head(url)
-        return response.status_code == 200
-    except requests.RequestException as e:
-        return False

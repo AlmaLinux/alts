@@ -4,7 +4,8 @@ import threading
 import time
 import urllib.parse
 import uuid
-from typing import List
+from typing import List, Optional
+from cachetools import TTLCache
 
 import requests
 
@@ -28,6 +29,10 @@ class TestsScheduler(threading.Thread):
         self.__graceful_terminate = graceful_terminate
         self.__celery = celery_app
         self.__get_result_timeout = get_result_timeout
+        self.__cached_config = TTLCache(
+            maxsize=CONFIG.cache_size,
+            ttl=CONFIG.cache_update_interval,
+        )
         self.logger = logging.getLogger(__file__)
 
     def get_available_test_tasks(self) -> List[dict]:
@@ -48,6 +53,17 @@ class TestsScheduler(threading.Thread):
         except Exception:
             self.logger.exception('Cannot get available test tasks:')
         return response_as_json
+
+    def get_excluded_packages(self) -> Optional[dict]:
+        if 'excluded_packages' not in self.__cached_config:
+            uri = f'{CONFIG.excluded_pkgs_url}'
+            try:
+                response = requests.get(uri)
+                response.raise_for_status()
+                self.__cached_config['excluded_packages'] = response.json()
+            except requests.RequestException:
+                return {}
+        return self.__cached_config.get('excluded_packages', {})
 
     def schedule_test_task(self, payload: TaskRequestPayload):
         """
@@ -130,7 +146,10 @@ class TestsScheduler(threading.Thread):
         task_params['repositories'] = repositories
         try:
             run_tests.apply_async(
-                (task_params,),
+                (
+                    task_params,
+                    self.get_excluded_packages(),
+                ),
                 task_id=task_id,
                 queue=queue_name,
             )
