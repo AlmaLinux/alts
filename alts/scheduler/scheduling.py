@@ -54,7 +54,7 @@ class TestsScheduler(threading.Thread):
             self.logger.exception('Cannot get available test tasks:')
         return response_as_json
 
-    def get_excluded_packages(self) -> Optional[dict]:
+    def get_excluded_packages(self, distro: str) -> Optional[dict]:
         if 'excluded_packages' not in self.__cached_config:
             uri = f'{CONFIG.excluded_pkgs_url}'
             try:
@@ -63,7 +63,8 @@ class TestsScheduler(threading.Thread):
                 self.__cached_config['excluded_packages'] = response.json()
             except requests.RequestException:
                 return {}
-        return self.__cached_config.get('excluded_packages', {})
+        pkgs = self.__cached_config.get('excluded_packages', {})
+        return pkgs.get(distro, {})
 
     def schedule_test_task(self, payload: TaskRequestPayload):
         """
@@ -144,11 +145,12 @@ class TestsScheduler(threading.Thread):
         task_params['task_id'] = task_id
         task_params['runner_type'] = runner_type
         task_params['repositories'] = repositories
+        distro = f"{task_params['dist_name']}-{task_params['dist_version']}"
         try:
             run_tests.apply_async(
                 (
                     task_params,
-                    self.get_excluded_packages(),
+                    self.get_excluded_packages(distro),
                 ),
                 task_id=task_id,
                 queue=queue_name,
