@@ -15,6 +15,7 @@ __all__ = [
     'DEFAULT_SSH_AUTH_METHODS',
     'X32_ARCHITECTURES',
     'X64_ARCHITECTURES',
+    'TESTS',
 ]
 
 
@@ -67,3 +68,10 @@ DEFAULT_SSH_AUTH_METHODS = [
     'hostbased',
     'publickey',
 ]
+
+TESTS = {
+    'run_system_info_commands': 'system_info',
+    'install_package': 'install_package',
+    'run_package_integrity_tests': 'package_integrity_tests',
+    'uninstall_package': 'uninstall_package',
+}

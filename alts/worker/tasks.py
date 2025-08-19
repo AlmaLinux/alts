@@ -24,7 +24,7 @@ from requests.exceptions import (
 from urllib3 import Retry
 from urllib3.exceptions import TimeoutError
 
-from alts.shared.constants import API_VERSION, DEFAULT_REQUEST_TIMEOUT
+from alts.shared.constants import API_VERSION, DEFAULT_REQUEST_TIMEOUT, TESTS
 from alts.shared.exceptions import (
     InstallPackageError,
     PackageIntegrityTestsError,
@@ -111,6 +111,7 @@ def run_tests(self, task_params: dict, packages_to_skip: dict):
         Result summary of a test execution.
     """
     aborted = False
+    summary = defaultdict(dict)
 
     def is_success(stage_data_: dict):
         tap_result = are_tap_tests_success(stage_data_.get('stdout', ''))
@@ -212,12 +213,16 @@ def run_tests(self, task_params: dict, packages_to_skip: dict):
              }),
             ("uninstall_package", runner.uninstall_package, [package_name], {})
         ]
+        skipped_tests = []
+        summary['skipped_tests'] = {}
         for test_name, func, args, kwargs in test_steps:
             if test_name == "run_package_integrity_tests" and not CONFIG.enable_integrity_tests:
                 continue
             if should_skip_test(package_name, test_name, packages_to_skip):
+                skipped_tests.append(TESTS[test_name])
                 continue
             func(*args, **kwargs)
+        summary['skipped_tests'] = skipped_tests
     except VMImageNotFound as exc:
         logging.exception('Cannot find VM image: %s', exc)
     except WorkDirPreparationError:
@@ -258,7 +263,6 @@ def run_tests(self, task_params: dict, packages_to_skip: dict):
         )
     finally:
         runner.teardown()
-        summary = defaultdict(dict)
         if aborted:
             summary['revoked'] = True
         else:
