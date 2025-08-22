@@ -58,7 +58,7 @@ class TestsScheduler(threading.Thread):
         if 'excluded_packages' not in self.__cached_config:
             uri = f'{CONFIG.excluded_pkgs_url}'
             try:
-                response = requests.get(uri)
+                response = requests.get(uri, timeout=10)
                 response.raise_for_status()
                 self.__cached_config['excluded_packages'] = response.json()
             except requests.RequestException:

@@ -188,40 +188,40 @@ def run_tests(self, task_params: dict, packages_to_skip: dict):
         # Wait a bit to not spawn all environments at once when
         # a lot of tasks are coming to the machine
         time.sleep(random.randint(5, 10))
-
-        test_steps = [
-            ("setup", runner.setup, [], {}),
-            ("run_system_info_commands", runner.run_system_info_commands, [], {}),
-            ("install_package", runner.install_package, [
-                package_name
-            ], {
-                 "package_version": package_version,
-                 "package_epoch": package_epoch,
-                 "module_name": module_name,
-                 "module_stream": module_stream,
-                 "module_version": module_version,
-                 "semi_verbose": True,
-             }),
-            ("run_package_integrity_tests", runner.run_package_integrity_tests, [
-                package_name, package_version
-            ], {}),
-            ("run_third_party_tests", runner.run_third_party_tests, [
-                package_name
-            ], {
-                 "package_version": package_version,
-                 "package_epoch": package_epoch,
-             }),
-            ("uninstall_package", runner.uninstall_package, [package_name], {})
-        ]
         skipped_tests = []
         summary['skipped_tests'] = {}
-        for test_name, func, args, kwargs in test_steps:
-            if test_name == "run_package_integrity_tests" and not CONFIG.enable_integrity_tests:
-                continue
+
+        def run_or_skip(test_name, func, *args, **kwargs):
             if should_skip_test(package_name, test_name, packages_to_skip):
                 skipped_tests.append(TESTS[test_name])
-                continue
-            func(*args, **kwargs)
+            else:
+                func(*args, **kwargs)
+
+        run_or_skip("setup", runner.setup)
+        run_or_skip("run_system_info_commands", runner.run_system_info_commands)
+        run_or_skip(
+            "install_package",
+            runner.install_package,
+            package_name,
+            package_version=package_version,
+            package_epoch=package_epoch,
+            module_name=module_name,
+            module_stream=module_stream,
+            module_version=module_version,
+            semi_verbose=True,
+        )
+        if CONFIG.enable_integrity_tests:
+            run_or_skip("run_package_integrity_tests", runner.run_package_integrity_tests, package_name,
+                        package_version)
+        run_or_skip(
+            "run_third_party_tests",
+            runner.run_third_party_tests,
+            package_name,
+            package_version=package_version,
+            package_epoch=package_epoch,
+        )
+        run_or_skip("uninstall_package", runner.uninstall_package, package_name)
+
         summary['skipped_tests'] = skipped_tests
     except VMImageNotFound as exc:
         logging.exception('Cannot find VM image: %s', exc)
