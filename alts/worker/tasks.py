@@ -24,7 +24,7 @@ from requests.exceptions import (
 from urllib3 import Retry
 from urllib3.exceptions import TimeoutError
 
-from alts.shared.constants import API_VERSION, DEFAULT_REQUEST_TIMEOUT, TESTS
+from alts.shared.constants import API_VERSION, DEFAULT_REQUEST_TIMEOUT, TESTS_MAPPING
 from alts.shared.exceptions import (
     InstallPackageError,
     PackageIntegrityTestsError,
@@ -94,7 +94,7 @@ class RetryableTask(AbortableTask):
 
 
 @celery_app.task(bind=True, base=RetryableTask)
-def run_tests(self, task_params: dict, packages_to_skip: dict):
+def run_tests(self, task_params: dict, tests_to_skip: dict):
     """
     Executes a package test in a specified environment.
 
@@ -102,7 +102,7 @@ def run_tests(self, task_params: dict, packages_to_skip: dict):
     ----------
     task_params : dict
         Task parameters.
-    packages_to_skip : dict
+    tests_to_skip : dict
         Tests mapping.
 
     Returns
@@ -183,22 +183,20 @@ def run_tests(self, task_params: dict, packages_to_skip: dict):
     module_name = task_params.get('module_name')
     module_stream = task_params.get('module_stream')
     module_version = task_params.get('module_version')
-
     try:
         # Wait a bit to not spawn all environments at once when
         # a lot of tasks are coming to the machine
         time.sleep(random.randint(5, 10))
-        skipped_tests = []
-        summary['skipped_tests'] = {}
+        summary['skipped_tests'] = []
 
         def run_or_skip(test_name, func, *args, **kwargs):
-            if should_skip_test(package_name, test_name, packages_to_skip):
-                skipped_tests.append(TESTS[test_name])
+            if should_skip_test(package_name, test_name, tests_to_skip):
+                summary['skipped_tests'].append(TESTS_MAPPING[test_name])
             else:
                 func(*args, **kwargs)
 
-        run_or_skip("setup", runner.setup)
-        run_or_skip("run_system_info_commands", runner.run_system_info_commands)
+        runner.setup()
+        runner.run_system_info_commands()
         run_or_skip(
             "install_package",
             runner.install_package,
@@ -221,8 +219,6 @@ def run_tests(self, task_params: dict, packages_to_skip: dict):
             package_epoch=package_epoch,
         )
         run_or_skip("uninstall_package", runner.uninstall_package, package_name)
-
-        summary['skipped_tests'] = skipped_tests
     except VMImageNotFound as exc:
         logging.exception('Cannot find VM image: %s', exc)
     except WorkDirPreparationError:

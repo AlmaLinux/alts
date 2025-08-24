@@ -1,7 +1,5 @@
 import hashlib
 
-import requests
-
 
 def get_hasher(checksum_type):
     """

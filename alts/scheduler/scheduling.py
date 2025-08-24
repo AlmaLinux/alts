@@ -30,8 +30,8 @@ class TestsScheduler(threading.Thread):
         self.__celery = celery_app
         self.__get_result_timeout = get_result_timeout
         self.__cached_config = TTLCache(
-            maxsize=CONFIG.cache_size,
-            ttl=CONFIG.cache_update_interval,
+            maxsize=CONFIG.excluded_tests_cache_size,
+            ttl=CONFIG.excluded_tests_cache_update_interval,
         )
         self.logger = logging.getLogger(__file__)
 
@@ -56,7 +56,7 @@ class TestsScheduler(threading.Thread):
 
     def get_excluded_packages(self, distro: str) -> Optional[dict]:
         if 'excluded_packages' not in self.__cached_config:
-            uri = f'{CONFIG.excluded_pkgs_url}'
+            uri = f'{CONFIG.excluded_tests_url}'
             try:
                 response = requests.get(uri, timeout=10)
                 response.raise_for_status()
