@@ -37,31 +37,43 @@
     repo: "deb http://archive.debian.org/debian buster-backports main"
     filename: "buster-backports"
     update_cache: yes
-  when: "ansible_facts.distribution == 'Debian' and ansible_facts.distribution_release == 'buster'"
+  when:
+    - ansible_facts.distribution == 'Debian'
+    - ansible_facts.distribution_release == 'buster'
 
 - name: Install newer iptables for Debian 10
   shell:
     cmd: apt-get -y -t buster-backports install iptables
   environment:
     DEBIAN_FRONTEND: noninteractive
-  when: "ansible_facts.distribution == 'Debian' and ansible_facts.distribution_release == 'buster'"
+  when:
+    - ansible_facts.distribution == 'Debian'
+    - ansible_facts.distribution_release == 'buster'
 
 - name: Delete buster-backports repository
   apt_repository:
     repo: "deb http://archive.debian.org/debian buster-backports main"
     filename: "buster-backports"
     state: absent
-  when: "ansible_facts.distribution == 'Debian' and ansible_facts.distribution_release == 'buster'"
+  when:
+    - ansible_facts.distribution == 'Debian'
+    - ansible_facts.distribution_release == 'buster'
 
-- name: Install additional packages
-  apt:
-    name:
+- set_fact:
+    additional_packages:
       - ansible
       - apt-transport-https
       - bats
       - python3-pip
       - ca-certificates
-      - "{{ procps_pkg }}"
+
+- set_fact:
+    additional_packages: "{{ additional_packages + [procps_pkg] }}"
+  when: "ansible_facts.distribution_release != 'buster'"
+
+- name: Install additional packages
+  ansible.builtin.apt:
+    name: "{{ additional_packages }}"
     state: present
 
 - name: Set fact about Ubuntu 22.04
@@ -94,6 +106,15 @@
   when:
     - enable_rollout_repos
     - rollout_bypass_list.stat.exists
+
+- name: Remove sources.list for Debian 10
+  file:
+    path: /etc/apt/sources.list
+    state: absent
+  when:
+    - ansible_connection == 'docker'
+    - ansible_facts.distribution == 'Debian'
+    - ansible_facts.distribution_release == 'buster'"
 
 - name: Add required repositories
   apt_repository:
