@@ -188,6 +188,18 @@ class DockerRunner(BaseRunner):
                         pattern,
                         sources_file,
                     )
+            if self.dist_version.startswith('10'):
+                for pattern in (
+                    r's/.*(buster\/updates).*//',
+                    r's/(deb|security)\.debian\.org/buster\-archive\.debian\.org/',
+                ):
+                    self.exec_command(
+                        'sed',
+                        '-E',
+                        '-i',
+                        pattern,
+                        sources_file,
+                    )
 
             if self.dist_version.startswith('12'):
                 sources_file = '/etc/apt/sources.list.d/debian.sources'
@@ -201,6 +213,13 @@ class DockerRunner(BaseRunner):
             )
         elif self.dist_name == 'ubuntu':
             replacements_dict = CONFIG.ubuntu_mirror_replacements
+            if self.dist_version.startswith('16'):
+                self.exec_command(
+                    'sed',
+                    '-i',
+                    r's/security\.ubuntu\.com/archive\.ubuntu\.com/',
+                    sources_file,
+                )
             if self.dist_version.startswith('24'):
                 sources_file = '/etc/apt/sources.list.d/ubuntu.sources'
         for pattern, repl in replacements_dict.items():
