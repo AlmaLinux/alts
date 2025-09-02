@@ -43,7 +43,6 @@ from alts.shared.exceptions import (
     UninstallPackageError,
     WorkDirPreparationError,
 )
-from alts.shared.terraform import get_renderer
 from alts.shared.types import ImmutableDict
 from alts.shared.uploaders.base import BaseLogsUploader, UploadError
 from alts.shared.uploaders.pulp import PulpLogsUploader
@@ -290,7 +289,6 @@ class BaseRunner(object):
         self._verbose = verbose
         self.package_channel = package_channel
         self.vm_alive = vm_alive
-        self._renderer = None
 
     @property
     def artifacts(self):
@@ -520,12 +518,18 @@ class BaseRunner(object):
             for handler in self._logger.handlers:
                 handler.flush()
 
+    def _render_template(self, template_name, result_file_path, **kwargs):
+        template = self._template_lookup.get_template(template_name)
+        with open(result_file_path, 'wt') as f:
+            content = template.render(**kwargs)
+            f.write(content)
+
     def _create_ansible_inventory_file(self, **kwargs):
         self._inventory_file_path = os.path.join(
             self._work_dir,
             self.ANSIBLE_INVENTORY_FILE,
         )
-        self._renderer.render_template(
+        self._render_template(
             f'{self.ANSIBLE_INVENTORY_FILE}.tmpl',
             self._inventory_file_path,
             env_name=self.env_name,
@@ -632,7 +636,6 @@ class BaseRunner(object):
         if not self._work_dir or not os.path.exists(self._work_dir):
             self._work_dir = self._create_work_dir()
             self._artifacts_dir = self._create_artifacts_dir()
-        self._renderer = get_renderer(self._work_dir, self.TYPE)
         try:
             # Write resources that are not templated into working directory
             for ansible_file in self.ANSIBLE_FILES:
