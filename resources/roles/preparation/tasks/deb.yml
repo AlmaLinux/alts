@@ -71,6 +71,10 @@
     additional_packages: "{{ additional_packages + [procps_pkg] }}"
   when: "ansible_facts.distribution_release != 'buster'"
 
+- set_fact:
+    additional_packages: "{{ additional_packages + ['gnupg', 'dirmngr'] }}"
+  when: "ansible_facts.distribution_release == 'trixie'"
+
 - name: Install additional packages
   ansible.builtin.apt:
     name: "{{ additional_packages }}"
@@ -114,7 +118,7 @@
   when:
     - ansible_connection == 'docker'
     - ansible_facts.distribution == 'Debian'
-    - ansible_facts.distribution_release == 'buster'"
+    - ansible_facts.distribution_release == 'buster'
 
 - name: Add required repositories
   apt_repository:
