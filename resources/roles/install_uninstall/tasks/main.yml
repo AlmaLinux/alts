@@ -1,48 +1,78 @@
 ---
 
-- set_fact:
+- ansible.builtin.set_fact:
     short_apk_pkg_name: "{{ pkg_name.split('=')[0] }}"
   when: ansible_facts['os_family'] == 'Alpine'
   tags:
     - uninstall_package
 
-- set_fact:
+- ansible.builtin.set_fact:
     short_deb_pkg_name: "{{ pkg_name.split('=')[0] }}"
   when: ansible_distribution_file_variety == 'Debian'
   tags:
     - uninstall_package
 
+- ansible.builtin.set_fact:
+    is_alt_package: "{{ pkg_name | regex_search('^alt-(php|python|ruby|nodejs).*', ignorecase=True) is not none }}"
+    is_custom_mysql_package: "{{ pkg_name | regex_search('^cl-(mysql|mariadb).*', ignorecase=True) is not none }}"
+    is_ea_apache24_mod_lsapi: "{{ pkg_name.startswith('ea-apache24-mod-lsapi') }}"
+    extra_dnf_args: "{{ { 'allowerasing': true } if ansible_facts.distribution_major_version | int >= 8 else {} }}"
+  tags:
+    - install_package
+
+- name: Ensure that additional packages installed for alt and custom mysql packages
+  ansible.builtin.package:
+    name:
+      - cloudlinux-linksafe
+      - cloudlinux-release
+    state: present
+    allow_downgrade: true
+    lock_timeout: 300
+  ignore_errors: true
+  args: "{{ extra_dnf_args }}"
+  when:
+    - is_alt_package or is_custom_mysql_package
+    - ansible_facts.os_family == 'RedHat'
+  tags:
+    - install_package
+
+- name: Ensure that conflicting packages removed for ea-apache24-mod-lsapi CL Ubuntu package
+  ansible.builtin.package:
+    name:
+      - apache2
+      - apache2-bin
+      - apache2-data
+      - apache2-utils
+      - mod-hostinglimits
+    state: absent
+  when:
+    - is_ea_apache24_mod_lsapi
+    - dist_name in ('cloudlinux-ubuntu', 'ubuntu')
+  tags:
+    - install_package
+
+
 - name: Enable module
-  shell: dnf module enable -y "{{ module_name }}:{{ module_stream }}:{{ module_version }}"
+  ansible.builtin.shell: dnf module enable -y "{{ module_name }}:{{ module_stream }}:{{ module_version }}"
   when: >
     ansible_facts.os_family == 'RedHat' and
     module_name is defined and module_stream is defined and module_version is defined
   tags:
     - install_package
 
-- name: Install RPM package (8 and higher)
-  dnf:
-    name: "{{ pkg_name }}"
-    state: present
-    allow_downgrade: true
-    allowerasing: true
-    lock_timeout: 300
-  when: ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version | int >= 8
-  tags:
-    - install_package
-
-- name: Install RPM package (7 and lower)
-  yum:
+- name: Install RPM package
+  ansible.builtin.package:
     name: "{{ pkg_name }}"
     state: present
     allow_downgrade: true
     lock_timeout: 300
-  when: ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version | int < 8
+  args: "{{ extra_dnf_args }}"
+  when: ansible_facts.os_family == 'RedHat'
   tags:
     - install_package
 
 - name: Install DEB package
-  apt:
+  ansible.builtin.apt:
     name: "{{ pkg_name }}"
     state: present
     allow_unauthenticated: true
@@ -51,7 +81,7 @@
     - install_package
 
 - name: Check RPM package is installed
-  shell:
+  ansible.builtin.shell:
     cmd: "rpm -q {{ pkg_name }}"
   register: rpm_installed
   failed_when: rpm_installed.rc not in [0, 1]
@@ -60,7 +90,7 @@
     - uninstall_package
 
 - name: Uninstall RPM package
-  shell:
+  ansible.builtin.shell:
     cmd: "rpm -e --nodeps {{ pkg_name }}"
   register: result
   retries: 30
@@ -71,7 +101,7 @@
     - uninstall_package
 
 - name: Check DEB package is installed
-  shell:
+  ansible.builtin.shell:
     cmd: "dpkg-query -Wf '${db:Status-Status} ${Package}\n' {{ short_deb_pkg_name }}"
   register: deb_installed
   failed_when: deb_installed.rc not in [0, 1]
@@ -80,7 +110,7 @@
     - uninstall_package
 
 - name: Uninstall DEB package
-  shell:
+  ansible.builtin.shell:
     cmd: "dpkg -r --force-depends {{ short_deb_pkg_name }}"
   register: result
   retries: 30
@@ -91,14 +121,14 @@
     - uninstall_package
 
 - name: Install APK package
-  shell:
+  ansible.builtin.shell:
     cmd: "apk --allow-untrusted add {{ pkg_name }}"
   when: ansible_facts['os_family'] == 'Alpine'
   tags:
     - install_package
 
 - name: Check APK package is installed
-  shell: "apk --allow-untrusted info -e {{ short_apk_pkg_name }}"
+  ansible.builtin.shell: "apk --allow-untrusted info -e {{ short_apk_pkg_name }}"
   register: apk_installed
   failed_when: apk_installed.rc not in [0, 1]
   when: ansible_facts['os_family'] == 'Alpine'
@@ -106,7 +136,7 @@
     - uninstall_package
 
 - name: Uninstall APK package
-  shell:
+  ansible.builtin.shell:
     cmd: "apk --allow-untrusted del {{ pkg_name }}"
   when: ansible_facts['os_family'] == 'Alpine' and apk_installed.rc == 0
   tags:
