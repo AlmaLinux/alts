@@ -16,6 +16,13 @@
     is_alt_package: "{{ pkg_name | regex_search('^alt-(php|python|ruby|nodejs).*', ignorecase=True) is not none }}"
     is_custom_mysql_package: "{{ pkg_name | regex_search('^cl-(mysql|mariadb).*', ignorecase=True) is not none }}"
     is_ea_apache24_mod_lsapi: "{{ pkg_name.startswith('ea-apache24-mod-lsapi') }}"
+    dnf_args: "{{ default_dnf_args | combine(extra_dnf_args) }}"
+    apt_args:
+      allow_unauthenticated: true
+  vars:
+    default_dnf_args:
+      allow_downgrade: true
+      lock_timeout: 300
     extra_dnf_args: "{{ { 'allowerasing': true } if ansible_facts.distribution_major_version | int >= 8 else {} }}"
   tags:
     - install_package
@@ -26,18 +33,26 @@
       - cloudlinux-linksafe
       - cloudlinux-release
     state: present
-    allow_downgrade: true
-    lock_timeout: 300
   ignore_errors: true
-  args: "{{ extra_dnf_args }}"
+  args: "{{ dnf_args if ansible_facts.os_family == 'RedHat' else apt_args}}"
   when:
     - is_alt_package or is_custom_mysql_package
-    - ansible_facts.os_family == 'RedHat'
+    - ansible_facts.os_family in ('RedHat', 'Debian')
+  tags:
+    - install_package
+
+- name: Ensure that additional packages installed for alt and custom mysql packages (Alpine)
+  ansible.builtin.shell:
+    cmd: "apk --allow-untrusted add cloudlinux-linksafe cloudlinux-release"
+  ignore_errors: true
+  when:
+    - is_alt_package or is_custom_mysql_package
+    - ansible_facts.os_family == 'Alpine'
   tags:
     - install_package
 
 - name: Ensure that conflicting packages removed for ea-apache24-mod-lsapi CL Ubuntu package
-  ansible.builtin.package:
+  ansible.builtin.apt:
     name:
       - apache2
       - apache2-bin
@@ -48,6 +63,7 @@
   when:
     - is_ea_apache24_mod_lsapi
     - dist_name in ('cloudlinux-ubuntu', 'ubuntu')
+    - ansible_facts.os_family == 'Debian'
   tags:
     - install_package
 
@@ -64,9 +80,7 @@
   ansible.builtin.package:
     name: "{{ pkg_name }}"
     state: present
-    allow_downgrade: true
-    lock_timeout: 300
-  args: "{{ extra_dnf_args }}"
+  args: "{{ dnf_args }}"
   when: ansible_facts.os_family == 'RedHat'
   tags:
     - install_package
@@ -123,7 +137,7 @@
 - name: Install APK package
   ansible.builtin.shell:
     cmd: "apk --allow-untrusted add {{ pkg_name }}"
-  when: ansible_facts['os_family'] == 'Alpine'
+  when: ansible_facts.os_family == 'Alpine'
   tags:
     - install_package
 
@@ -131,13 +145,13 @@
   ansible.builtin.shell: "apk --allow-untrusted info -e {{ short_apk_pkg_name }}"
   register: apk_installed
   failed_when: apk_installed.rc not in [0, 1]
-  when: ansible_facts['os_family'] == 'Alpine'
+  when: ansible_facts.os_family == 'Alpine'
   tags:
     - uninstall_package
 
 - name: Uninstall APK package
   ansible.builtin.shell:
     cmd: "apk --allow-untrusted del {{ pkg_name }}"
-  when: ansible_facts['os_family'] == 'Alpine' and apk_installed.rc == 0
+  when: ansible_facts.os_family == 'Alpine' and apk_installed.rc == 0
   tags:
     - uninstall_package
