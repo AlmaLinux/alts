@@ -863,6 +863,7 @@ class BaseRunner(object):
         semi_verbose: bool = False,
         verbose: bool = False,
         allow_fail: bool = False,
+        dist_name: str = '',
     ) -> Tuple[int, str, str]:
         full_pkg_name = self._detect_full_package_name(
             package_name,
@@ -881,6 +882,8 @@ class BaseRunner(object):
             self.ANSIBLE_PLAYBOOK,
             '-e',
             f'pkg_name={full_pkg_name}',
+            '-e',
+            f'dist_name={dist_name}',
         ]
         if module_name and module_stream and module_version:
             cmd_args.extend([
@@ -934,6 +937,7 @@ class BaseRunner(object):
         semi_verbose: bool = False,
         verbose: bool = False,
         allow_fail: bool = False,
+        dist_name: str = '',
     ):
         return self.install_package_no_log(
             package_name,
@@ -945,6 +949,7 @@ class BaseRunner(object):
             semi_verbose=semi_verbose,
             verbose=self._verbose or verbose,
             allow_fail=allow_fail,
+            dist_name=dist_name,
         )
 
     def detect_protected_packages(self):
