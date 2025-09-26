@@ -13,6 +13,9 @@
 - name: Update APK index cache
   command: apk --allow-untrusted update
 
+- name: Update apk-tools package
+  command: apk --allow-untrusted upgrade apk-tools
+
 - name: Install required packages on Alpine
   command: apk --allow-untrusted add ansible bats python3 py3-pip ca-certificates procps file iproute2
 
