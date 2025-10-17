@@ -1,6 +1,6 @@
 -r base.txt
 SQLAlchemy==1.4.54
-aiohttp==3.10.5
+aiohttp==3.13.1
 databases[sqlite]==0.8.0
 fastapi==0.115.0
 pyjwt==2.9.0
