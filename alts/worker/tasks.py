@@ -3,7 +3,6 @@
 # created: 2021-04-13
 
 """AlmaLinux Test System package testing tasks running."""
-
 import logging
 import traceback
 import random
@@ -25,7 +24,7 @@ from requests.exceptions import (
 from urllib3 import Retry
 from urllib3.exceptions import TimeoutError
 
-from alts.shared.constants import API_VERSION, DEFAULT_REQUEST_TIMEOUT
+from alts.shared.constants import API_VERSION, DEFAULT_REQUEST_TIMEOUT, TESTS_MAPPING
 from alts.shared.exceptions import (
     InstallPackageError,
     PackageIntegrityTestsError,
@@ -95,7 +94,7 @@ class RetryableTask(AbortableTask):
 
 
 @celery_app.task(bind=True, base=RetryableTask)
-def run_tests(self, task_params: dict):
+def run_tests(self, task_params: dict, tests_to_skip: dict):
     """
     Executes a package test in a specified environment.
 
@@ -103,6 +102,8 @@ def run_tests(self, task_params: dict):
     ----------
     task_params : dict
         Task parameters.
+    tests_to_skip : dict
+        Tests mapping.
 
     Returns
     -------
@@ -110,6 +111,7 @@ def run_tests(self, task_params: dict):
         Result summary of a test execution.
     """
     aborted = False
+    summary = defaultdict(dict)
 
     def is_success(stage_data_: dict):
         tap_result = are_tap_tests_success(stage_data_.get('stdout', ''))
@@ -119,6 +121,12 @@ def run_tests(self, task_params: dict):
             stage_data_['exit_code'] = 255
             return False
         return stage_data_['exit_code'] == 0
+
+    def should_skip_test(package, test_name, skipped_tests_map):
+        for pkg_pattern, tests in skipped_tests_map.items():
+            if package.startswith(pkg_pattern) and test_name in tests:
+                return True
+        return False
 
     def set_artifacts_when_stage_has_unexpected_exception(
         _artifacts: dict,
@@ -179,9 +187,19 @@ def run_tests(self, task_params: dict):
         # Wait a bit to not spawn all environments at once when
         # a lot of tasks are coming to the machine
         time.sleep(random.randint(5, 10))
+        summary['skipped_tests'] = []
+
+        def run_or_skip(test_name, func, *args, **kwargs):
+            if should_skip_test(package_name, test_name, tests_to_skip):
+                summary['skipped_tests'].append(TESTS_MAPPING[test_name])
+            else:
+                func(*args, **kwargs)
+
         runner.setup()
         runner.run_system_info_commands()
-        runner.install_package(
+        run_or_skip(
+            "install_package",
+            runner.install_package,
             package_name,
             package_version=package_version,
             package_epoch=package_epoch,
@@ -191,13 +209,16 @@ def run_tests(self, task_params: dict):
             semi_verbose=True,
         )
         if CONFIG.enable_integrity_tests:
-            runner.run_package_integrity_tests(package_name, package_version)
-        runner.run_third_party_tests(
+            run_or_skip("run_package_integrity_tests", runner.run_package_integrity_tests, package_name,
+                        package_version)
+        run_or_skip(
+            "run_third_party_tests",
+            runner.run_third_party_tests,
             package_name,
             package_version=package_version,
             package_epoch=package_epoch,
         )
-        runner.uninstall_package(package_name)
+        run_or_skip("uninstall_package", runner.uninstall_package, package_name)
     except VMImageNotFound as exc:
         logging.exception('Cannot find VM image: %s', exc)
     except WorkDirPreparationError:
@@ -238,7 +259,6 @@ def run_tests(self, task_params: dict):
         )
     finally:
         runner.teardown()
-        summary = defaultdict(dict)
         if aborted:
             summary['revoked'] = True
         else:

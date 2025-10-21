@@ -389,3 +389,6 @@ class SchedulerConfig(CeleryConfig):
     working_directory: str = '/srv/alts/scheduler'
     jwt_secret: str
     hashing_algorithm: str = 'HS256'
+    excluded_tests_url: str = 'https://git.almalinux.org/almalinux/alts-exclusions/raw/branch/main/skipped_tests.json'
+    excluded_tests_cache_size: str = 1
+    excluded_tests_cache_update_interval: int = 600
