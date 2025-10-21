@@ -798,8 +798,8 @@ class BaseRunner(object):
             basic_commands['Installed packages'] = ('dpkg', '-l')
             basic_commands['Repositories list'] = ('apt-cache', 'policy')
             basic_commands['Repositories details'] = (
-                'find', '/etc/apt/', '-type', 'f', '-name', '*.list*',
-                '-o', '-name', '*.sources*', '-exec', 'cat', '{}', '+'
+                'find', '/etc/apt/', '-type', 'f', '(', '-name', '*.list*',
+                '-o', '-name', '*.sources*', ')', '-exec', 'cat', '{}', '+'
             )
         return basic_commands
 
