@@ -61,6 +61,25 @@ For testing purposes, you can add the `--reload` argument to the scheduler launc
 
 Both Celery worker and scheduler REST API services need YAML-based configs to function. Config examples are provided in the `configs` folder.
 
+During the task execution some tests may be skipped if it specified in a particular `.json` file which can be found here: https://git.almalinux.org/almalinux/alts-exclusions/src/branch/main/skipped_tests.json
+
+Example of a file content:
+```
+{
+    "almalinux-8": {
+        "libxml2": ["run_package_integrity_tests"],
+        "curl": ["run_package_integrity_tests"],
+        "bzip2": ["run_package_integrity_tests"]
+    },
+    "almalinux-9": {
+        "libxml2": ["run_package_integrity_tests"],
+        "curl": ["run_package_integrity_tests"]
+    },
+    "ubuntu-24.04": {
+        "bzip2": ["run_package_integrity_tests"]
+    }
+}
+```
 
 Filling options in the config file
 --
