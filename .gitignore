@@ -146,3 +146,7 @@ deployment/*vars*.yaml
 
 # Ignore venvs of all kind
 *venv
+
+# Ignore Ansible dependencies
+deployment/roles/geerlingguy.redis
+deployment/roles/geerlingguy.docker

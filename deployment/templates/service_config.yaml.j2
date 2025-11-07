@@ -15,7 +15,7 @@ broker_config:
   use_ssl: true
   rabbitmq_ssl_port: {{ rabbitmq_ssl_port }}
 {% endif %}
-  rabbitmq_user: {{ test_system_user }}
+  rabbitmq_user: {{ celery_rabbitmq_user or test_system_user }}
   rabbitmq_password: {{ test_system_password }}
   rabbitmq_vhost: {{ test_system_vhost }}
 {% elif broker_type == 'redis' and alts_redis_host and alts_redis_port %}
@@ -31,7 +31,7 @@ broker_pool: {{ broker_pool }}
 results_backend_config:
 {% if result_backend_name == 'local' and celery_result_folder %}
   path: file://{{ celery_result_folder }}
-{% elif result_backend_name == 'azure' and azure_connection_str and azureblockblob_container_name %}
+{% elif result_backend_name == 'azure' and azure_connection_str is defined and azureblockblob_container_name is defined %}
   azureblockblob_container_name: {{ azureblockblob_container_name }}
   azureblockblob_base_path: 'celery_results/'
   azure_connection_string: {{ azure_connection_str }}
@@ -97,7 +97,9 @@ opennebula_config:
   network: "{{ opennebula_network }}"
 {% endif %}
 {% endif %}
+{% if tests_exec_timeout is defined %}
 tests_exec_timeout: {{ tests_exec_timeout }}
+{% endif %}
 {% if centos_baseurl is defined %}
 centos_baseurl: "{{ centos_baseurl }}"
 {% endif %}

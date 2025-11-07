@@ -50,9 +50,9 @@
         mode: 0600
         backup: "yes"
       with_items:
-        - { src: "{{ celery_src_cacert }}", dest: "{{ celery_cacert }}" }
-        - { src: "{{ celery_ssl_src_key }}", dest: "{{ celery_ssl_key }}" }
-        - { src: "{{ celery_ssl_src_certificate }}", dest: "{{ celery_ssl_certificate }}" }
+        - {src: "{{ celery_src_cacert }}", dest: "{{ celery_cacert }}"}
+        - {src: "{{ celery_ssl_src_key }}", dest: "{{ celery_ssl_key }}"}
+        - {src: "{{ celery_ssl_src_certificate }}", dest: "{{ celery_ssl_certificate }}"}
       when: celery_ssl
 
     - name: Create scheduler config
@@ -69,6 +69,18 @@
     state: directory
   when: scheduler_working_directory is defined and scheduler_working_directory
 
+- name: Install firewalld
+  yum:
+    name: ["firewalld", "python3-firewall"]
+    state: present
+  when: manage_firewall | default(true) | bool
+
+- name: Ensure firewalld is running
+  service:
+    name: firewalld
+    state: started
+    enabled: yes
+  when: manage_firewall | default(true) | bool
 
 - name: Enable HTTP/HTTPS services on firewall
   firewalld:
@@ -79,6 +91,7 @@
   with_items:
     - http
     - https
+  when: manage_firewall | default(true) | bool
 
 - name: Add scheduler port to firewall
   firewalld:
@@ -87,6 +100,7 @@
     state: enabled
     permanent: yes
     immediate: yes
+  when: manage_firewall | default(true) | bool
 
 - name: Create scheduler Systemd service file
   template:

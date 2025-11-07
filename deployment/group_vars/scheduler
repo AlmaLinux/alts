@@ -1,7 +1,11 @@
 ---
 
-test_system_user: test-system
-test_system_vhost: test_system
+# Firewall management (set to false for cloud instances using security groups)
+manage_firewall: false
+
+broker_type: rabbitmq
+test_system_user: albs
+test_system_vhost: alts
 test_system_password: some-another-secret-password
 test_system_config_dir: ~/.config/alts
 
@@ -12,14 +16,28 @@ rabbitmq_ssl_port: 5671
 celery_ssl: true
 celery_ssl_src_certificate: "files/celery/client_certificate.pem"
 celery_ssl_src_key: "files/celery/client_key.pem"
-celery_src_cacert: "files/ca_certificate.pem"
+celery_src_cacert: "files/celery/ca_certificate.pem"
 celery_ssl_dir: "{{ test_system_config_dir }}/ssl"
 celery_ssl_certificate: "{{ celery_ssl_dir }}/{{ celery_ssl_src_certificate | basename }}"
 celery_ssl_key: "{{ celery_ssl_dir }}/{{ celery_ssl_src_key | basename }}"
 celery_cacert: "{{ celery_ssl_dir }}/{{ celery_src_cacert | basename }}"
 
-result_backend_name: local
-celery_result_folder: /srv/celery_results
+# Redis configuration for result backend (geerlingguy.redis role variables)
+redis_bind_interface: 0.0.0.0
+redis_port: 6379
+# redis_requirepass: ""  # Uncomment and set if you need password authentication
+# redis_maxmemory: 512mb
+# redis_maxmemory_policy: allkeys-lru
+
+# Celery result backend configuration
+result_backend_name: redis
+alts_redis_host: localhost
+alts_redis_port: 6379
+alts_redis_results_db: 1
+
+# Legacy local result backend (not used with Redis)
+# result_backend_name: local
+# celery_result_folder: /srv/celery_results
 
 celery_pid_file_dir: /var/run/celery
 celery_pid_file: "{{ celery_pid_file_dir }}/worker.pid"
@@ -30,3 +48,6 @@ celery_queues:
 
 scheduler_working_directory: /srv/alts/scheduler
 jwt_secret: very-secret-on5
+broker_pool: 30
+worker_prefetch_multiplier: 1
+result_expires: 3600
