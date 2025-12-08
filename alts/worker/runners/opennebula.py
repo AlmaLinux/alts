@@ -188,6 +188,7 @@ class OpennebulaRunner(GenericVMRunner):
             vm_disk_size=self.vm_disk_size,
             vm_ram_size=self.vm_ram_size,
             opennebula_network=CONFIG.opennebula_config.network,
+            dist_arch=self.dist_arch,
         )
 
     def _render_tf_variables_file(self):

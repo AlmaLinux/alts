@@ -42,10 +42,12 @@ resource "opennebula_virtual_machine" "${vm_name}" {
     size = local.disk_size
     target = "sda"
   }
+% if dist_arch != 'aarch64':
   nic {
     network_id = data.opennebula_virtual_network.test_system_network.id
     model      = "virtio"
   }
+% endif
 
   context = {
     NETWORK      = "YES"
