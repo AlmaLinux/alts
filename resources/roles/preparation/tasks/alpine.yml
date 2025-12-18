@@ -16,6 +16,10 @@
 - name: Update apk-tools package
   command: apk --allow-untrusted upgrade apk-tools
 
+- name: Update libapk2 package for Alpine 3.22 envs
+  command: apk --allow-untrusted upgrade libapk2
+  when: (ansible_facts.distribution_version | string).startswith('3.22')
+
 - name: Install required packages on Alpine
   command: apk --allow-untrusted add ansible bats python3 py3-pip ca-certificates procps file iproute2
 
