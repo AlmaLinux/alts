@@ -90,6 +90,7 @@
     name: "{{ pkg_name }}"
     state: present
     allow_unauthenticated: true
+    install_recommends: no
   when: ansible_distribution_file_variety == 'Debian'
   tags:
     - install_package
