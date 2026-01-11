@@ -10,6 +10,7 @@ __all__ = [
     'ConfigNotFoundError',
     'DBUpdateError',
     'InstallPackageError',
+    'OpenNebulaQuotaExceededError',
     'OpennebulaVMStopError',
     'ProvisionError',
     'PublishArtifactsError',
@@ -91,4 +92,9 @@ class SystemInfoCmdError(ALTSBaseError):
 
 
 class OpennebulaVMStopError(ALTSBaseError):
+    pass
+
+
+class OpenNebulaQuotaExceededError(ALTSBaseError):
+    """Raised when OpenNebula quota capacity is insufficient."""
     pass

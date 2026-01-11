@@ -5,7 +5,6 @@
 """AlmaLinux Test System package testing tasks running."""
 
 import logging
-import re
 import traceback
 import random
 import time
@@ -31,6 +30,7 @@ from urllib3.exceptions import TimeoutError
 from alts.shared.constants import API_VERSION, DEFAULT_REQUEST_TIMEOUT, TapStatusEnum
 from alts.shared.exceptions import (
     InstallPackageError,
+    OpenNebulaQuotaExceededError,
     PackageIntegrityTestsError,
     ProvisionError,
     StartEnvironmentError,
@@ -57,6 +57,7 @@ AUTO_RETRY_EXCEPTIONS = (
     ReadTimeout,
     ConnectTimeout,
     TimeoutError,
+    OpenNebulaQuotaExceededError,
 )
 
 
@@ -316,7 +317,12 @@ def run_tests(self, task_params: dict):
             task_params['task_id']
         )
         aborted = True
-
+    except OpenNebulaQuotaExceededError as exc:
+        logging.warning(
+            'OpenNebula quota exceeded for task %s, scheduling retry: %s',
+            task_params['task_id'], exc
+        )
+        raise
     except Exception as exc:
         logging.exception('Unexpected exception: %s', exc)
         set_artifacts_when_stage_has_unexpected_exception(
