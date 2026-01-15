@@ -1392,6 +1392,50 @@ class BaseRunner(object):
 
         executor_params = self.get_test_executor_params()
         executor_params['timeout'] = CONFIG.tests_exec_timeout
+        passed_init_tests = []
+
+        def find_and_run_init_tests():
+            for test in self._test_configuration['tests']:
+                git_ref = test.get('git_ref', 'master')
+                repo_url = test['url']
+                test_dir = test['test_dir']
+                tests_to_run = test.get('tests_to_run', [])
+                if tests_to_run:
+                    continue
+                repo_url = (
+                    self.prepare_gerrit_repo_url(repo_url)
+                    if 'gerrit' in repo_url
+                    else repo_url
+                )
+                test_repo_path = self.clone_third_party_repo(repo_url, git_ref)
+                if not test_repo_path:
+                    errors.append(f'Cannot clone test repository {repo_url}')
+                    continue
+                remote_workdir = os.path.join(
+                    CONFIG.tests_base_dir,
+                    test_repo_path.name,
+                    test_dir,
+                )
+                local_workdir = self._work_dir
+                tests_path = Path(test_repo_path, test_dir)
+                if not tests_path.exists():
+                    self._logger.warning('Directory %s does not exist', tests_path)
+                    self._logger.warning('Skipping test configuration')
+                    continue
+                init_test = self.get_init_script(tests_path)
+                if init_test and init_test.name not in passed_init_tests:
+                    self._run_test_file(
+                        init_test,
+                        remote_workdir,
+                        local_workdir,
+                        executors_cache,
+                        tests_path,
+                    )
+                    passed_init_tests.append(init_test.name)
+                git_reset_hard(test_repo_path, self._logger)
+
+        find_and_run_init_tests()
+
         for test in self._test_configuration['tests']:
             git_ref = test.get('git_ref', 'master')
             repo_url = test['url']
@@ -1418,7 +1462,7 @@ class BaseRunner(object):
                 self._logger.warning('Skipping test configuration')
                 continue
             init_test = self.get_init_script(tests_path)
-            if init_test:
+            if init_test and init_test.name not in passed_init_tests:
                 self._run_test_file(
                     init_test,
                     remote_workdir,
@@ -1426,6 +1470,7 @@ class BaseRunner(object):
                     executors_cache,
                     tests_path,
                 )
+                passed_init_tests.append(init_test.name)
             tests_list = self.find_tests(remote_workdir)
             # Check if package has 0_init-like script
             for test_file in tests_list:
@@ -1817,8 +1862,8 @@ class GenericVMRunner(BaseRunner):
                 if result.is_successful():
                     break
                 self._logger.warning(
-                    'Attempt to clone repository on VM failed:\n%s\n%s',
-                    result.stdout, result.stderr,
+                    'Attempt %d to clone repository on VM failed:\n%s\n%s',
+                    attempt, result.stdout, result.stderr,
                 )
                 time.sleep(random.randint(5, 10))
             if not result or (result and not result.is_successful()):
@@ -1831,9 +1876,17 @@ class GenericVMRunner(BaseRunner):
             command = f'git fetch origin && git checkout {git_ref}'
             if 'gerrit' in repo_url:
                 command = prepare_gerrit_command(git_ref)
-            result = self._ssh_client.sync_run_command(
-                f'cd {repo_path} && {command}',
-            )
+            for attempt in range(1, 6):
+                result = self._ssh_client.sync_run_command(
+                    f'cd {repo_path} && {command}',
+                )
+                if result.is_successful():
+                    break
+                self._logger.warning(
+                    'Attempt %d to run "%s" command on VM failed:\n%s\n%s',
+                    attempt, command, result.stdout, result.stderr,
+                )
+                time.sleep(random.randint(5, 10))
             if not result.is_successful():
                 self._logger.error(
                     'Cannot prepare git repository:\n%s',
