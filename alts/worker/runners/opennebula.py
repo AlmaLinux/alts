@@ -19,11 +19,13 @@ from plumbum import local
 
 from alts.shared.constants import X32_ARCHITECTURES
 from alts.shared.exceptions import (
+    OpenNebulaQuotaExceededError,
     OpennebulaVMStopError,
     VMImageNotFound,
 )
 from alts.shared.uploaders.base import BaseLogsUploader
 from alts.worker import CONFIG
+from alts.worker.quota_cache import OpenNebulaQuotaCache, QuotaInfo
 from alts.worker.runners.base import GenericVMRunner
 
 __all__ = ['OpennebulaRunner']
@@ -151,7 +153,20 @@ class OpennebulaRunner(GenericVMRunner):
         final_image_id = final_disk.get('IMAGE_ID')
         final_template_id = final_template.ID
         final_template_name = final_template.NAME
+
+        template_data = final_template.TEMPLATE
+        required_cpu = float(template_data.get('CPU', 1))
+        required_memory = int(template_data.get('MEMORY', self.vm_ram_size))
+        disk_size = final_disk.get('SIZE')
+        required_disk = int(disk_size) if disk_size else self.vm_disk_size
+
+        self._logger.debug(
+            'Template %s requires: CPU=%.1f, Memory=%dMB, Disk=%dMB',
+            final_template_name, required_cpu, required_memory, required_disk
+        )
+
         if final_image_id:
+            self.check_quota_capacity(required_cpu, required_memory, required_disk)
             return final_template.ID, int(final_image_id)
         images_pool = self.opennebula_client.imagepool.info(-2, -1, -1, -1)
         images = [
@@ -170,6 +185,7 @@ class OpennebulaRunner(GenericVMRunner):
             final_image_id,
             template_params,
         )
+        self.check_quota_capacity(required_cpu, required_memory, required_disk)
         return final_template_id, final_image_id
 
     def _render_tf_main_file(self):
@@ -202,6 +218,209 @@ class OpennebulaRunner(GenericVMRunner):
             opennebula_username=CONFIG.opennebula_config.username,
             opennebula_password=CONFIG.opennebula_config.password,
         )
+
+    def _get_group_id_by_name(self, group_name: str) -> Optional[int]:
+        """
+        Look up OpenNebula group ID by group name.
+
+        Parameters
+        ----------
+        group_name : str
+            Name of the OpenNebula group.
+
+        Returns
+        -------
+        Optional[int]
+            Group ID if found, None otherwise.
+        """
+        try:
+            group_pool = self.opennebula_client.grouppool.info()
+            for group in group_pool.GROUP:
+                if group.NAME == group_name:
+                    return group.ID
+        except Exception as e:
+            self._logger.error('Failed to fetch group pool: %s', e)
+        return None
+
+    def check_quota_capacity(
+        self,
+        required_cpu: float,
+        required_memory: int,
+        required_disk: int,
+    ):
+        """
+        Check if OpenNebula group has sufficient quota capacity.
+
+        Parameters
+        ----------
+        required_cpu : float
+            Required CPU cores for the VM.
+        required_memory : int
+            Required memory in MB for the VM.
+        required_disk : int
+            Required disk size in MB for the VM.
+
+        Raises
+        ------
+        OpenNebulaQuotaExceededError
+            If quota capacity is insufficient for creating a new VM.
+        """
+        if not CONFIG.opennebula_config.quota_check_enabled:
+            return
+
+        group_name = CONFIG.opennebula_config.vm_group
+        if not group_name:
+            self._logger.warning(
+                'Quota check enabled but vm_group not configured'
+            )
+            return
+
+        group_id = self._get_group_id_by_name(group_name)
+        if group_id is None:
+            self._logger.warning(
+                'Could not find group ID for group name: %s', group_name
+            )
+            return
+
+        cache = OpenNebulaQuotaCache(CONFIG.opennebula_config.quota_cache_ttl)
+        quota = cache.get(group_id)
+
+        if quota is None:
+            quota = self._fetch_quota_from_api(group_id)
+            cache.set(group_id, quota)
+
+        if not self._has_sufficient_capacity(
+            quota, required_cpu, required_memory, required_disk
+        ):
+            raise OpenNebulaQuotaExceededError(
+                f'Insufficient OpenNebula quota capacity for group {group_name}: '
+                f'Required CPU={required_cpu}, Memory={required_memory}MB, '
+                f'Disk={required_disk}MB. '
+                f'Current: VMs {quota.vms_used}/{quota.vms_limit}, '
+                f'CPU {quota.cpu_used}/{quota.cpu_limit}, '
+                f'Memory {quota.memory_used}/{quota.memory_limit} MB, '
+                f'Disk {quota.disk_used}/{quota.disk_limit} MB'
+            )
+
+        self._logger.info(
+            'Quota check passed for group %s: Required CPU=%.1f, Memory=%dMB, '
+            'Disk=%dMB. Current: VMs %d/%d, CPU %.1f/%.1f, '
+            'Memory %d/%d MB, Disk %d/%d MB',
+            group_name,
+            required_cpu, required_memory, required_disk,
+            quota.vms_used, quota.vms_limit,
+            quota.cpu_used, quota.cpu_limit,
+            quota.memory_used, quota.memory_limit,
+            quota.disk_used, quota.disk_limit
+        )
+
+    def _fetch_quota_from_api(self, group_id: int) -> QuotaInfo:
+        """
+        Fetch quota information from OpenNebula API.
+
+        Parameters
+        ----------
+        group_id : int
+            OpenNebula group ID.
+
+        Returns
+        -------
+        QuotaInfo
+            Quota usage and limits information.
+        """
+        self._logger.debug('Fetching quota from API for group %d', group_id)
+        group_info = self.opennebula_client.group.info(group_id)
+
+        vm_quota = group_info.VM_QUOTA.VM if hasattr(group_info, 'VM_QUOTA') else None
+
+        if vm_quota is None:
+            self._logger.warning(
+                'No VM_QUOTA found for group %d, assuming unlimited', group_id
+            )
+            return QuotaInfo(
+                vms_used=0,
+                vms_limit=-1,
+                cpu_used=0.0,
+                cpu_limit=-1.0,
+                memory_used=0,
+                memory_limit=-1,
+                disk_used=0,
+                disk_limit=-1,
+                timestamp=0.0,
+            )
+
+        def parse_quota_value(value, default=0):
+            if value is None or value == '' or value == '-1':
+                return -1
+            try:
+                return int(value)
+            except (ValueError, TypeError):
+                try:
+                    return float(value)
+                except (ValueError, TypeError):
+                    return default
+
+        return QuotaInfo(
+            vms_used=parse_quota_value(vm_quota.VMS_USED, 0),
+            vms_limit=parse_quota_value(vm_quota.VMS, -1),
+            cpu_used=float(parse_quota_value(vm_quota.CPU_USED, 0)),
+            cpu_limit=float(parse_quota_value(vm_quota.CPU, -1)),
+            memory_used=parse_quota_value(vm_quota.MEMORY_USED, 0),
+            memory_limit=parse_quota_value(vm_quota.MEMORY, -1),
+            disk_used=parse_quota_value(vm_quota.SYSTEM_DISK_SIZE_USED, 0),
+            disk_limit=parse_quota_value(vm_quota.SYSTEM_DISK_SIZE, -1),
+            timestamp=0.0,
+        )
+
+    def _has_sufficient_capacity(
+        self,
+        quota: QuotaInfo,
+        required_cpu: float,
+        required_memory: int,
+        required_disk: int,
+    ) -> bool:
+        """
+        Check if quota has sufficient capacity for a new VM.
+
+        Parameters
+        ----------
+        quota : QuotaInfo
+            Current quota usage and limits.
+        required_cpu : float
+            Required CPU cores for the VM.
+        required_memory : int
+            Required memory in MB for the VM.
+        required_disk : int
+            Required disk size in MB for the VM.
+
+        Returns
+        -------
+        bool
+            True if sufficient capacity available.
+        """
+        margin = CONFIG.opennebula_config.quota_safety_margin
+
+        def check_limit(used, limit, required=1):
+            if limit == -1:
+                return True
+            effective_limit = limit * (1 - margin)
+            return used + required <= effective_limit
+
+        checks = [
+            ('VMs', check_limit(quota.vms_used, quota.vms_limit, 1)),
+            ('CPU', check_limit(quota.cpu_used, quota.cpu_limit, required_cpu)),
+            ('Memory', check_limit(quota.memory_used, quota.memory_limit, required_memory)),
+            ('Disk', check_limit(quota.disk_used, quota.disk_limit, required_disk)),
+        ]
+
+        for resource, passed in checks:
+            if not passed:
+                self._logger.warning(
+                    'Quota check failed for %s', resource
+                )
+                return False
+
+        return True
 
     def destroy_vm_via_api(self, vm_id: int):
         def vm_info():

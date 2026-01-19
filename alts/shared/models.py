@@ -154,6 +154,10 @@ class OpennebulaConfig(BaseModel):
     default_vm_disk_size: Optional[int] = 15360
     default_vm_ram_size: Optional[int] = 1536
     network: Optional[str] = None
+    # Quota checking configuration
+    quota_check_enabled: bool = False
+    quota_safety_margin: float = 0.1
+    quota_cache_ttl: int = 30
 
 
 class RabbitmqBrokerConfig(BaseBrokerConfig):
