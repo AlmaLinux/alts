@@ -16,6 +16,8 @@
     is_alt_package: "{{ pkg_name | regex_search('^alt-(php|python|ruby|nodejs).*', ignorecase=True) is not none }}"
     is_custom_mysql_package: "{{ pkg_name | regex_search('^cl-(mysql|mariadb).*', ignorecase=True) is not none }}"
     is_ea_apache24_mod_lsapi: "{{ pkg_name.startswith('ea-apache24-mod-lsapi') }}"
+    is_ea_apache24_mod_cgid: "{{ pkg_name.startswith('ea-apache24-mod_cgid') }}"
+    is_ea_apache24_mod_http2: "{{ pkg_name.startswith('ea-apache24-mod_http2') }}"
     dnf_args: "{{ default_dnf_args | combine(extra_dnf_args) }}"
     apt_args:
       allow_unauthenticated: true
@@ -64,6 +66,29 @@
     - is_ea_apache24_mod_lsapi
     - dist_name in ('cloudlinux-ubuntu', 'ubuntu')
     - ansible_facts.os_family == 'Debian'
+  tags:
+    - install_package
+
+- name: Ensure that conflicting packages removed for ea-apache24-mod_cgid RPM package
+  ansible.builtin.package:
+    name:
+      - ea-apache24-mod_cgi
+      - ea-apache24-mod_mpm_prefork
+    state: absent
+  when:
+    - is_ea_apache24_mod_cgid
+    - ansible_facts.os_family == 'RedHat'
+  tags:
+    - install_package
+
+- name: Ensure that conflicting packages removed for ea-apache24-mod_http2 RPM package
+  ansible.builtin.package:
+    name:
+      - ea-apache24-mod_mpm_prefork
+    state: absent
+  when:
+    - is_ea_apache24_mod_http2
+    - ansible_facts.os_family == 'RedHat'
   tags:
     - install_package
 
