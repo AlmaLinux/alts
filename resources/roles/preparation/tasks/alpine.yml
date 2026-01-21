@@ -2,6 +2,23 @@
 - name: Update Alpine packages
   command: apk --allow-untrusted update && apk --allow-untrusted upgrade
 
+- name: Set extra packages for Alpine 3.22
+  set_fact:
+    extra_packages:
+      - apk-tools
+      - libapk2
+    extra_alpine_repo: "{{ extra_alpine_repo_baseurl }}/{{ configuration.split('-')[1] }}/stable"
+  when: (ansible_facts.distribution_version | string).startswith('3.22')
+
+- name: Install extra packages on Alpine 3.22
+  include_tasks: alpine_extra_packages.yml
+  loop: "{{ extra_packages }}"
+  loop_control:
+    loop_var: package_name
+  when:
+    - (ansible_facts.distribution_version | string).startswith('3.22')
+    - extra_alpine_repo is defined
+
 - name: Add custom APK repository to /etc/apk/repositories
   lineinfile:
     path: /etc/apk/repositories

@@ -752,6 +752,8 @@ class BaseRunner(object):
             var_dict['epel_mirror_replacement'] = CONFIG.epel_mirror_replacement
         if CONFIG.centos_baseurl:
             var_dict['centos_repo_baseurl'] = CONFIG.centos_baseurl
+        if CONFIG.extra_alpine_repo_baseurl:
+            var_dict['extra_alpine_repo_baseurl'] = CONFIG.extra_alpine_repo_baseurl
         cmd_args = [
             '-i',
             self.ANSIBLE_INVENTORY_FILE,

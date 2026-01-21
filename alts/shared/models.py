@@ -334,6 +334,7 @@ class CeleryConfig(BaseModel):
              'Packages/e/epel-release-7-14.noarch.rpm',
     }
     centos_baseurl: str = 'http://mirror.centos.org/centos'
+    extra_alpine_repo_baseurl: str = ''
     epel_mirror_replacement: str = ''
     git_reference_directory: Optional[str] = None
     tests_base_dir: str = '/tests'
