@@ -1,0 +1,22 @@
+---
+- name: "Get latest {{ package_name }} version from APKINDEX"
+  shell: |
+    curl -fsSL "{{ extra_alpine_repo }}/{{ ansible_architecture }}/APKINDEX.tar.gz" \
+      | tar -xzO APKINDEX \
+      | awk '/^P:/ { pkg = substr($0,3) } /^V:/ { ver = substr($0,3); if (pkg == "{{ package_name }}") print ver }' \
+      | sort -V | tail -n1
+  register: package_version
+  changed_when: false
+
+- name: "Download {{ package_name }} package"
+  shell: >
+    curl -fSL -o "/tmp/{{ package_name }}-{{ package_version.stdout }}.apk" "{{ extra_alpine_repo }}/{{ ansible_architecture }}/{{ package_name }}-{{ package_version.stdout }}.apk"
+
+- name: "Install {{ package_name }} from downloaded package"
+  command: "apk add --allow-untrusted --no-network /tmp/{{ package_name }}-{{ package_version.stdout }}.apk"
+
+- name: "Verify {{ package_name }} version was installed"
+  shell: apk list -I {{ package_name }} | head -1 | sed 's/^{{ package_name }}-\([^ ]*\).*/\1/'
+  register: installed_package_version
+  changed_when: false
+  failed_when: installed_package_version.stdout != package_version.stdout
