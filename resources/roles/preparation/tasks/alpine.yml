@@ -7,7 +7,7 @@
     extra_packages:
       - apk-tools
       - libapk2
-    extra_alpine_repo: "{{ extra_alpine_repo_baseurl }}/{{ configuration.split('-')[1] }}/stable"
+    extra_alpine_repo: "{{ extra_alpine_repo_baseurl }}/{{ ansible_facts.distribution_version.split('.')[:2] | join('.') }}/stable"
   when: (ansible_facts.distribution_version | string).startswith('3.22')
 
 - name: Install extra packages on Alpine 3.22
