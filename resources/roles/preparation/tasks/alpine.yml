@@ -2,6 +2,11 @@
 - name: Update Alpine packages
   command: apk --allow-untrusted update && apk --allow-untrusted upgrade
 
+- name: Ensure that additional packages installed on Alpine 3.22
+  ansible.builtin.shell:
+    cmd: "apk --allow-untrusted add curl"
+  when: (ansible_facts.distribution_version | string).startswith('3.22')
+
 - name: Set extra packages for Alpine 3.22
   set_fact:
     extra_packages:
