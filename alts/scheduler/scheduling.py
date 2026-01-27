@@ -129,10 +129,15 @@ class TestsScheduler(threading.Thread):
         task_params['runner_type'] = runner_type
         task_params['repositories'] = repositories
         try:
+            task_priority = (
+                CONFIG.release_build_priority if payload.release_build
+                else CONFIG.task_default_priority
+            )
             run_tests.apply_async(
                 (task_params,),
                 task_id=task_id,
                 queue=queue_name,
+                priority=task_priority,
             )
         except Exception:
             # TODO: report error to the web server
