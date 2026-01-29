@@ -30,7 +30,7 @@ celery_log_file: "{{ celery_log_file_dir }}/celery.log"
 celery_concurrency: 10
 celery_loglevel: INFO
 task_queue_max_priority: 2
-task_default_priority: 0
-release_build_priority: 1
+task_default_priority: 1
+release_build_priority: 0
 celery_queues:
   - "docker-x86_64-0"

@@ -283,8 +283,8 @@ class CeleryConfig(BaseModel):
     azure_connection_string: Optional[str] = None
     task_default_queue: str = 'default'
     task_queue_max_priority: int = 2
-    task_default_priority: int = 0
-    release_build_priority: int = 1
+    task_default_priority: int = 1
+    release_build_priority: int = 0
     task_acks_late: bool = True
     task_track_started: bool = True
     worker_prefetch_multiplier: int = 1
