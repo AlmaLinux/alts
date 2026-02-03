@@ -393,6 +393,9 @@ class BaseRunner(object):
     def prepare_repositories(self, repositories: List[dict]) -> List[dict]:
         if self.dist_name in CONFIG.rhel_flavors:
             return repositories
+        arch_mapping = {
+            'aarch64': 'arm64',
+        }
         for repo in repositories:
             self._logger.debug('Repository initial state: %s', repo)
             if not repo['url'].startswith('deb'):
@@ -400,7 +403,8 @@ class BaseRunner(object):
             url_parts = repo['url'].split(' ')
             if url_parts[1].startswith('['):
                 continue
-            url_parts.insert(1, f'[arch={self.dist_arch}]')
+            arch = arch_mapping.get(self.dist_arch, self.dist_arch)
+            url_parts.insert(1, f'[arch={arch}]')
             repo['url'] = ' '.join(url_parts)
             self._logger.debug('Repository modified state: %s', repo)
         return repositories
