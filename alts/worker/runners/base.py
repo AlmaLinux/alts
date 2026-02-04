@@ -885,6 +885,8 @@ class BaseRunner(object):
             '-e',
             f'pkg_name={full_pkg_name}',
             '-e',
+            f'pkg_version={package_version}',
+            '-e',
             f'dist_name={dist_name}',
         ]
         if module_name and module_stream and module_version:
