@@ -101,6 +101,16 @@
   tags:
     - install_package
 
+- name: Downgrade nss packages on EL7
+  ansible.builtin.shell:
+    cmd: "yum downgrade -y nss*-{{ pkg_version }}"
+  when:
+    - ansible_facts.os_family == 'RedHat'
+    - ansible_facts.distribution_major_version == '7'
+    - pkg_name.startswith('nss')
+  tags:
+    - install_package
+
 - name: Install RPM package
   ansible.builtin.package:
     name: "{{ pkg_name }}"
