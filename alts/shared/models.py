@@ -94,7 +94,6 @@ class TaskRequestPayload(BaseModel):
     callback_href: Optional[str] = None
     vm_alive: bool = False
     verbose: bool = False
-    release_build: bool = False
 
 
 class TaskRequestResponse(BaseModel):
@@ -282,16 +281,12 @@ class CeleryConfig(BaseModel):
     azureblockblob_base_path: str = 'celery_result_backend/'
     azure_connection_string: Optional[str] = None
     task_default_queue: str = 'default'
-    task_queue_max_priority: int = 2
-    task_default_priority: int = 1
-    release_build_priority: int = 0
     task_acks_late: bool = True
     task_track_started: bool = True
     worker_prefetch_multiplier: int = 1
     worker_deduplicate_successful_tasks: bool = True
     worker_max_tasks_per_child: int = 5
     broker_pool_limit: int = 20
-    broker_transport_options: Dict[str, Any] = {}
     # Task track timeout
     task_tracking_timeout: int = 7300
     task_soft_time_limit: int = 7200  # 2 hours
@@ -378,8 +373,6 @@ class CeleryConfig(BaseModel):
             'result_expires': self.result_expires,  # 1 hour in seconds
             'result_backend_max_retries': self.result_backend_max_retries,
             'task_default_queue': 'default',
-            'task_queue_max_priority': self.task_queue_max_priority,
-            'task_default_priority': self.task_default_priority,
             'task_acks_late': True,
             'task_track_started': True,
             'task_soft_time_limit': self.task_soft_time_limit,
@@ -388,12 +381,6 @@ class CeleryConfig(BaseModel):
             'worker_max_tasks_per_child': self.worker_max_tasks_per_child,
             'broker_transport_options': {'visibility_timeout': 36000}
         }
-        if isinstance(self.broker_config, RedisBrokerConfig):
-            config_dict['broker_transport_options'].update({
-                'queue_order_strategy': 'priority',
-                'priority_steps': list(range(self.task_queue_max_priority)),
-                'sep': ':',
-            })
         if isinstance(self.results_backend_config, AzureResultsConfig):
             for key in (
                 'azureblockblob_container_name',

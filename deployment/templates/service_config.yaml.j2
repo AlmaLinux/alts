@@ -35,9 +35,6 @@ results_backend_config:
 {% endif %}
 
 task_default_queue: 'default'
-task_queue_max_priority: {{ task_queue_max_priority }}
-task_default_priority: {{ task_default_priority }}
-release_build_priority: {{ release_build_priority }}
 task_acks_late: true
 task_track_started: true
 artifacts_root_directory: 'test_system_artifacts'
