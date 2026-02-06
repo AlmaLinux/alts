@@ -8,6 +8,7 @@ from kombu import Exchange, Queue
 from alts.shared.constants import ARCHITECTURES, COSTS, DRIVERS
 from alts.shared.utils.path_utils import get_abspath
 from alts.worker import CONFIG
+from alts.shared.models import RabbitmqBrokerConfig
 
 
 __all__ = ['celery_app']
@@ -20,13 +21,18 @@ celery_app = Celery('alts', include=['alts.worker.tasks'])
 celery_app.conf.update(CONFIG.get_celery_config_dict())
 celery_app.conf.update(result_accept_content=['json'])
 
+queue_arguments = None
+if isinstance(CONFIG.broker_config, RabbitmqBrokerConfig):
+    queue_arguments = {'x-max-priority': CONFIG.task_queue_max_priority}
+
 # Define all queues so client (scheduler) would be aware of all of them
 task_queues = [Queue('default', Exchange('default', type='direct'),
-                     routing_key='default')]
+                     routing_key='default', queue_arguments=queue_arguments)]
 for queue_tuple in itertools.product(DRIVERS, ARCHITECTURES, COSTS):
     queue_name = '-'.join(queue_tuple)
     task_queues.append(Queue(queue_name, Exchange(queue_name, type='direct'),
-                             routing_key=queue_name))
+                             routing_key=queue_name,
+                             queue_arguments=queue_arguments))
 
 celery_app.conf.task_queues = task_queues
 celery_app.conf.task_default_queue = 'default'
