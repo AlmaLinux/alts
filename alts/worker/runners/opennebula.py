@@ -497,5 +497,12 @@ class OpennebulaRunner(GenericVMRunner):
         if id_exit_code != 0 or not vm_id:
             self._logger.warning('Cannot get VM ID: %s', id_stderr)
             return id_exit_code, 'Cannot get VM ID', id_stderr
-        self.destroy_vm_via_api(int(vm_id.strip()))
-        return 0, f'{vm_id} is destroyed via API', ''
+        try:
+            parsed_vm_id = int(vm_id.strip())
+        except ValueError:
+            # Terraform may return warning text (e.g. no outputs in state)
+            # instead of an integer VM id on partially initialized envs.
+            self._logger.warning('Unexpected VM ID output: %s', vm_id)
+            return 1, 'Cannot parse VM ID', str(vm_id)
+        self.destroy_vm_via_api(parsed_vm_id)
+        return 0, f'{parsed_vm_id} is destroyed via API', ''
