@@ -58,6 +58,8 @@ AUTO_RETRY_EXCEPTIONS = (
     ConnectTimeout,
     TimeoutError,
     OpenNebulaQuotaExceededError,
+    StartEnvironmentError,
+    TerraformInitializationError,
 )
 
 
@@ -196,6 +198,7 @@ def run_tests(self, task_params: dict):
         Result summary of a test execution.
     """
     aborted = False
+    retry_exc = None
 
     def is_success(stage_data_: dict):
         tap_result = are_tap_tests_success(stage_data_.get('stdout', ''))
@@ -296,9 +299,17 @@ def run_tests(self, task_params: dict):
             'stderr': traceback.format_exc()
         }
     except TerraformInitializationError as exc:
-        logging.exception('Cannot initialize terraform: %s', exc)
+        logging.exception(
+            'Cannot initialize terraform for task %s, scheduling retry: %s',
+            task_params['task_id'], exc,
+        )
+        retry_exc = exc
     except StartEnvironmentError as exc:
-        logging.exception('Cannot start environment: %s', exc)
+        logging.exception(
+            'Cannot start environment for task %s, scheduling retry: %s',
+            task_params['task_id'], exc,
+        )
+        retry_exc = exc
     except ProvisionError as exc:
         logging.exception('Cannot run initial provision: %s', exc)
     except InstallPackageError as exc:
@@ -320,9 +331,9 @@ def run_tests(self, task_params: dict):
     except OpenNebulaQuotaExceededError as exc:
         logging.warning(
             'OpenNebula quota exceeded for task %s, scheduling retry: %s',
-            task_params['task_id'], exc
+            task_params['task_id'], exc,
         )
-        raise
+        retry_exc = exc
     except Exception as exc:
         logging.exception('Unexpected exception: %s', exc)
         set_artifacts_when_stage_has_unexpected_exception(
@@ -332,6 +343,8 @@ def run_tests(self, task_params: dict):
         )
     finally:
         runner.teardown()
+        if retry_exc is not None and self.request.retries < self.max_retries:
+            raise retry_exc
         summary = defaultdict(dict)
         if aborted:
             summary['revoked'] = True

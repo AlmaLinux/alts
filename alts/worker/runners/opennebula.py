@@ -473,12 +473,11 @@ class OpennebulaRunner(GenericVMRunner):
             self._logger.warning(err_msg)
             return 0, err_msg, ''
         if self.start_env_failed:
-            err_msg = (
-                'VM is not created because start environment step failed'
+            self._logger.warning(
+                'Start environment step failed, but VM may have been '
+                'partially created. Attempting cleanup.',
             )
-            self._logger.warning(err_msg)
-            return 0, err_msg, ''
-        if self.vm_alive:
+        elif self.vm_alive:
             return 0, "WARNING: VM won't be destroyed because vm_alive=True was given", ""
         stop_exit_code, stop_out, stop_err = super()._stop_env()
         if stop_exit_code == 0:
