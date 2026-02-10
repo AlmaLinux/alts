@@ -121,9 +121,36 @@
     name: "{{ pkg_name }}"
     state: present
   args: "{{ dnf_args }}"
-  when: ansible_facts.os_family == 'RedHat'
+  when:
+    - ansible_facts.os_family == 'RedHat'
+    - not (force_install | default(false) | bool)
   tags:
     - install_package
+
+- name: Force install RPM package (bypass conflicts)
+  when:
+    - ansible_facts.os_family == 'RedHat'
+    - force_install | default(false) | bool
+  tags:
+    - install_package
+  block:
+    - name: Create temporary directory for forced RPM download
+      ansible.builtin.file:
+        path: /tmp/force_install
+        state: directory
+
+    - name: Download RPM package
+      ansible.builtin.shell:
+        cmd: "dnf download --destdir=/tmp/force_install {{ pkg_name }}"
+
+    - name: Install downloaded RPM bypassing conflicts
+      ansible.builtin.shell:
+        cmd: "rpm -i --nodeps --force /tmp/force_install/*.rpm"
+
+    - name: Clean up downloaded RPMs
+      ansible.builtin.file:
+        path: /tmp/force_install
+        state: absent
 
 - name: Install DEB package
   ansible.builtin.apt:
