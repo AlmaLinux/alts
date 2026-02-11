@@ -422,6 +422,54 @@ class OpennebulaRunner(GenericVMRunner):
 
         return True
 
+    def find_vm_by_name(self, vm_name: str) -> Optional[int]:
+        """
+        Find VM ID by VM name using OpenNebula API.
+
+        Parameters
+        ----------
+        vm_name : str
+            Name of the VM to search for.
+
+        Returns
+        -------
+        Optional[int]
+            VM ID if found, None otherwise.
+        """
+        try:
+            vmpool = self.opennebula_client.vmpool.info(-1, -1, -1, -1)
+            for vm in vmpool.VM:
+                if vm.NAME == vm_name:
+                    self._logger.info('Found VM "%s" with ID %d', vm_name, vm.ID)
+                    return vm.ID
+            self._logger.warning('VM with name "%s" not found in vmpool', vm_name)
+        except Exception as e:
+            self._logger.error('Failed to search for VM by name "%s": %s', vm_name, e)
+        return None
+
+    def destroy_vm_by_name(self, vm_name: str) -> bool:
+        """
+        Destroy VM by name. This method finds the VM by name and then destroys it.
+
+        Note: OpenNebula API requires VM ID for deletion, so this method must
+        query for the ID first before deletion.
+
+        Parameters
+        ----------
+        vm_name : str
+            Name of the VM to destroy.
+
+        Returns
+        -------
+        bool
+            True if VM was found and destroyed, False otherwise.
+        """
+        vm_id = self.find_vm_by_name(vm_name)
+        if vm_id is None:
+            return False
+        self.destroy_vm_via_api(vm_id)
+        return True
+
     def destroy_vm_via_api(self, vm_id: int):
         def vm_info():
             return self.opennebula_client.vm.info(vm_id)
@@ -495,14 +543,24 @@ class OpennebulaRunner(GenericVMRunner):
         )
         self._logger.debug('VM ID: %s', vm_id)
         if id_exit_code != 0 or not vm_id:
-            self._logger.warning('Cannot get VM ID: %s', id_stderr)
-            return id_exit_code, 'Cannot get VM ID', id_stderr
+            self._logger.warning(
+                'Cannot get VM ID: %s. Attempting to destroy VM by name',
+                id_stderr
+            )
+            if self.destroy_vm_by_name(self.env_name):
+                return 0, f'VM "{self.env_name}" is destroyed via API (found by name)', ''
+            return id_exit_code, 'Cannot get VM ID and VM not found by name', id_stderr
         try:
             parsed_vm_id = int(vm_id.strip())
         except ValueError:
             # Terraform may return warning text (e.g. no outputs in state)
             # instead of an integer VM id on partially initialized envs.
-            self._logger.warning('Unexpected VM ID output: %s', vm_id)
-            return 1, 'Cannot parse VM ID', str(vm_id)
+            self._logger.warning(
+                'Unexpected VM ID output: %s. Attempting to destroy VM by name',
+                vm_id
+            )
+            if self.destroy_vm_by_name(self.env_name):
+                return 0, f'VM "{self.env_name}" is destroyed via API (found by name)', ''
+            return 1, 'Cannot parse VM ID and VM not found by name', str(vm_id)
         self.destroy_vm_via_api(parsed_vm_id)
         return 0, f'{parsed_vm_id} is destroyed via API', ''

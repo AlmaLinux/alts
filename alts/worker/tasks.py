@@ -344,7 +344,8 @@ def run_tests(self, task_params: dict):
     finally:
         runner.teardown()
         if retry_exc is not None and self.request.retries < self.max_retries:
-            raise retry_exc
+            if isinstance(runner, OpennebulaRunner):
+                raise retry_exc
         summary = defaultdict(dict)
         if aborted:
             summary['revoked'] = True
