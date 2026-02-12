@@ -171,6 +171,23 @@
     cmd: yum-config-manager --disable epel
   when: centos_7_x32 | bool
 
+- name: Install additional packages
+  yum:
+    name: "{{ additional_packages + pip_packages }}"
+    state: present
+    enablerepo: epel
+    lock_timeout: 300
+    update_cache: yes
+  when: centos_7_x32 | bool is false
+
+- name: Install additional packages on CentOS 7 i686
+  yum:
+    name: "{{ additional_packages }}"
+    state: present
+    lock_timeout: 300
+    update_cache: yes
+  when: centos_7_x32 | bool
+
 - name: Add required repositories
   yum_repository:
     name: "{{ item.name }}"
@@ -195,23 +212,6 @@
   when: >
     ansible_distribution_file_variety in ('RedHat', 'CentOS') and
     ansible_facts.distribution_major_version == '7'
-
-- name: Install additional packages
-  yum:
-    name: "{{ additional_packages + pip_packages }}"
-    state: present
-    enablerepo: epel
-    lock_timeout: 300
-    update_cache: yes
-  when: centos_7_x32 | bool is false
-
-- name: Install additional packages on CentOS 7 i686
-  yum:
-    name: "{{ additional_packages }}"
-    state: present
-    lock_timeout: 300
-    update_cache: yes
-  when: centos_7_x32 | bool
 
 - name: Remove cloudlinux-imunify360.repo for CentOS 7 32-bit
   file:
