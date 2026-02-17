@@ -1,0 +1,6 @@
+---
+el7_disablerepo_pkg_prefixes:
+  - grub
+el7_disablerepo_repos:
+  - centos-7-os
+  - centos-7-updates
