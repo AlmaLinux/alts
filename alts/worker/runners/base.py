@@ -876,7 +876,6 @@ class BaseRunner(object):
             package_version=package_version,
             package_epoch=package_epoch,
         )
-
         self._logger.info(
             'Installing %s on %s...',
             full_pkg_name,
