@@ -876,13 +876,10 @@ class BaseRunner(object):
             package_version=package_version,
             package_epoch=package_epoch,
         )
-        force_install = package_name in CONFIG.force_install_pkgs
-
         self._logger.info(
-            'Installing %s on %s...%s',
+            'Installing %s on %s...',
             full_pkg_name,
             self.env_name,
-            ' (force install due to known conflicts)' if force_install else '',
         )
         cmd_args = [
             '-i',
@@ -894,8 +891,6 @@ class BaseRunner(object):
             f'pkg_version={package_version}',
             '-e',
             f'dist_name={dist_name}',
-            '-e',
-            f'force_install={force_install}',
         ]
         if module_name and module_stream and module_version:
             cmd_args.extend([

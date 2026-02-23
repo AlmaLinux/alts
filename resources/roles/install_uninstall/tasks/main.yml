@@ -19,6 +19,7 @@
     is_ea_apache24_mod_cgid: "{{ pkg_name.startswith('ea-apache24-mod_cgid') }}"
     is_ea_apache24_mod_http2: "{{ pkg_name.startswith('ea-apache24-mod_http2') }}"
     dnf_args: "{{ default_dnf_args | combine(extra_dnf_args) | combine(disablerepo_args) }}"
+    force_install: "{{ force_install_pkgs | select('in', pkg_name) | list | length > 0 }}"
     apt_args:
       allow_unauthenticated: true
   vars:
@@ -123,14 +124,24 @@
   args: "{{ dnf_args }}"
   when:
     - ansible_facts.os_family == 'RedHat'
-    - not (force_install | default(false) | bool)
+    - not (force_install | bool)
+  tags:
+    - install_package
+
+- name: Ensure download utilities are installed
+  ansible.builtin.package:
+    name: "{{ yum_download_utils_pkg if ansible_facts.distribution_major_version | int <= 7 else dnf_download_utils_pkg }}"
+    state: present
+  when:
+    - ansible_facts.os_family == 'RedHat'
+    - force_install | bool
   tags:
     - install_package
 
 - name: Force install RPM package (bypass conflicts)
   when:
     - ansible_facts.os_family == 'RedHat'
-    - force_install | default(false) | bool
+    - force_install | bool
   tags:
     - install_package
   block:
@@ -141,7 +152,11 @@
 
     - name: Download RPM package
       ansible.builtin.shell:
-        cmd: "dnf download --destdir=/tmp/force_install {{ pkg_name }}"
+        cmd: >-
+          {{ 'yumdownloader --destdir=/tmp/force_install'
+          if ansible_facts.distribution_major_version | int <= 7
+          else 'dnf download --destdir=/tmp/force_install' }}
+          {{ pkg_name }}
 
     - name: Install downloaded RPM bypassing conflicts
       ansible.builtin.shell:

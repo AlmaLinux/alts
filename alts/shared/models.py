@@ -318,10 +318,6 @@ class CeleryConfig(BaseModel):
         'kernel',
         'dnf',
     ]
-    force_install_pkgs: List[str] = [
-        'systemd-standalone-sysusers',
-        'systemd-standalone-tmpfiles',
-    ]
     keepalive_interval: int = 30  # unit in seconds
     commands_exec_timeout: int = 30  # unit in seconds
     provision_timeout: int = 1200  # 20 minutes in seconds
