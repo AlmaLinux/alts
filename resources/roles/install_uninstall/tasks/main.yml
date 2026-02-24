@@ -18,7 +18,7 @@
     is_ea_apache24_mod_lsapi: "{{ pkg_name.startswith('ea-apache24-mod-lsapi') }}"
     is_ea_apache24_mod_cgid: "{{ pkg_name.startswith('ea-apache24-mod_cgid') }}"
     is_ea_apache24_mod_http2: "{{ pkg_name.startswith('ea-apache24-mod_http2') }}"
-    dnf_args: "{{ default_dnf_args | combine(extra_dnf_args) | combine(disablerepo_args) }}"
+    dnf_args: "{{ default_dnf_args | combine(extra_dnf_args) }}"
     force_install: "{{ force_install_pkgs | select('in', pkg_name) | list | length > 0 }}"
     apt_args:
       allow_unauthenticated: true
@@ -27,11 +27,6 @@
       allow_downgrade: true
       lock_timeout: 300
     extra_dnf_args: "{{ { 'allowerasing': true } if ansible_facts.distribution_major_version | int >= 8 else {} }}"
-    _is_el7_disablerepo_pkg: >-
-      {{ ansible_facts.distribution_major_version == '7'
-         and el7_disablerepo_pkg_prefixes | default([]) | length > 0
-         and pkg_name | regex_search('^(' + el7_disablerepo_pkg_prefixes | join('|') + ')') is not none }}
-    disablerepo_args: "{{ {'disablerepo': el7_disablerepo_repos | join(',')} if _is_el7_disablerepo_pkg else {} }}"
   tags:
     - install_package
 
@@ -114,6 +109,16 @@
     - ansible_facts.os_family == 'RedHat'
     - ansible_facts.distribution_major_version == '7'
     - pkg_name.startswith('nss')
+  tags:
+    - install_package
+
+- name: Downgrade grub2 packages on EL7
+  ansible.builtin.shell:
+    cmd: "yum downgrade -y grub2*-{{ pkg_version }}"
+  when:
+    - ansible_facts.os_family == 'RedHat'
+    - ansible_facts.distribution_major_version == '7'
+    - pkg_name.startswith('grub2')
   tags:
     - install_package
 

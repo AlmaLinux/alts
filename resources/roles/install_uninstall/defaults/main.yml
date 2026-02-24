@@ -1,9 +1,4 @@
 ---
-el7_disablerepo_pkg_prefixes:
-  - grub
-el7_disablerepo_repos:
-  - centos-7-os
-  - centos-7-updates
 dnf_download_utils_pkg: "dnf-utils"
 yum_download_utils_pkg: "yum-utils"
 force_install_pkgs:
