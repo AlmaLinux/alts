@@ -79,3 +79,9 @@ logs_uploader_config:
 jwt_secret: {{ jwt_secret }}
 
 {% endif %}
+{% if pip_index_url | default('') %}
+pip_index_url: {{ pip_index_url }}
+{% endif %}
+{% if docker_tmpfs_size | default('') %}
+docker_tmpfs_size: "{{ docker_tmpfs_size }}"
+{% endif %}

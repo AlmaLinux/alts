@@ -136,6 +136,7 @@ class DockerRunner(BaseRunner):
             http_proxy=http_proxy,
             https_proxy=https_proxy,
             no_proxy=no_proxy,
+            tmpfs_size=CONFIG.docker_tmpfs_size,
         )
 
     def _render_tf_variables_file(self):

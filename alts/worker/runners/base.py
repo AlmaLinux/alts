@@ -747,6 +747,8 @@ class BaseRunner(object):
             'development_mode': CONFIG.development_mode,
             'package_proxy': CONFIG.package_proxy,
         }
+        if CONFIG.pip_index_url:
+            var_dict['pip_index_url'] = CONFIG.pip_index_url
         dist_major_version = self.dist_version[0]
         if self.dist_name in CONFIG.rhel_flavors and dist_major_version in ('6', '7'):
             epel_release_url = CONFIG.epel_release_urls.get(dist_major_version)

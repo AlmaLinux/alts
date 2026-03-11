@@ -21,6 +21,15 @@
   tags:
     - initial_provision
 
+- name: Deploy pip configuration
+  template:
+    src: pip.conf.j2
+    dest: /etc/pip.conf
+    mode: '0644'
+  when: pip_index_url is defined and pip_index_url
+  tags:
+    - initial_provision
+
 - name: Copy tests to test environment
   copy:
     src: "{{ integrity_tests_dir }}"

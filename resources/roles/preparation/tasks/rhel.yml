@@ -225,5 +225,4 @@
     state: present
     enablerepo: epel
     lock_timeout: 300
-    update_cache: yes
   when: pytest_is_needed | bool
