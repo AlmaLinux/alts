@@ -34,3 +34,6 @@ task_default_priority: 1
 release_build_priority: 0
 celery_queues:
   - "docker-x86_64-0"
+
+pip_index_url: ""
+docker_tmpfs_size: "256m"

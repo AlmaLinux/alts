@@ -18,6 +18,11 @@ resource "docker_container" "${container_name}" {
     "no_proxy=${no_proxy}",
 % endif
   ]
+% if tmpfs_size:
+  tmpfs = {
+    "/tmp" = "rw,exec,nosuid,size=${tmpfs_size}"
+  }
+% endif
 % if external_network:
   networks_advanced {
     name = "${external_network}"
