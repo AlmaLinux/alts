@@ -117,6 +117,8 @@ class DockerRunner(BaseRunner):
         """
         docker_tf_file = os.path.join(self._work_dir, self.TF_MAIN_FILE)
         image_name = f'{self.dist_name}:{self.dist_version}'
+        if CONFIG.docker_registry_prefix:
+            image_name = f'{CONFIG.docker_registry_prefix}{image_name}'
         image_platform = ARCH_PLATFORM_MAPPING.get(self.dist_arch)
         external_network = os.environ.get('EXTERNAL_NETWORK', None)
         http_proxy = os.environ.get('http_proxy', None)
