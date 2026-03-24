@@ -344,6 +344,8 @@ class CeleryConfig(BaseModel):
     git_reference_directory: Optional[str] = None
     tests_base_dir: str = '/tests'
     package_proxy: str = ''
+    disabled_al_repos: List[str] = []
+    build_system_host: str = ''
     docker_registry_prefix: str = ''
     development_mode: bool = False
     authorize_build_repositories: bool = False

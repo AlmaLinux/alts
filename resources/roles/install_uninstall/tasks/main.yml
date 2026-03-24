@@ -172,6 +172,23 @@
         path: /tmp/force_install
         state: absent
 
+- name: Create APT pinning for build repos
+  ansible.builtin.copy:
+    dest: /etc/apt/preferences.d/cloudlinux-pinning
+    content: |
+      Package: *
+      Pin: origin {{ build_system_host }}
+      Pin-Priority: 1001
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - ansible_distribution_file_variety == 'Debian'
+    - build_system_host is defined
+    - build_system_host | length > 0
+  tags:
+    - install_package
+
 - name: Install DEB package
   ansible.builtin.apt:
     name: "{{ pkg_name }}"
