@@ -198,12 +198,28 @@
   with_items: "{{ repositories }}"
   when: repositories is defined and (repositories | length > 0)
 
+- name: Update all packages (AlmaLinux with disabled repos)
+  yum:
+    name: "*"
+    state: latest
+    update_cache: yes
+    lock_timeout: 300
+    disablerepo: "{{ disabled_al_repos }}"
+  when:
+    - ansible_facts.distribution == 'AlmaLinux'
+    - disabled_al_repos is defined
+    - disabled_al_repos | length > 0
+
 - name: Update all packages
   package:
     name: "*"
     state: latest
     update_cache: yes
     lock_timeout: 300
+  when: >
+    ansible_facts.distribution != 'AlmaLinux' or
+    disabled_al_repos is not defined or
+    disabled_al_repos | length == 0
 
 - name: Remove CentOS-Base.repo file again (just in case)
   file:

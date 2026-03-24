@@ -756,6 +756,8 @@ class BaseRunner(object):
             var_dict['epel_mirror_replacement'] = CONFIG.epel_mirror_replacement
         if CONFIG.centos_baseurl:
             var_dict['centos_repo_baseurl'] = CONFIG.centos_baseurl
+        if CONFIG.disabled_al_repos:
+            var_dict['disabled_al_repos'] = ','.join(CONFIG.disabled_al_repos)
         if CONFIG.extra_alpine_repo_baseurl:
             var_dict['extra_alpine_repo_baseurl'] = CONFIG.extra_alpine_repo_baseurl
         cmd_args = [
@@ -900,6 +902,11 @@ class BaseRunner(object):
                 f'module_stream={module_stream}',
                 '-e',
                 f'module_version={module_version}',
+            ])
+        if CONFIG.build_system_host:
+            cmd_args.extend([
+                '-e',
+                f'build_system_host={CONFIG.build_system_host}',
             ])
         cmd_args.extend(['-t', 'install_package'])
         verbosity = ''
