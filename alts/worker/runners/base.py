@@ -1446,6 +1446,19 @@ class BaseRunner(object):
                         tests_path,
                     )
                     passed_init_tests.append(init_test.name)
+                install_test = Path(tests_path, '0_install')
+                if (
+                    install_test.exists()
+                    and install_test.name not in passed_init_tests
+                ):
+                    self._run_test_file(
+                        install_test,
+                        remote_workdir,
+                        local_workdir,
+                        executors_cache,
+                        tests_path,
+                    )
+                    passed_init_tests.append(install_test.name)
                 git_reset_hard(test_repo_path, self._logger)
 
         find_and_run_init_tests()
@@ -1489,6 +1502,8 @@ class BaseRunner(object):
             # Check if package has 0_init-like script
             for test_file in tests_list:
                 if tests_to_run and test_file.name not in tests_to_run:
+                    continue
+                if test_file.name in passed_init_tests:
                     continue
                 if (('0_init' not in test_file.name
                      or '0_install' not in test_file.name)):
