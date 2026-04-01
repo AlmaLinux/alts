@@ -1467,6 +1467,11 @@ class BaseRunner(object):
             git_ref = test.get('git_ref', 'master')
             repo_url = test['url']
             test_dir = test['test_dir']
+            self._logger.info(
+                'Package: %s / Run tests from dir: %s',
+                package_name,
+                test_dir,
+            )
             tests_to_run = test.get('tests_to_run', [])
             repo_url = (
                 self.prepare_gerrit_repo_url(repo_url)
