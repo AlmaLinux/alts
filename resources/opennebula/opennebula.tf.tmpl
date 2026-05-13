@@ -50,6 +50,7 @@ resource "opennebula_virtual_machine" "${vm_name}" {
   permissions = "660"
   group = "${opennebula_vm_group}"
   memory = "${vm_ram_size}"
+  hard_shutdown = true
 
   cpumodel {
     model = "host-passthrough"

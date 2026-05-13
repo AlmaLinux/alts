@@ -195,7 +195,7 @@
     description: "Repository {{ item.name }}"
     enabled: yes
     gpgcheck: no
-    priority: "{{ '10' if (ansible_distribution == 'Amazon' and item.name | regex_search('-br(-|$)')) else omit }}"
+    priority: "{{ '10' if ansible_distribution == 'Amazon' and (item.name | regex_search('-br(-|$)') or 'koji' in item.url or 'tuxcare' in item.url) else omit }}"
   with_items: "{{ repositories }}"
   when: repositories is defined and (repositories | length > 0)
 

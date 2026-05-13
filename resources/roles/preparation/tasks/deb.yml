@@ -124,6 +124,11 @@
   apt_repository:
     repo: "{{ item.url }}"
     filename: 'test_repos'
-    update_cache: yes
+    update_cache: no
   with_items: "{{ repositories }}"
+  when: repositories is defined and (repositories | length > 0)
+
+- name: Update apt cache after adding repositories
+  apt:
+    update_cache: yes
   when: repositories is defined and (repositories | length > 0)
