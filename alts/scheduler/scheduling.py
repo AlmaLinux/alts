@@ -10,6 +10,7 @@ import requests
 
 from alts.scheduler import CONFIG
 from alts.scheduler.db import Session, Task
+from alts.shared.constants import DEFAULT_REQUEST_TIMEOUT
 from alts.shared.models import TaskRequestPayload
 from alts.worker.mappings import RUNNER_MAPPING
 from alts.worker.tasks import run_tests
@@ -40,6 +41,7 @@ class TestsScheduler(threading.Thread):
                     CONFIG.bs_tasks_endpoint,
                 ),
                 headers={'Authorization': f'Bearer {CONFIG.bs_token}'},
+                timeout=DEFAULT_REQUEST_TIMEOUT,
             )
             response.raise_for_status()
             response_as_json = response.json()
