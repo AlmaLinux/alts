@@ -52,6 +52,7 @@ from alts.shared.utils.git_utils import (
     clone_git_repo,
     git_reset_hard,
     prepare_gerrit_command,
+    repo_reference_subpath,
 )
 from alts.shared.utils.log_utils import (
     get_temp_log_files,
@@ -1150,13 +1151,12 @@ class BaseRunner(object):
             self._logger.debug('An unknown repository format, skipping')
             return git_repo_path
         self._logger.info('Cloning %s to %s', repo_url, self._work_dir)
-        repo_name = os.path.basename(repo_url)
-        if not repo_name.endswith('.git'):
-            repo_name += '.git'
         repo_reference_dir = None
         if CONFIG.git_reference_directory:
             repo_reference_dir = os.path.join(
-                CONFIG.git_reference_directory, repo_name)
+                CONFIG.git_reference_directory,
+                repo_reference_subpath(repo_url),
+            )
         repo_path = None
         for attempt in range(1, 6):
             try:

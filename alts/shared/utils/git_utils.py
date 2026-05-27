@@ -1,3 +1,6 @@
+import os
+import re
+import urllib.parse
 from logging import Logger
 from pathlib import Path
 from random import randint
@@ -7,6 +10,48 @@ from typing import Optional
 from plumbum import local
 
 from alts.shared.utils.path_utils import get_abspath
+
+
+_SCP_URL_RE = re.compile(r'^(?P<user>[^@]+@)?(?P<host>[^:/]+):(?P<path>.+)$')
+
+
+def repo_reference_subpath(repo_url: str) -> str:
+    """
+    Derive a host-aware on-disk subpath for a git repository's reference
+    mirror. Two repositories that share a basename but live on different
+    hosts (e.g. a Gerrit "QA" and a GitLab "QA") must map to different
+    subpaths to avoid clobbering each other's bare mirrors.
+
+    Examples
+    --------
+    >>> repo_reference_subpath('ssh://gerrit.cloudlinux.com:29418/QA')
+    'gerrit.cloudlinux.com/QA.git'
+    >>> repo_reference_subpath('https://gitlab.cloudlinux.com/qa/QA.git')
+    'gitlab.cloudlinux.com/qa/QA.git'
+    >>> repo_reference_subpath('git@gitlab.com:qa/QA.git')
+    'gitlab.com/qa/QA.git'
+    """
+    host = None
+    path = None
+    parsed = urllib.parse.urlparse(repo_url)
+    if parsed.hostname:
+        host = parsed.hostname
+        path = parsed.path
+    else:
+        scp_match = _SCP_URL_RE.match(repo_url)
+        if scp_match:
+            host = scp_match.group('host')
+            path = scp_match.group('path')
+    if not host or not path:
+        # Unparseable URL — fall back to basename so behaviour stays
+        # predictable; collisions across hosts remain the caller's problem
+        # in that degenerate case.
+        basename = os.path.basename(repo_url) or 'repo'
+        return basename if basename.endswith('.git') else f'{basename}.git'
+    path = path.strip('/')
+    if not path.endswith('.git'):
+        path = f'{path}.git'
+    return f'{host.lower()}/{path}'
 
 
 def checkout(
