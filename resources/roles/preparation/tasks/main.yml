@@ -21,6 +21,47 @@
   tags:
     - initial_provision
 
+# SSH client config is only needed where the third-party repo is cloned
+# *inside* the environment (VMs cloned over SSH). Docker envs receive the
+# repo via `docker cp` from the worker, so they never clone and need no
+# SSH config.
+- name: Ensure root ~/.ssh directory exists
+  file:
+    path: /root/.ssh
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+  when:
+    - connection_type != 'docker'
+    - third_party_repo_ssh_hosts | length > 0
+  tags:
+    - initial_provision
+
+- name: Configure SSH client for third-party repo hosts
+  copy:
+    dest: /root/.ssh/config
+    owner: root
+    group: root
+    mode: '0600'
+    content: |
+      {% for entry in third_party_repo_ssh_hosts %}
+      Host {{ entry.host }}
+      {% if entry.user is defined %}
+          User {{ entry.user }}
+      {% endif %}
+          StrictHostKeyChecking no
+          UserKnownHostsFile /dev/null
+      {% if not loop.last %}
+
+      {% endif %}
+      {% endfor %}
+  when:
+    - connection_type != 'docker'
+    - third_party_repo_ssh_hosts | length > 0
+  tags:
+    - initial_provision
+
 - name: Copy tests to test environment
   copy:
     src: "{{ integrity_tests_dir }}"

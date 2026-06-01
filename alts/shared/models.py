@@ -238,6 +238,11 @@ class PulpLogsConfig(BaseLogsConfig):
     pulp_password: Optional[str] = None
 
 
+class ThirdPartyRepoSshHost(BaseModel):
+    host: str
+    user: Optional[str] = None
+
+
 class CeleryConfig(BaseModel):
     def __init__(self, **data):
         super().__init__(**data)
@@ -342,6 +347,12 @@ class CeleryConfig(BaseModel):
     extra_alpine_repo_baseurl: str = ''
     epel_mirror_replacement: str = ''
     git_reference_directory: Optional[str] = None
+    # SSH client config seeded into test VMs so third-party test repos
+    # (gerrit, gitlab) can be cloned. Each entry maps to a `Host` block
+    # in `/root/.ssh/config` on the VM; missing `user` leaves the
+    # default (current SSH user). Configured per-deployment; empty by
+    # default so no `~/.ssh/config` is written unless explicitly set.
+    third_party_repo_ssh_hosts: List[ThirdPartyRepoSshHost] = []
     tests_base_dir: str = '/tests'
     package_proxy: str = ''
     disabled_al_repos: List[str] = []
