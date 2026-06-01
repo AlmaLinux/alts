@@ -43,7 +43,7 @@ def repo_reference_subpath(repo_url: str) -> str:
             host = scp_match.group('host')
             path = scp_match.group('path')
     if not host or not path:
-        # Unparseable URL — fall back to basename so behaviour stays
+        # Unparsable URL — fall back to basename so behaviour stays
         # predictable; collisions across hosts remain the caller's problem
         # in that degenerate case.
         basename = os.path.basename(repo_url) or 'repo'
@@ -87,19 +87,20 @@ def __clone_git_repo(
     reference_directory: Optional[str] = None,
     cmd_timeout: int = 300,
 ):
-    git_repo_path = Path(
-        work_dir,
-        Path(repo_url).name.replace('.git', ''),
-    )
+    subpath = repo_reference_subpath(repo_url)
+    if subpath.endswith('.git'):
+        subpath = subpath[:-4]
+    git_repo_path = Path(work_dir, subpath)
     if git_repo_path.exists():
         return git_repo_path
+    git_repo_path.parent.mkdir(parents=True, exist_ok=True)
     logger.debug('Cloning the git repo: %s', repo_url)
-    args = ['clone', repo_url, '--depth', '1']
+    args = ['clone', repo_url, str(git_repo_path), '--depth', '1']
     if reference_directory:
         args.extend(
             ['--reference-if-able', get_abspath(reference_directory)]
         )
-    exit_code, stdout, stderr = local['git'].with_cwd(work_dir).run(
+    exit_code, stdout, stderr = local['git'].run(
         args,
         retcode=None,
         timeout=cmd_timeout,

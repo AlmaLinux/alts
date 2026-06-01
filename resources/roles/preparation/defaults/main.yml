@@ -1,3 +1,8 @@
 ---
 procps_pkg: "procps"
 centos_repo_baseurl: "https://vault.centos.org"
+# Source of truth lives in the alts config
+# (`CelerConfig.third_party_repo_ssh_hosts`) and is passed in as an
+# extra-var by the runner. Empty list here is a no-op fallback so the
+# role still works if invoked standalone (e.g. ansible-lint).
+third_party_repo_ssh_hosts: []

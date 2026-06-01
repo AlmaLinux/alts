@@ -28,6 +28,7 @@ from alts.worker.executors.ansible import AnsibleExecutor
 from alts.worker.executors.bats import BatsExecutor
 from alts.worker.executors.command import CommandExecutor
 from alts.worker.executors.shell import ShellExecutor
+from alts.shared.utils.git_utils import repo_reference_subpath
 from alts.worker.runners.base import (
     TESTS_SECTION_NAME,
     BaseRunner,
@@ -376,10 +377,15 @@ class DockerRunner(BaseRunner):
             return
         self._logger.info('Copying tests to container')
         self._logger.debug('Repo path: %s', test_repo_path)
-        self.exec_command('mkdir', '-p', CONFIG.tests_base_dir)
+        remote_subpath = repo_reference_subpath(repo_url)
+        if remote_subpath.endswith('.git'):
+            remote_subpath = remote_subpath[:-4]
+        remote_repo_path = f'{CONFIG.tests_base_dir}/{remote_subpath}'
+        remote_parent = os.path.dirname(remote_repo_path)
+        self.exec_command('mkdir', '-p', remote_parent)
         self.copy([
             str(test_repo_path),
-            f'{self.env_name}:{CONFIG.tests_base_dir}/{test_repo_path.name}',
+            f'{self.env_name}:{remote_repo_path}',
         ])
         return test_repo_path
 

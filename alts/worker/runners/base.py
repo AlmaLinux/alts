@@ -747,6 +747,10 @@ class BaseRunner(object):
             'pytest_is_needed': self.pytest_is_needed,
             'development_mode': CONFIG.development_mode,
             'package_proxy': CONFIG.package_proxy,
+            'third_party_repo_ssh_hosts': [
+                entry.model_dump(exclude_none=True)
+                for entry in CONFIG.third_party_repo_ssh_hosts
+            ],
         }
         dist_major_version = self.dist_version[0]
         if self.dist_name in CONFIG.rhel_flavors and dist_major_version in ('6', '7'):
@@ -1425,9 +1429,12 @@ class BaseRunner(object):
                 if not test_repo_path:
                     errors.append(f'Cannot clone test repository {repo_url}')
                     continue
+                remote_subpath = repo_reference_subpath(repo_url)
+                if remote_subpath.endswith('.git'):
+                    remote_subpath = remote_subpath[:-4]
                 remote_workdir = os.path.join(
                     CONFIG.tests_base_dir,
-                    test_repo_path.name,
+                    remote_subpath,
                     test_dir,
                 )
                 local_workdir = self._work_dir
@@ -1482,9 +1489,12 @@ class BaseRunner(object):
             if not test_repo_path:
                 errors.append(f'Cannot clone test repository {repo_url}')
                 continue
+            remote_subpath = repo_reference_subpath(repo_url)
+            if remote_subpath.endswith('.git'):
+                remote_subpath = remote_subpath[:-4]
             remote_workdir = os.path.join(
                 CONFIG.tests_base_dir,
-                test_repo_path.name,
+                remote_subpath,
                 test_dir,
             )
             local_workdir = self._work_dir
@@ -1883,15 +1893,16 @@ class GenericVMRunner(BaseRunner):
         if not git_repo_path:
             return
         if self._ssh_client:
-            repo_path = Path(
-                self._tests_dir,
-                Path(repo_url).name.replace('.git', ''),
-            )
+            subpath = repo_reference_subpath(repo_url)
+            if subpath.endswith('.git'):
+                subpath = subpath[:-4]
+            repo_path = Path(self._tests_dir, subpath)
             result = None
             for attempt in range(1, 6):
                 cmd = (f'if [ -e {repo_path} ]; then cd {repo_path} && '
                        f'git reset --hard origin/master && git checkout master && git pull; '
-                       f'else cd {self._tests_dir} && git clone {repo_url}; fi')
+                       f'else mkdir -p {repo_path.parent} && '
+                       f'git clone {repo_url} {repo_path}; fi')
                 result = self._ssh_client.sync_run_command(cmd)
                 if result.is_successful():
                     break
@@ -1903,10 +1914,6 @@ class GenericVMRunner(BaseRunner):
             if not result or (result and not result.is_successful()):
                 return
 
-            repo_path = Path(
-                self._tests_dir,
-                Path(repo_url).name.replace('.git', ''),
-            )
             command = f'git fetch origin && git checkout {git_ref}'
             if 'gerrit' in repo_url:
                 command = prepare_gerrit_command(git_ref)
