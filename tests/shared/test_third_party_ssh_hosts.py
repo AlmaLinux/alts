@@ -7,7 +7,11 @@ when unset (the Ansible template keys off `user is defined`).
 """
 import pytest
 
-from alts.shared.models import CeleryConfig, ThirdPartyRepoSshHost
+from alts.shared.models import (
+    CachedTestRepo,
+    CeleryConfig,
+    ThirdPartyRepoSshHost,
+)
 
 
 class TestThirdPartyRepoSshHost:
@@ -35,12 +39,31 @@ class TestThirdPartyRepoSshHost:
             ThirdPartyRepoSshHost()
 
 
+class TestCachedTestRepo:
+    def test_requires_src_and_dest(self):
+        entry = CachedTestRepo(
+            src='/opt/QA',
+            dest='/opt/gerrit.cloudlinux.com/QA',
+        )
+        assert entry.model_dump() == {
+            'src': '/opt/QA',
+            'dest': '/opt/gerrit.cloudlinux.com/QA',
+        }
+
+    @pytest.mark.parametrize('kwargs', [{}, {'src': '/opt/QA'}])
+    def test_missing_field_raises(self, kwargs):
+        with pytest.raises(Exception):
+            CachedTestRepo(**kwargs)
+
+
 class TestCeleryConfigDefault:
-    def test_third_party_repo_ssh_hosts_defaults_to_empty(self):
-        # No built-in hosts: an unconfigured deployment writes no
-        # ~/.ssh/config (the role task is gated on a non-empty list).
-        config = CeleryConfig.__new__(CeleryConfig)
-        field = CeleryConfig.model_fields['third_party_repo_ssh_hosts']
-        # Pydantic stores the default factory / default value.
+    @pytest.mark.parametrize(
+        'field_name',
+        ['third_party_repo_ssh_hosts', 'cached_test_repos'],
+    )
+    def test_field_defaults_to_empty(self, field_name):
+        # No built-in entries: an unconfigured deployment is a no-op
+        # (the role tasks are gated on non-empty lists).
+        field = CeleryConfig.model_fields[field_name]
         default = field.get_default(call_default_factory=True)
         assert default == []

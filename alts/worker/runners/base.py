@@ -751,6 +751,10 @@ class BaseRunner(object):
                 entry.model_dump(exclude_none=True)
                 for entry in CONFIG.third_party_repo_ssh_hosts
             ],
+            'cached_test_repos': [
+                entry.model_dump()
+                for entry in CONFIG.cached_test_repos
+            ],
         }
         dist_major_version = self.dist_version[0]
         if self.dist_name in CONFIG.rhel_flavors and dist_major_version in ('6', '7'):

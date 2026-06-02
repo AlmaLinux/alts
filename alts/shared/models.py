@@ -243,6 +243,13 @@ class ThirdPartyRepoSshHost(BaseModel):
     user: Optional[str] = None
 
 
+class CachedTestRepo(BaseModel):
+    # Baked-in repo cache (`src`) on the VM image, re-seeded into the
+    # host-aware path (`dest`) during provisioning to avoid a full clone.
+    src: str
+    dest: str
+
+
 class CeleryConfig(BaseModel):
     def __init__(self, **data):
         super().__init__(**data)
@@ -353,6 +360,10 @@ class CeleryConfig(BaseModel):
     # default (current SSH user). Configured per-deployment; empty by
     # default so no `~/.ssh/config` is written unless explicitly set.
     third_party_repo_ssh_hosts: List[ThirdPartyRepoSshHost] = []
+    # Baked-in QA repo caches to re-seed into the host-aware layout during
+    # provisioning (avoids a full network clone on every VM). Empty by
+    # default; configured per-deployment to match the VM image's caches.
+    cached_test_repos: List[CachedTestRepo] = []
     tests_base_dir: str = '/tests'
     package_proxy: str = ''
     disabled_al_repos: List[str] = []

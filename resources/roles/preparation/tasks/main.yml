@@ -62,6 +62,49 @@
   tags:
     - initial_provision
 
+# Re-seed baked-in QA caches into the host-aware layout so the test
+# runner reuses them (light `git pull`) instead of a full network clone.
+# Docker envs receive repos via `docker cp` from the worker, so skip them.
+- name: Check which baked test repo caches exist
+  ansible.builtin.stat:
+    path: "{{ item.src }}"
+  register: cached_test_repo_stats
+  loop: "{{ cached_test_repos }}"
+  when:
+    - connection_type != 'docker'
+    - cached_test_repos | length > 0
+  tags:
+    - initial_provision
+
+- name: Ensure parent directories for seeded test repos exist
+  ansible.builtin.file:
+    path: "{{ item.item.dest | dirname }}"
+    state: directory
+    mode: '0755'
+  loop: "{{ cached_test_repo_stats.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.dest }}"
+  when:
+    - not (item.skipped | default(false))
+    - item.stat.exists
+  tags:
+    - initial_provision
+
+- name: Seed host-aware test repo paths from baked caches
+  ansible.builtin.copy:
+    src: "{{ item.item.src }}/"
+    dest: "{{ item.item.dest }}"
+    remote_src: true
+    mode: preserve
+  loop: "{{ cached_test_repo_stats.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.dest }}"
+  when:
+    - not (item.skipped | default(false))
+    - item.stat.exists
+  tags:
+    - initial_provision
+
 - name: Copy tests to test environment
   copy:
     src: "{{ integrity_tests_dir }}"
