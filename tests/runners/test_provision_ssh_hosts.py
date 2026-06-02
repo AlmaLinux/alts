@@ -14,7 +14,7 @@ import pytest
 
 from alts.worker import runners
 from alts.worker.runners.base import GenericVMRunner
-from alts.shared.models import ThirdPartyRepoSshHost
+from alts.shared.models import CachedTestRepo, ThirdPartyRepoSshHost
 
 
 def _make_runner(tmp_path):
@@ -97,3 +97,58 @@ class TestInitialProvisionSshHosts:
 
         extra_vars = _extract_extra_vars(captured['args'])
         assert extra_vars['third_party_repo_ssh_hosts'] == []
+
+
+class TestInitialProvisionCachedTestRepos:
+    def test_extra_vars_include_configured_caches(
+        self, tmp_path, monkeypatch,
+    ):
+        monkeypatch.setattr(
+            runners.base.CONFIG,
+            'cached_test_repos',
+            [
+                CachedTestRepo(
+                    src='/opt/QA',
+                    dest='/opt/gerrit.cloudlinux.com/QA',
+                ),
+            ],
+            raising=False,
+        )
+        captured = {}
+
+        def fake_run(cmd_args, timeout=None):
+            captured['args'] = cmd_args
+            return 0, '', ''
+
+        runner = _make_runner(tmp_path)
+        runner.run_ansible_command = fake_run
+
+        runner.initial_provision()
+
+        extra_vars = _extract_extra_vars(captured['args'])
+        assert extra_vars['cached_test_repos'] == [
+            {'src': '/opt/QA', 'dest': '/opt/gerrit.cloudlinux.com/QA'},
+        ]
+
+    def test_extra_vars_empty_when_unconfigured(
+        self, tmp_path, monkeypatch,
+    ):
+        monkeypatch.setattr(
+            runners.base.CONFIG,
+            'cached_test_repos',
+            [],
+            raising=False,
+        )
+        captured = {}
+
+        def fake_run(cmd_args, timeout=None):
+            captured['args'] = cmd_args
+            return 0, '', ''
+
+        runner = _make_runner(tmp_path)
+        runner.run_ansible_command = fake_run
+
+        runner.initial_provision()
+
+        extra_vars = _extract_extra_vars(captured['args'])
+        assert extra_vars['cached_test_repos'] == []
