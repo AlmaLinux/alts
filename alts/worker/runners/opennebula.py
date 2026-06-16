@@ -203,6 +203,7 @@ class OpennebulaRunner(GenericVMRunner):
             template_id=template_id,
             vm_disk_size=self.vm_disk_size,
             vm_ram_size=self.vm_ram_size,
+            vm_swap_size=self.vm_swap_size,
             opennebula_network=CONFIG.opennebula_config.network,
         )
 

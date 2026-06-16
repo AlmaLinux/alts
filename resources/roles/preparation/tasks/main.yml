@@ -21,6 +21,45 @@
   tags:
     - initial_provision
 
+# Some platforms (e.g. CL7h) carry many available kernels across repos, and
+# dnf/yum can exhaust memory while resolving kernel-module dependencies.
+# A swapfile sized from the platform's `vm_swap_size` gives them headroom.
+# VM-only (Docker envs share the host kernel and can't swapon) and a no-op
+# when vm_swap_size is 0.
+- name: Provide swap space for memory-constrained platforms
+  when:
+    - connection_type != 'docker'
+    - (vm_swap_size | int) > 0
+  tags:
+    - initial_provision
+  block:
+    - name: Allocate swapfile
+      ansible.builtin.command:
+        cmd: "fallocate -l {{ vm_swap_size }}M /swapfile"
+        creates: /swapfile
+
+    - name: Restrict swapfile permissions
+      ansible.builtin.file:
+        path: /swapfile
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Format swapfile
+      ansible.builtin.command:
+        cmd: mkswap /swapfile
+      register: _mkswap
+      changed_when: _mkswap.rc == 0
+
+    - name: Enable swapfile
+      ansible.builtin.command:
+        cmd: swapon /swapfile
+      register: _swapon
+      changed_when: _swapon.rc == 0
+      failed_when:
+        - _swapon.rc != 0
+        - "'already active' not in _swapon.stderr"
+
 # SSH client config is only needed where the third-party repo is cloned
 # *inside* the environment (VMs cloned over SSH). Docker envs receive the
 # repo via `docker cp` from the worker, so they never clone and need no

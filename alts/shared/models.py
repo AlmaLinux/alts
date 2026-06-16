@@ -154,6 +154,8 @@ class OpennebulaConfig(BaseModel):
     vm_group: Optional[str] = None
     default_vm_disk_size: Optional[int] = 15360
     default_vm_ram_size: Optional[int] = 1536
+    # Swapfile size in MB created during provisioning; 0 disables it
+    default_vm_swap_size: Optional[int] = 0
     network: Optional[str] = None
     # Quota checking configuration
     quota_check_enabled: bool = False

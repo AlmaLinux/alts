@@ -42,6 +42,7 @@ opennebula_config:
   # in MB
   default_vm_disk_size:
   default_vm_ram_size:
+  default_vm_swap_size:
   network:
 
 bs_host:

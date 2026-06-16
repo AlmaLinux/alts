@@ -10,3 +10,6 @@ third_party_repo_ssh_hosts: []
 # and is passed in as an extra-var by the runner. Empty list here is a
 # no-op fallback so the role still works if invoked standalone.
 cached_test_repos: []
+# Swapfile size in MB, passed in as an extra-var by the runner from the
+# platform's `vm_swap_size`. 0 (the default) disables swapfile creation.
+vm_swap_size: 0

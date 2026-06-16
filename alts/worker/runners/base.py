@@ -357,6 +357,13 @@ class BaseRunner(object):
         )
 
     @property
+    def vm_swap_size(self) -> int:
+        return self._test_env.get(
+            'vm_swap_size',
+            getattr(CONFIG.opennebula_config, 'default_vm_swap_size', 0),
+        )
+
+    @property
     def dist_arch(self):
         return self._dist_arch
 
@@ -745,6 +752,7 @@ class BaseRunner(object):
             'integrity_tests_dir': self._integrity_tests_dir,
             'connection_type': self.ansible_connection_type,
             'pytest_is_needed': self.pytest_is_needed,
+            'vm_swap_size': self.vm_swap_size,
             'development_mode': CONFIG.development_mode,
             'package_proxy': CONFIG.package_proxy,
             'third_party_repo_ssh_hosts': [
