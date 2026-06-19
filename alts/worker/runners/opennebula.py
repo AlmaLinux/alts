@@ -35,6 +35,13 @@ class OpennebulaRunner(GenericVMRunner):
     """Opennebula environment runner for testing tasks."""
 
     TYPE = 'opennebula'
+    COST_STANDARD = 1
+    COST_RELEASE_BUILD = 2
+
+    @classmethod
+    def get_cost(cls, release_build: bool = False) -> int:
+        return cls.COST_RELEASE_BUILD if release_build else cls.COST_STANDARD
+
     TEMPFILE_PREFIX = 'opennebula_test_runner_'
     TF_VARIABLES_FILE = 'opennebula.tfvars'
     TF_MAIN_FILE = 'opennebula.tf'

@@ -124,7 +124,7 @@ class TestsScheduler(threading.Thread):
                 repo_counter += 1
             repositories.append({'url': repository.baseurl, 'name': repo_name})
 
-        queue_name = f'{runner_type}-{queue_arch}-{runner_class.COST}'
+        queue_name = f'{runner_type}-{queue_arch}-{runner_class.get_cost(payload.release_build)}'
         task_id = str(uuid.uuid4())
         task_params = payload.model_dump()
         task_params['task_id'] = task_id

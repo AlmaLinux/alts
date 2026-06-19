@@ -189,6 +189,11 @@ class BaseRunner(object):
         s390x=['s390x'],
     )
     COST = 0
+
+    @classmethod
+    def get_cost(cls, release_build: bool = False) -> int:
+        return cls.COST
+
     TF_VARIABLES_FILE = None
     TF_MAIN_FILE = None
     TF_VERSIONS_FILE = 'versions.tf'
