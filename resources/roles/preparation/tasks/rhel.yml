@@ -79,10 +79,9 @@
   with_items:
     - "os"
     - "updates"
-  when:
-    - ansible_distribution_file_variety in ('RedHat', 'CentOS')
-    - ansible_connection == 'docker'
-    - ansible_facts.distribution_major_version == '7'
+  when: >
+    (ansible_distribution == 'CentOS' and ansible_facts.distribution_major_version == '7') or
+    (ansible_distribution_file_variety in ('RedHat', 'CentOS') and ansible_connection == 'docker' and ansible_facts.distribution_major_version == '7')
 
 - name: Add YUM proxy
   ini_file:
