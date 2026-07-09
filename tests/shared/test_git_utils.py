@@ -1,7 +1,10 @@
-"""Tests for alts.shared.utils.git_utils.repo_reference_subpath."""
+"""Tests for alts.shared.utils.git_utils."""
 import pytest
 
-from alts.shared.utils.git_utils import repo_reference_subpath
+from alts.shared.utils.git_utils import (
+    prepare_gerrit_command,
+    repo_reference_subpath,
+)
 
 
 class TestRepoReferenceSubpath:
@@ -62,3 +65,28 @@ class TestRepoReferenceSubpath:
     def test_unparseable_url_falls_back_to_basename(self):
         # No scheme, no SCP-style colon — degenerate input.
         assert repo_reference_subpath('just-a-name') == 'just-a-name.git'
+
+
+class TestPrepareGerritCommand:
+    CLEANUP = 'git reset --hard && git clean -fdx'
+
+    def test_master_cleans_before_checkout(self):
+        cmd = prepare_gerrit_command('master')
+        assert cmd.startswith(self.CLEANUP)
+        assert cmd == f'{self.CLEANUP} && git checkout master && git pull'
+
+    def test_named_branch_cleans_before_checkout(self):
+        cmd = prepare_gerrit_command('some-feature-branch')
+        assert cmd.startswith(self.CLEANUP)
+        assert 'git checkout some-feature-branch' in cmd
+
+    def test_changeset_cleans_before_checkout(self):
+        # git_ref "review/patchset" -> refs/changes/<last 2 of review>/...
+        cmd = prepare_gerrit_command('256840/2')
+        assert cmd.startswith(self.CLEANUP)
+        assert "git fetch origin 'refs/changes/40/256840/2'" in cmd
+        assert cmd.endswith('git checkout FETCH_HEAD')
+
+    def test_incomplete_changeset_returns_empty(self):
+        # A ref with an empty segment isn't a valid review/patchset pair.
+        assert prepare_gerrit_command('256840/') == ''

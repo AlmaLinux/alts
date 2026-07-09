@@ -135,11 +135,18 @@ def clone_git_repo(
 
 
 def prepare_gerrit_command(git_ref: str) -> str:
+    # The repo is reused between runs, so a previous checkout (or the test
+    # run itself) can leave the working tree dirty with modified tracked
+    # files and untracked leftovers. Reset and clean first, otherwise the
+    # subsequent `git checkout` aborts with "local changes/untracked working
+    # tree files would be overwritten by checkout".
+    cleanup = 'git reset --hard && git clean -fdx'
     command = ''
     if git_ref == 'master':
-        command = 'git checkout master && git pull'
+        command = f'{cleanup} && git checkout master && git pull'
     elif '/' not in git_ref and not git_ref.isdigit():
         command = (
+            f'{cleanup} && '
             f'git reset --hard origin/{git_ref} && '
             f'git checkout {git_ref} && git pull'
         )
@@ -147,6 +154,7 @@ def prepare_gerrit_command(git_ref: str) -> str:
         review, patchset = git_ref.split('/')
         sm = review[-2:]
         command = (
+            f'{cleanup} && '
             'git checkout master && git pull && '
             f"git fetch origin 'refs/changes/{sm}/{review}/{patchset}' "
             '--force --update-head-ok --progress && '
