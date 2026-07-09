@@ -13,7 +13,7 @@
     curl -fSL -o "/tmp/{{ package_name }}-{{ package_version.stdout }}.apk" "{{ extra_alpine_repo }}/{{ ansible_architecture }}/{{ package_name }}-{{ package_version.stdout }}.apk"
 
 - name: "Install {{ package_name }} from downloaded package"
-  command: "apk add --allow-untrusted --no-network /tmp/{{ package_name }}-{{ package_version.stdout }}.apk"
+  command: "apk add --allow-untrusted /tmp/{{ package_name }}-{{ package_version.stdout }}.apk"
 
 - name: "Verify {{ package_name }} version was installed"
   shell: apk list -I {{ package_name }} | head -1 | sed 's/^{{ package_name }}-\([^ ]*\).*/\1/'
