@@ -1916,7 +1916,14 @@ class GenericVMRunner(BaseRunner):
             repo_path = Path(self._tests_dir, subpath)
             result = None
             for attempt in range(1, 6):
+                # The repo persists between runs on the VM, so a previous
+                # test run can leave the working tree dirty with modified
+                # tracked files and untracked leftovers. Clean before
+                # switching refs, otherwise a later `git checkout` aborts
+                # with "local changes/untracked working tree files would be
+                # overwritten by checkout".
                 cmd = (f'if [ -e {repo_path} ]; then cd {repo_path} && '
+                       f'git reset --hard && git clean -fdx && '
                        f'git reset --hard origin/master && git checkout master && git pull; '
                        f'else mkdir -p {repo_path.parent} && '
                        f'git clone {repo_url} {repo_path}; fi')
