@@ -4,3 +4,4 @@ yum_download_utils_pkg: "yum-utils"
 force_install_pkgs:
   - "systemd-standalone-sysusers"
   - "systemd-standalone-tmpfiles"
+  - "libcrypt-nss"
