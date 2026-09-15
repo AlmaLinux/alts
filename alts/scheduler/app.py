@@ -26,8 +26,7 @@ from fastapi.security import HTTPBearer
 from sqlalchemy import select
 
 from alts.scheduler import CONFIG
-from alts.scheduler.db import Session, Task, database
-from alts.scheduler.monitoring import TasksMonitor
+from alts.scheduler.db import Session, Task, database, prune_tasks
 from alts.scheduler.scheduling import TestsScheduler
 from alts.shared.constants import API_VERSION, DEFAULT_REQUEST_TIMEOUT
 from alts.shared.exceptions import ALTSBaseError
@@ -35,7 +34,6 @@ from alts.shared.models import CancelTaskResponse, TaskResultResponse
 from alts.worker.app import celery_app
 
 app = FastAPI()
-monitor = None
 scheduler = None
 terminate_event = Event()
 graceful_terminate_event = Event()
@@ -142,25 +140,10 @@ async def startup():
     # for _, tasks in inspect_instance.active(safe=True).items():
     #     # TODO: Add query to database and update tasks
     #     pass
-    with Session() as session:
-        with session.begin():
-            tasks_for_update = []
-            for task in session.query(Task).filter(Task.status == 'STARTED'):
-                task_result = AbortableAsyncResult(task.task_id, app=celery_app)
-                if task.status != task_result.state:
-                    task.status = task_result.state
-                    tasks_for_update.append(task)
-            if tasks_for_update:
-                try:
-                    session.add_all(tasks_for_update)
-                    session.commit()
-                except Exception:
-                    logging.exception('Cannot save tasks info:')
-    del tasks_for_update
+    prune_tasks()
 
     global graceful_terminate_event
     global terminate_event
-    global monitor
     global scheduler
 
     def signal_handler(signum, frame):
@@ -175,17 +158,11 @@ async def startup():
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGUSR1, sigusr_handler)
 
-    monitor = TasksMonitor(
-        terminate_event,
-        graceful_terminate_event,
-        celery_app,
-    )
     scheduler = TestsScheduler(
         terminate_event,
         graceful_terminate_event,
         celery_app,
     )
-    monitor.start()
     scheduler.start()
 
 
