@@ -446,3 +446,9 @@ class SchedulerConfig(CeleryConfig):
     working_directory: str = '/srv/alts/scheduler'
     jwt_secret: str
     hashing_algorithm: str = 'HS256'
+    # Task bookkeeping rows are only needed to map a build system task to its
+    # Celery task while it can still be cancelled. Keep a recent window and
+    # prune the rest on startup so the table cannot grow without bound.
+    task_retention_rows: int = 200000
+    task_prune_chunk_size: int = 10000
+    task_prune_time_budget: int = 30
