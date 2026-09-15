@@ -217,6 +217,13 @@ class DockerRunner(BaseRunner):
                         pattern,
                         sources_file,
                     )
+            if self.dist_version.startswith('11'):
+                self.exec_command(
+                    'bash',
+                    '-c',
+                    'echo \'Acquire::Check-Valid-Until "false";\''
+                    ' > /etc/apt/apt.conf.d/99workaround',
+                )
 
             if self.dist_version.startswith('12'):
                 sources_file = '/etc/apt/sources.list.d/debian.sources'
