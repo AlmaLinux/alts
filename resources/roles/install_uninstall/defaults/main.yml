@@ -5,3 +5,10 @@ force_install_pkgs:
   - "systemd-standalone-sysusers"
   - "systemd-standalone-tmpfiles"
   - "libcrypt-nss"
+# Packages that are not modular themselves, but provide a name owned by a
+# modular stream (e.g. percona-server-shared provides mysql-libs, which belongs
+# to mysql:8.0). libdnf applies modular filtering by Provides, so such packages
+# are hidden in build repos until those repos are marked module_hotfixes=1.
+module_hotfixes_pkg_patterns:
+  - "^MariaDB"
+  - "^percona-"

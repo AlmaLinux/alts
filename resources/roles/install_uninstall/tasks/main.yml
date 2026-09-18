@@ -15,7 +15,10 @@
 - ansible.builtin.set_fact:
     is_alt_package: "{{ pkg_name | regex_search('^alt-(php|python|ruby|nodejs).*', ignorecase=True) is not none }}"
     is_custom_mysql_package: "{{ pkg_name | regex_search('^cl-(mysql|mariadb).*', ignorecase=True) is not none }}"
-    is_mariadb_package: "{{ pkg_name.startswith('MariaDB') }}"
+    needs_module_hotfixes: >-
+      {{ module_hotfixes_pkg_patterns | length > 0 and
+         pkg_name | regex_search('(?:' ~ (module_hotfixes_pkg_patterns | join('|')) ~ ')')
+         is not none }}
     is_ea_apache24_mod_lsapi: "{{ pkg_name.startswith('ea-apache24-mod-lsapi') }}"
     is_ea_apache24_mod_cgid: "{{ pkg_name.startswith('ea-apache24-mod_cgid') }}"
     is_ea_apache24_mod_http2: "{{ pkg_name.startswith('ea-apache24-mod_http2') }}"
@@ -133,12 +136,12 @@
   when:
     - ansible_facts.os_family == 'RedHat'
     - ansible_facts.distribution_major_version == '8'
-    - is_mariadb_package
+    - needs_module_hotfixes
     - module_name is not defined
   tags:
     - install_package
 
-- name: Enable module_hotfixes in build repos for MariaDB packages on EL8
+- name: Enable module_hotfixes in build repos for modular-filtered packages on EL8
   community.general.ini_file:
     path: "{{ item.path }}"
     section: "{{ item.path | basename | regex_replace('\\.repo$', '') }}"
@@ -148,7 +151,7 @@
   when:
     - ansible_facts.os_family == 'RedHat'
     - ansible_facts.distribution_major_version == '8'
-    - is_mariadb_package
+    - needs_module_hotfixes
     - module_name is not defined
   tags:
     - install_package
