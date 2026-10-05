@@ -1,10 +1,7 @@
 ---
 
-- name: Update all packages
-  apt:
-    name: "*"
-    state: latest
-
+# Installed before the first apt run so its settings (proxy, retries)
+# apply to every apt invocation.
 - name: Install custom apt.conf
   template:
     src: custom-apt.conf.j2
@@ -12,6 +9,11 @@
     mode: 0644
     owner: root
     group: root
+
+- name: Update all packages
+  apt:
+    name: "*"
+    state: latest
 
 - name: Check /etc/dpkg/dpkg.cfg.d/excludes presence
   stat:

@@ -42,6 +42,10 @@
     state: present
   ignore_errors: true
   args: "{{ dnf_args if ansible_facts.os_family == 'RedHat' else apt_args}}"
+  register: pkg_mgr_result
+  until: pkg_mgr_retry_done | bool
+  retries: "{{ pkg_mgr_retries }}"
+  delay: "{{ pkg_mgr_retry_delay }}"
   when:
     - is_alt_package or is_custom_mysql_package
     - ansible_facts.os_family in ('RedHat', 'Debian')
@@ -80,6 +84,10 @@
       - ea-apache24-mod_cgi
       - ea-apache24-mod_mpm_prefork
     state: absent
+  register: pkg_mgr_result
+  until: pkg_mgr_retry_done | bool
+  retries: "{{ pkg_mgr_retries }}"
+  delay: "{{ pkg_mgr_retry_delay }}"
   when:
     - is_ea_apache24_mod_cgid
     - ansible_facts.os_family == 'RedHat'
@@ -91,6 +99,10 @@
     name:
       - ea-apache24-mod_mpm_prefork
     state: absent
+  register: pkg_mgr_result
+  until: pkg_mgr_retry_done | bool
+  retries: "{{ pkg_mgr_retries }}"
+  delay: "{{ pkg_mgr_retry_delay }}"
   when:
     - is_ea_apache24_mod_http2
     - ansible_facts.os_family == 'RedHat'
@@ -100,6 +112,10 @@
 
 - name: Enable module
   ansible.builtin.shell: dnf module enable -y "{{ module_name }}:{{ module_stream }}:{{ module_version }}"
+  register: pkg_mgr_result
+  until: pkg_mgr_retry_done | bool
+  retries: "{{ pkg_mgr_retries }}"
+  delay: "{{ pkg_mgr_retry_delay }}"
   when: >
     ansible_facts.os_family == 'RedHat' and
     module_name is defined and module_stream is defined and module_version is defined
@@ -109,6 +125,10 @@
 - name: Downgrade nss packages on EL7
   ansible.builtin.shell:
     cmd: "yum downgrade -y nss*-{{ pkg_version }}"
+  register: pkg_mgr_result
+  until: pkg_mgr_retry_done | bool
+  retries: "{{ pkg_mgr_retries }}"
+  delay: "{{ pkg_mgr_retry_delay }}"
   when:
     - ansible_facts.os_family == 'RedHat'
     - ansible_facts.distribution_major_version == '7'
@@ -119,6 +139,10 @@
 - name: Downgrade grub2 packages on EL7
   ansible.builtin.shell:
     cmd: "yum downgrade -y grub2*-{{ pkg_version }}"
+  register: pkg_mgr_result
+  until: pkg_mgr_retry_done | bool
+  retries: "{{ pkg_mgr_retries }}"
+  delay: "{{ pkg_mgr_retry_delay }}"
   when:
     - ansible_facts.os_family == 'RedHat'
     - ansible_facts.distribution_major_version == '7'
@@ -161,6 +185,10 @@
     name: "{{ pkg_name }}"
     state: present
   args: "{{ dnf_args }}"
+  register: pkg_mgr_result
+  until: pkg_mgr_retry_done | bool
+  retries: "{{ pkg_mgr_retries }}"
+  delay: "{{ pkg_mgr_retry_delay }}"
   when:
     - ansible_facts.os_family == 'RedHat'
     - not (force_install | bool)
@@ -171,6 +199,10 @@
   ansible.builtin.package:
     name: "{{ yum_download_utils_pkg if ansible_facts.distribution_major_version | int <= 7 else dnf_download_utils_pkg }}"
     state: present
+  register: pkg_mgr_result
+  until: pkg_mgr_retry_done | bool
+  retries: "{{ pkg_mgr_retries }}"
+  delay: "{{ pkg_mgr_retry_delay }}"
   when:
     - ansible_facts.os_family == 'RedHat'
     - force_install | bool
@@ -196,6 +228,10 @@
           if ansible_facts.distribution_major_version | int <= 7
           else 'dnf download --destdir=/tmp/force_install' }}
           {{ pkg_name }}
+      register: pkg_mgr_result
+      until: pkg_mgr_retry_done | bool
+      retries: "{{ pkg_mgr_retries }}"
+      delay: "{{ pkg_mgr_retry_delay }}"
 
     - name: Install downloaded RPM bypassing conflicts
       ansible.builtin.shell:
@@ -229,6 +265,10 @@
     state: present
     allow_unauthenticated: true
     install_recommends: no
+  register: pkg_mgr_result
+  until: pkg_mgr_retry_done | bool
+  retries: "{{ pkg_mgr_retries }}"
+  delay: "{{ pkg_mgr_retry_delay }}"
   when: ansible_distribution_file_variety == 'Debian'
   tags:
     - install_package

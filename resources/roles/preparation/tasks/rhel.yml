@@ -118,6 +118,10 @@
     name: epel-release
     state: present
     lock_timeout: 300
+  register: pkg_mgr_result
+  until: pkg_mgr_retry_done | bool
+  retries: "{{ pkg_mgr_retries }}"
+  delay: "{{ pkg_mgr_retry_delay }}"
   when: "ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version | int >= 8"
 
 - name: Install epel-release (7 and less)
@@ -125,6 +129,10 @@
     name: "{{ epel_release_url }}"
     state: present
     lock_timeout: 300
+  register: pkg_mgr_result
+  until: pkg_mgr_retry_done | bool
+  retries: "{{ pkg_mgr_retries }}"
+  delay: "{{ pkg_mgr_retry_delay }}"
   when: >
     epel_release_url is defined and
     epel_release_url and
@@ -178,6 +186,10 @@
     enablerepo: epel
     lock_timeout: 300
     update_cache: yes
+  register: pkg_mgr_result
+  until: pkg_mgr_retry_done | bool
+  retries: "{{ pkg_mgr_retries }}"
+  delay: "{{ pkg_mgr_retry_delay }}"
   when: centos_7_x32 | bool is false
 
 - name: Install additional packages on CentOS 7 i686
@@ -186,6 +198,10 @@
     state: present
     lock_timeout: 300
     update_cache: yes
+  register: pkg_mgr_result
+  until: pkg_mgr_retry_done | bool
+  retries: "{{ pkg_mgr_retries }}"
+  delay: "{{ pkg_mgr_retry_delay }}"
   when: centos_7_x32 | bool
 
 - name: Add required repositories
@@ -206,6 +222,10 @@
     update_cache: yes
     lock_timeout: 300
     disablerepo: "{{ disabled_al_repos }}"
+  register: pkg_mgr_result
+  until: pkg_mgr_retry_done | bool
+  retries: "{{ pkg_mgr_retries }}"
+  delay: "{{ pkg_mgr_retry_delay }}"
   when:
     - ansible_facts.distribution == 'AlmaLinux'
     - disabled_al_repos is defined
@@ -217,6 +237,10 @@
     state: latest
     update_cache: yes
     lock_timeout: 300
+  register: pkg_mgr_result
+  until: pkg_mgr_retry_done | bool
+  retries: "{{ pkg_mgr_retries }}"
+  delay: "{{ pkg_mgr_retry_delay }}"
   when: >
     ansible_facts.distribution != 'AlmaLinux' or
     disabled_al_repos is not defined or
@@ -243,4 +267,8 @@
     enablerepo: epel
     lock_timeout: 300
     update_cache: yes
+  register: pkg_mgr_result
+  until: pkg_mgr_retry_done | bool
+  retries: "{{ pkg_mgr_retries }}"
+  delay: "{{ pkg_mgr_retry_delay }}"
   when: pytest_is_needed | bool

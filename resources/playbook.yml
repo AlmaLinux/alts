@@ -2,6 +2,24 @@
 - name: Manage environment
   hosts: all
   remote_user: root
+  vars:
+    # Shared retry policy for package manager tasks. Repos can be
+    # regenerated while we provision (repomd.xml points to primary/filelists
+    # that are already gone), and only re-running the whole command picks
+    # up fresh metadata. Retry only on download/mirror errors so genuine
+    # dependency failures still fail fast. Tasks opt in with:
+    #   register: pkg_mgr_result
+    #   until: pkg_mgr_retry_done | bool
+    #   retries: "{{ pkg_mgr_retries }}"
+    #   delay: "{{ pkg_mgr_retry_delay }}"
+    pkg_mgr_retries: 5
+    pkg_mgr_retry_delay: 30
+    pkg_mgr_transient_error_re: >-
+      Failed to download|Cannot download|Curl error|No more mirrors to try|Cannot retrieve repository metadata|Cannot find a valid baseurl|Failed to fetch|Hash Sum mismatch|Status code: 5[0-9][0-9]|Timeout was reached
+    pkg_mgr_retry_done: >-
+      {{ pkg_mgr_result is succeeded or
+         not ([pkg_mgr_result.msg | default(''), pkg_mgr_result.stderr | default('')]
+              | join('\n') is search(pkg_mgr_transient_error_re)) }}
   roles:
     - { role: preparation, tags: [ 'initial_provision' ] }
     - install_uninstall

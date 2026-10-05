@@ -5,6 +5,7 @@ Acquire::https::Proxy "{{ package_proxy }}";
 APT::Get::AllowUnauthenticated "true";
 Acquire::AllowInsecureRepositories "true";
 Acquire::ForceIPv4 "true";
+Acquire::Retries "{{ pkg_mgr_retries }}";
 Acquire::Check-Valid-Until "false";
 Acquire::Languages none;
 Acquire::IndexTargets::deb::Contents-deb::DefaultEnabled false;
