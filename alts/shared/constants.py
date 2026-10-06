@@ -13,6 +13,7 @@ __all__ = [
     'RHEL_FLAVORS',
     'SUPPORTED_ARCHITECTURES',
     'SUPPORTED_DISTRIBUTIONS',
+    'TaskPriority',
     'DEFAULT_REQUEST_TIMEOUT',
     'DEFAULT_UPLOADER_CONCURRENCY',
     'DEFAULT_SSH_AUTH_METHODS',
@@ -75,3 +76,16 @@ class TapStatusEnum(IntEnum):
     DONE = 1
     TODO = 2
     SKIPPED = 3
+
+
+class TaskPriority(IntEnum):
+    """
+    Celery priority of a test task. On Redis the lowest value is served
+    first, and each value gets its own `<queue>:<value>` list.
+    """
+    # Never published by the scheduler: reserved for tasks an operator
+    # routes by hand ahead of everything else
+    MANUAL = 0
+    RELEASE_BUILD = 1
+    SMALL_BUILD = 2
+    LARGE_BUILD = 3

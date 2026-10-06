@@ -296,14 +296,6 @@ class CeleryConfig(BaseModel):
     azureblockblob_base_path: str = 'celery_result_backend/'
     azure_connection_string: Optional[str] = None
     task_default_queue: str = 'default'
-    # On Redis a lower priority number is served first, and the broker
-    # keeps one list per value in `range(task_queue_max_priority)`, so it
-    # must stay above every priority the scheduler publishes: release
-    # builds, then small builds (the default), then large builds.
-    task_queue_max_priority: int = 3
-    task_default_priority: int = 1
-    release_build_priority: int = 0
-    large_build_priority: int = 2
     task_acks_late: bool = True
     task_track_started: bool = True
     worker_prefetch_multiplier: int = 1
@@ -396,6 +388,12 @@ class CeleryConfig(BaseModel):
     def broker_url(self) -> str:
         return self.broker_config.broker_url
 
+    @property
+    def task_queue_max_priority(self) -> int:
+        # Priorities are fixed in `TaskPriority` rather than configured, so
+        # the broker always has a list for every value that is published
+        return len(constants.TaskPriority)
+
     @computed_field(return_type=Set[str])
     @property
     def supported_distributions(self):
@@ -411,7 +409,7 @@ class CeleryConfig(BaseModel):
             'result_backend_max_retries': self.result_backend_max_retries,
             'task_default_queue': 'default',
             'task_queue_max_priority': self.task_queue_max_priority,
-            'task_default_priority': self.task_default_priority,
+            'task_default_priority': constants.TaskPriority.SMALL_BUILD,
             'task_acks_late': True,
             'task_track_started': True,
             'task_soft_time_limit': self.task_soft_time_limit,
@@ -423,7 +421,7 @@ class CeleryConfig(BaseModel):
         if isinstance(self.broker_config, RedisBrokerConfig):
             config_dict['broker_transport_options'].update({
                 'queue_order_strategy': 'priority',
-                'priority_steps': list(range(self.task_queue_max_priority)),
+                'priority_steps': [int(p) for p in constants.TaskPriority],
                 'sep': ':',
             })
         if isinstance(self.results_backend_config, AzureResultsConfig):

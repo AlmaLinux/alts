@@ -1,8 +1,8 @@
 """Tests for the Celery priority the scheduler gives each test task.
 
-On Redis a lower priority number is served first: release builds go
-first, then builds with at most `small_build_max_tasks` test tasks, then
-larger builds (PF-3736).
+On Redis a lower priority number is served first: manually routed tasks,
+then release builds, then builds with at most `small_build_max_tasks` test
+tasks, then larger builds (PF-3736).
 """
 import threading
 from unittest.mock import MagicMock, patch
@@ -12,7 +12,7 @@ import pytest
 from alts.scheduler import CONFIG
 # Imported as a module: pytest would try to collect `TestsScheduler`
 from alts.scheduler import scheduling
-from alts.shared.models import CeleryConfig
+from alts.shared.constants import TaskPriority
 
 
 def _payload(index: int, release_build: bool = False) -> dict:
@@ -52,22 +52,22 @@ def _run_once(test_tasks: list) -> list:
 @pytest.mark.parametrize('test_tasks, expected_priority', [
     pytest.param(
         [_payload(i, release_build=True) for i in range(50)],
-        CONFIG.release_build_priority,
+        TaskPriority.RELEASE_BUILD,
         id='release-build',
     ),
     pytest.param(
         [_payload(i) for i in range(5)],
-        CONFIG.task_default_priority,
+        TaskPriority.SMALL_BUILD,
         id='5-task-build',
     ),
     pytest.param(
         [_payload(i) for i in range(CONFIG.small_build_max_tasks)],
-        CONFIG.task_default_priority,
+        TaskPriority.SMALL_BUILD,
         id='build-at-small-limit',
     ),
     pytest.param(
         [_payload(i) for i in range(50)],
-        CONFIG.large_build_priority,
+        TaskPriority.LARGE_BUILD,
         id='50-task-build',
     ),
 ])
@@ -75,22 +75,33 @@ def test_task_priority_depends_on_build_size(test_tasks, expected_priority):
     assert _run_once(test_tasks) == [expected_priority] * len(test_tasks)
 
 
-def test_small_builds_are_served_after_release_and_before_large():
+def test_priorities_are_served_in_order():
     assert (
-        CONFIG.release_build_priority
-        < CONFIG.task_default_priority
-        < CONFIG.large_build_priority
+        TaskPriority.MANUAL
+        < TaskPriority.RELEASE_BUILD
+        < TaskPriority.SMALL_BUILD
+        < TaskPriority.LARGE_BUILD
     )
 
 
-def test_default_priority_steps_cover_every_published_priority():
+def test_redis_priority_steps_cover_every_priority():
     # Workers consume only the Redis priority lists listed in
     # `priority_steps`, so a priority outside them would never be served
-    fields = CeleryConfig.model_fields
-    steps = range(fields['task_queue_max_priority'].default)
-    for name in (
-        'release_build_priority',
-        'task_default_priority',
-        'large_build_priority',
-    ):
-        assert fields[name].default in steps
+    celery_config = CONFIG.get_celery_config_dict()
+    if 'priority_steps' in celery_config['broker_transport_options']:
+        steps = celery_config['broker_transport_options']['priority_steps']
+        assert steps == [int(p) for p in TaskPriority]
+    assert celery_config['task_queue_max_priority'] == len(TaskPriority)
+    assert celery_config['task_default_priority'] == TaskPriority.SMALL_BUILD
+
+
+def test_redis_priority_steps_ignore_configured_max_priority():
+    # Deployments still set the old `task_queue_max_priority` key; it must
+    # not shrink the steps below what the scheduler publishes
+    config = CONFIG.model_validate({
+        **CONFIG.model_dump(),
+        'broker_config': {'redis_host': 'redis'},
+        'task_queue_max_priority': 2,
+    })
+    transport = config.get_celery_config_dict()['broker_transport_options']
+    assert transport['priority_steps'] == [int(p) for p in TaskPriority]

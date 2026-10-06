@@ -10,7 +10,7 @@ import requests
 
 from alts.scheduler import CONFIG
 from alts.scheduler.db import Session, Task
-from alts.shared.constants import DEFAULT_REQUEST_TIMEOUT
+from alts.shared.constants import DEFAULT_REQUEST_TIMEOUT, TaskPriority
 from alts.shared.models import TaskRequestPayload
 from alts.worker.mappings import RUNNER_MAPPING
 from alts.worker.tasks import run_tests
@@ -52,18 +52,23 @@ class TestsScheduler(threading.Thread):
         return response_as_json
 
     @staticmethod
-    def get_task_priority(release_build: bool, build_tasks_count: int) -> int:
+    def get_task_priority(
+        release_build: bool,
+        build_tasks_count: int,
+    ) -> TaskPriority:
         """
         Returns the Celery priority for a test task of a build.
 
         Release builds go first, then builds with at most
         `small_build_max_tasks` test tasks, then larger builds.
+        `TaskPriority.MANUAL` is never returned: it is kept for tasks
+        routed by hand.
         """
         if release_build:
-            return CONFIG.release_build_priority
+            return TaskPriority.RELEASE_BUILD
         if build_tasks_count <= CONFIG.small_build_max_tasks:
-            return CONFIG.task_default_priority
-        return CONFIG.large_build_priority
+            return TaskPriority.SMALL_BUILD
+        return TaskPriority.LARGE_BUILD
 
     def schedule_test_task(
         self,
