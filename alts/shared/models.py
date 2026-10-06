@@ -296,9 +296,14 @@ class CeleryConfig(BaseModel):
     azureblockblob_base_path: str = 'celery_result_backend/'
     azure_connection_string: Optional[str] = None
     task_default_queue: str = 'default'
-    task_queue_max_priority: int = 2
+    # On Redis a lower priority number is served first, and the broker
+    # keeps one list per value in `range(task_queue_max_priority)`, so it
+    # must stay above every priority the scheduler publishes: release
+    # builds, then small builds (the default), then large builds.
+    task_queue_max_priority: int = 3
     task_default_priority: int = 1
     release_build_priority: int = 0
+    large_build_priority: int = 2
     task_acks_late: bool = True
     task_track_started: bool = True
     worker_prefetch_multiplier: int = 1
@@ -452,3 +457,6 @@ class SchedulerConfig(CeleryConfig):
     task_retention_rows: int = 200000
     task_prune_chunk_size: int = 10000
     task_prune_time_budget: int = 30
+    # Builds handed out with at most this many test tasks are queued ahead
+    # of larger ones, so a few tests are not stuck behind a big backlog.
+    small_build_max_tasks: int = 10

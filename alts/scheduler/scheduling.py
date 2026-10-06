@@ -51,7 +51,25 @@ class TestsScheduler(threading.Thread):
             self.logger.exception('Cannot get available test tasks:')
         return response_as_json
 
-    def schedule_test_task(self, payload: TaskRequestPayload):
+    @staticmethod
+    def get_task_priority(release_build: bool, build_tasks_count: int) -> int:
+        """
+        Returns the Celery priority for a test task of a build.
+
+        Release builds go first, then builds with at most
+        `small_build_max_tasks` test tasks, then larger builds.
+        """
+        if release_build:
+            return CONFIG.release_build_priority
+        if build_tasks_count <= CONFIG.small_build_max_tasks:
+            return CONFIG.task_default_priority
+        return CONFIG.large_build_priority
+
+    def schedule_test_task(
+        self,
+        payload: TaskRequestPayload,
+        build_tasks_count: int = 1,
+    ):
         """
         Schedules new tasks in Test System.
 
@@ -59,6 +77,8 @@ class TestsScheduler(threading.Thread):
         ----------
         payload : TaskRequestPayload
             Loader task data in appropriate for request form.
+        build_tasks_count : int
+            Number of test tasks handed out for the same build.
 
         Returns
         -------
@@ -131,9 +151,9 @@ class TestsScheduler(threading.Thread):
         task_params['runner_type'] = runner_type
         task_params['repositories'] = repositories
         try:
-            task_priority = (
-                CONFIG.release_build_priority if payload.release_build
-                else CONFIG.task_default_priority
+            task_priority = self.get_task_priority(
+                payload.release_build,
+                build_tasks_count,
             )
             run_tests.apply_async(
                 (task_params,),
@@ -163,8 +183,11 @@ class TestsScheduler(threading.Thread):
                 not self.__graceful_terminate.is_set()
                 or not self.__terminated_event.is_set()
         ):
-            for test_task_payload in self.get_available_test_tasks():
+            # The build system hands out all test tasks of one build at once
+            test_tasks = self.get_available_test_tasks()
+            for test_task_payload in test_tasks:
                 self.schedule_test_task(
-                    TaskRequestPayload(**test_task_payload)
+                    TaskRequestPayload(**test_task_payload),
+                    build_tasks_count=len(test_tasks),
                 )
             time.sleep(10)
