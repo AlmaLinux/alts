@@ -11,7 +11,7 @@ import urllib.parse
 from celery.contrib.abortable import AbortableTask
 from collections import defaultdict
 from socket import timeout
-from typing import Union
+from typing import Dict, List, Union
 
 import requests
 import requests.adapters
@@ -85,6 +85,38 @@ def are_tap_tests_success(tests_output: str):
     return errors == 0
 
 
+def should_skip_test(
+    package_name: str,
+    test_name: str,
+    excluded_tests: Dict[str, List[str]],
+    skipped_tests: List[str],
+) -> bool:
+    """
+    Checks if a test stage shouldn't run for the package.
+
+    Parameters
+    ----------
+    package_name : str
+        Package name.
+    test_name : str
+        Test stage, one of TESTS_MAPPING keys.
+    excluded_tests : dict
+        Test stages excluded for packages which names start with the keys.
+    skipped_tests : list
+        Tests skipped for the task, named as TESTS_MAPPING values.
+
+    Returns
+    -------
+    bool
+    """
+    if TESTS_MAPPING[test_name] in skipped_tests:
+        return True
+    for pkg_pattern, tests in excluded_tests.items():
+        if package_name.startswith(pkg_pattern) and test_name in tests:
+            return True
+    return False
+
+
 class RetryableTask(AbortableTask):
     autoretry_for = AUTO_RETRY_EXCEPTIONS
     max_retries = 5
@@ -112,6 +144,7 @@ def run_tests(self, task_params: dict, tests_to_skip: dict):
     """
     aborted = False
     summary = defaultdict(dict)
+    summary['skipped_tests'] = []
 
     def is_success(stage_data_: dict):
         tap_result = are_tap_tests_success(stage_data_.get('stdout', ''))
@@ -121,12 +154,6 @@ def run_tests(self, task_params: dict, tests_to_skip: dict):
             stage_data_['exit_code'] = 255
             return False
         return stage_data_['exit_code'] == 0
-
-    def should_skip_test(package, test_name, skipped_tests_map):
-        for pkg_pattern, tests in skipped_tests_map.items():
-            if package.startswith(pkg_pattern) and test_name in tests:
-                return True
-        return False
 
     def set_artifacts_when_stage_has_unexpected_exception(
         _artifacts: dict,
@@ -183,14 +210,19 @@ def run_tests(self, task_params: dict, tests_to_skip: dict):
     module_name = task_params.get('module_name')
     module_stream = task_params.get('module_stream')
     module_version = task_params.get('module_version')
+    skipped_tests = task_params.get('skipped_tests') or []
     try:
         # Wait a bit to not spawn all environments at once when
         # a lot of tasks are coming to the machine
         time.sleep(random.randint(5, 10))
-        summary['skipped_tests'] = []
 
         def run_or_skip(test_name, func, *args, **kwargs):
-            if should_skip_test(package_name, test_name, tests_to_skip):
+            if should_skip_test(
+                package_name,
+                test_name,
+                tests_to_skip,
+                skipped_tests,
+            ):
                 summary['skipped_tests'].append(TESTS_MAPPING[test_name])
             else:
                 func(*args, **kwargs)
@@ -217,6 +249,7 @@ def run_tests(self, task_params: dict, tests_to_skip: dict):
             package_name,
             package_version=package_version,
             package_epoch=package_epoch,
+            skipped_tests=skipped_tests,
         )
         run_or_skip("uninstall_package", runner.uninstall_package, package_name)
     except VMImageNotFound as exc:
@@ -262,6 +295,7 @@ def run_tests(self, task_params: dict, tests_to_skip: dict):
         if aborted:
             summary['revoked'] = True
         else:
+            summary['skipped_tests'].extend(runner.skipped_third_party_tests)
             for stage, stage_data in runner.artifacts.items():
                 # FIXME: Temporary solution, needs to be removed when this
                 #  test system will be the only running one

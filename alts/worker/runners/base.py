@@ -1,4 +1,5 @@
 import datetime
+import fnmatch
 import gzip
 import logging
 import os
@@ -105,6 +106,11 @@ DetectExecutorResult = Type[Optional[Union[
     CommandExecutor,
     ShellExecutor,
 ]]]
+
+
+def get_third_party_test_key(test_file_name: str) -> str:
+    """Name of a third party test in the artifacts and in the result."""
+    return f'{THIRD_PARTY_SECTION_NAME}_test_{test_file_name}'
 
 
 def command_decorator(
@@ -282,12 +288,17 @@ class BaseRunner(object):
         self._uploaded_logs = None
         self._stats = {}
         self._verbose = verbose
+        self._skipped_third_party_tests = []
         self.package_channel = package_channel
         self.vm_alive = vm_alive
 
     @property
     def artifacts(self):
         return self._artifacts
+
+    @property
+    def skipped_third_party_tests(self) -> List[str]:
+        return self._skipped_third_party_tests
 
     @property
     def uploaded_logs(self) -> Dict[str, str]:
@@ -1272,6 +1283,34 @@ class BaseRunner(object):
                 options = result_dict['options'].strip()
             return interpreter, options
 
+    def _skip_third_party_test(
+        self,
+        test_file: Path,
+        skipped_tests: List[str],
+    ) -> bool:
+        """
+        Checks if the third party test is skipped and remembers it if so.
+
+        Parameters
+        ----------
+        test_file : Path
+            Test file.
+        skipped_tests : list
+            Skipped tests, a single third party test is skipped as
+            third_party_test_<test file>, where the file may be a pattern.
+
+        Returns
+        -------
+        bool
+        """
+        key = get_third_party_test_key(test_file.name)
+        if not any(fnmatch.fnmatchcase(key, test) for test in skipped_tests):
+            return False
+        self._logger.info('Skipping the third party test %s', test_file.name)
+        if key not in self._skipped_third_party_tests:
+            self._skipped_third_party_tests.append(key)
+        return True
+
     def _run_test_file(
         self,
         test_file: Path,
@@ -1328,7 +1367,7 @@ class BaseRunner(object):
             self.env_name,
         )
         try:
-            key = f'{THIRD_PARTY_SECTION_NAME}_test_{test_file.name}'
+            key = get_third_party_test_key(test_file.name)
             self.run_third_party_test(
                 executor=executor,
                 cmd_args=cmd_args,
@@ -1359,9 +1398,11 @@ class BaseRunner(object):
         package_name: str,
         package_version: Optional[str] = None,
         package_epoch: Optional[int] = None,
+        skipped_tests: Optional[List[str]] = None,
     ):
         if not self._test_configuration:
             return 0, 'Nothing to run', ''
+        skipped_tests = skipped_tests or []
         errors = []
         executors_cache = {}
 
@@ -1393,7 +1434,10 @@ class BaseRunner(object):
                 self._logger.warning('Skipping test configuration')
                 continue
             init_test = self.get_init_script(tests_path)
-            if init_test:
+            if init_test and not self._skip_third_party_test(
+                init_test,
+                skipped_tests,
+            ):
                 self._run_test_file(
                     init_test,
                     remote_workdir,
@@ -1405,6 +1449,8 @@ class BaseRunner(object):
             # Check if package has 0_init-like script
             for test_file in tests_list:
                 if tests_to_run and test_file.name not in tests_to_run:
+                    continue
+                if self._skip_third_party_test(test_file, skipped_tests):
                     continue
                 if (('0_init' not in test_file.name
                      or '0_install' not in test_file.name)):

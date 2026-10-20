@@ -1,4 +1,5 @@
-from typing import Callable, Tuple
+from pathlib import Path
+from typing import Callable, List, Tuple
 
 import pytest
 
@@ -6,10 +7,12 @@ from alts.worker.runners import DockerRunner
 
 # from pyfakefs.fake_filesystem_unittest import TestCase
 
+
 # This function is provided by worker and doesn't
 # affect this test.
 def task_is_aborted():
     pass
+
 
 class TestDockerRunner:
     @pytest.mark.parametrize(
@@ -66,6 +69,53 @@ class TestDockerRunner:
             'pkg_manager',
         ):
             assert getattr(runner, attribute) == expected[attribute]
+
+    @pytest.mark.parametrize(
+        'test_file, skipped_tests, skipped',
+        [
+            pytest.param('smoke.sh', [], False, id='nothing-skipped'),
+            pytest.param(
+                'smoke.sh',
+                ['third_party_test_smoke.sh'],
+                True,
+                id='skipped-test',
+            ),
+            pytest.param(
+                'smoke.sh',
+                ['third_party_test_*.sh'],
+                True,
+                id='skipped-pattern',
+            ),
+            pytest.param(
+                'smoke.bats',
+                ['third_party_test_*.sh'],
+                False,
+                id='other-pattern',
+            ),
+            pytest.param(
+                'smoke.sh',
+                ['third_party_tests', 'uninstall_package'],
+                False,
+                id='other-tests-skipped',
+            ),
+        ],
+    )
+    def test_skip_third_party_test(
+        self,
+        test_file: str,
+        skipped_tests: List[str],
+        skipped: bool,
+    ):
+        runner = DockerRunner('test_id', task_is_aborted, 'almalinux', '9')
+        assert (
+            runner._skip_third_party_test(
+                Path('/tests/foo', test_file),
+                skipped_tests,
+            )
+            is skipped
+        )
+        expected = [f'third_party_test_{test_file}'] if skipped else []
+        assert runner.skipped_third_party_tests == expected
 
     # def setUp(self) -> None:
     #     self.patcher = patch('os.stat', MagicMock())

@@ -81,6 +81,8 @@ Example of a file content:
 }
 ```
 
+A task can also skip tests on its own with the `skipped_tests` field of its payload. The build system fills it from the package tests config in https://git.almalinux.org/tests/<package>. It takes the names the results use: `install_package`, `package_integrity_tests`, `third_party_tests` and `uninstall_package`, or `third_party_test_<test file>` for a single third-party test, where the file name may be a shell-style pattern (`third_party_test_*.bats`). Skipped tests are listed in `skipped_tests` of the task result.
+
 Filling options in the config file
 --
 
@@ -196,6 +198,7 @@ After acquiring the token, you can put it in Authorize section on the http://loc
   "repositories": [] # a list of repositories to add before attempting package installation. Each repository is a dictionary with 'name' and 'url' values. 'name' is optional
   "package_name": "string" # the name of the package to install
   "package_version": "string" # optional, version of the package you want to install
+  "skipped_tests": [] # optional, tests not to run, e.g. ["uninstall_package", "third_party_test_*.bats"]
 }
 ```
   
