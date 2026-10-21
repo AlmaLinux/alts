@@ -87,6 +87,8 @@
     owner: "{{ test_system_user }}"
     group: "{{ test_system_user }}"
     state: directory
+  tags:
+    - update
 
 - name: Create folder for Celery local results
   ansible.builtin.file:

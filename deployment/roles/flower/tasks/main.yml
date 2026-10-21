@@ -17,6 +17,8 @@
     owner: "{{ test_system_user }}"
     group: "{{ test_system_user }}"
     mode: "0755"
+  tags:
+    - update
 
 # Flower imports the ALTS Celery app, so it needs the ALTS dependencies.
 # Flower itself is pinned here rather than in the checkout's requirements,
@@ -71,6 +73,8 @@
     owner: root
     group: root
     mode: "0644"
+  tags:
+    - update
 
 - name: Add Flower port to firewall
   ansible.posix.firewalld:
