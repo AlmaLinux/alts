@@ -26,11 +26,17 @@
       git:
         repo: https://github.com/AlmaLinux/alts
         dest: ~/alts
+      register: scheduler_code
+      tags:
+        - update
 
     - name: Install scheduler dependencies
       pip:
         virtualenv: "{{ scheduler_venv_dir }}"
         requirements: ~/alts/requirements/scheduler.txt
+      register: scheduler_requirements
+      tags:
+        - update
 
     - name: Create config and SSL folder
       file:
@@ -59,6 +65,9 @@
       template:
         src: service_config.yaml.j2
         dest: "{{ test_system_config_dir }}/scheduler.yaml"
+      register: scheduler_config
+      tags:
+        - update
 
 - name: Create scheduler working directory
   file:
@@ -107,12 +116,19 @@
     src: alts-scheduler.service.j2
     dest: /etc/systemd/system/alts-scheduler.service
     mode: 0644
-
-- name: Reload scheduler service file
-  command: systemctl daemon-reload
+  register: scheduler_unit_file
+  tags:
+    - update
 
 - name: Enable and start scheduler service
-  service:
+  systemd:
     name: alts-scheduler
     enabled: yes
-    state: started
+    daemon_reload: yes
+    state: >-
+      {{ 'restarted'
+         if scheduler_code.changed or scheduler_requirements.changed
+            or scheduler_config.changed or scheduler_unit_file.changed
+         else 'started' }}
+  tags:
+    - update

@@ -7,6 +7,8 @@
     fail_msg: flower_password must be set to enable Flower basic auth
     quiet: true
   no_log: true
+  tags:
+    - update
 
 - name: Create Flower service log directory
   ansible.builtin.file:
@@ -23,6 +25,8 @@
     virtualenv: "{{ flower_venv_dir }}"
     requirements: "{{ flower_requirements_file }}"
   register: flower_requirements
+  tags:
+    - update
 
 - name: Create Flower environment file
   ansible.builtin.template:
@@ -33,6 +37,8 @@
     mode: "0600"
   no_log: true
   register: flower_env
+  tags:
+    - update
 
 - name: Create Flower Systemd service file
   ansible.builtin.template:
@@ -42,6 +48,8 @@
     group: root
     mode: "0644"
   register: flower_unit_file
+  tags:
+    - update
 
 - name: Create logrotate config for Flower
   ansible.builtin.template:
@@ -60,6 +68,8 @@
     immediate: true
   when: manage_firewall | default(true) | bool
 
+# Flower imports the ALTS Celery app from the checkout made by the
+# scheduler role, so it also needs a restart when that code changes
 - name: Enable and start Flower service
   ansible.builtin.systemd:
     name: alts-flower
@@ -68,4 +78,7 @@
     state: >-
       {{ 'restarted'
          if flower_requirements.changed or flower_env.changed or flower_unit_file.changed
+            or (scheduler_code.changed | default(false))
          else 'started' }}
+  tags:
+    - update
