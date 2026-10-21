@@ -18,13 +18,26 @@
     group: "{{ test_system_user }}"
     mode: "0755"
 
-- name: Install Flower requirements
+# Flower imports the ALTS Celery app, so it needs the ALTS dependencies.
+# Flower itself is pinned here rather than in the checkout's requirements,
+# so the role works with whatever ALTS revision is deployed
+- name: Install ALTS requirements for Flower
   become: true
   become_user: "{{ test_system_user }}"
   ansible.builtin.pip:
     virtualenv: "{{ flower_venv_dir }}"
     requirements: "{{ flower_requirements_file }}"
   register: flower_requirements
+  tags:
+    - update
+
+- name: Install Flower
+  become: true
+  become_user: "{{ test_system_user }}"
+  ansible.builtin.pip:
+    virtualenv: "{{ flower_venv_dir }}"
+    name: "flower=={{ flower_version }}"
+  register: flower_package
   tags:
     - update
 
@@ -77,7 +90,8 @@
     daemon_reload: true
     state: >-
       {{ 'restarted'
-         if flower_requirements.changed or flower_env.changed or flower_unit_file.changed
+         if flower_requirements.changed or flower_package.changed
+            or flower_env.changed or flower_unit_file.changed
             or (scheduler_code.changed | default(false))
          else 'started' }}
   tags:
