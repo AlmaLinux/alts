@@ -73,5 +73,6 @@ TESTS_MAPPING = {
     'run_system_info_commands': 'system_info',
     'install_package': 'install_package',
     'run_package_integrity_tests': 'package_integrity_tests',
+    'run_third_party_tests': 'third_party_tests',
     'uninstall_package': 'uninstall_package',
 }

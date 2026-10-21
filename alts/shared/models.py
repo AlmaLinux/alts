@@ -93,6 +93,10 @@ class TaskRequestPayload(BaseModel):
     module_version: Optional[str] = None
     callback_href: Optional[str] = None
     verbose: bool = False
+    # Tests not to run: install_package, package_integrity_tests,
+    # third_party_tests, uninstall_package, or third_party_test_<test file>
+    # for a single third-party test, where the file may be a shell pattern
+    skipped_tests: Optional[List[str]] = None
 
 
 class TaskRequestResponse(BaseModel):
