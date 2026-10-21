@@ -15,7 +15,7 @@ broker_config:
   use_ssl: true
   rabbitmq_ssl_port: {{ rabbitmq_ssl_port }}
 {% endif %}
-  rabbitmq_user: {{ celery_rabbitmq_user or test_system_user }}
+  rabbitmq_user: {{ celery_rabbitmq_user | default(test_system_user, true) }}
   rabbitmq_password: {{ test_system_password }}
   rabbitmq_vhost: {{ test_system_vhost }}
 {% elif broker_type == 'redis' and alts_redis_host and alts_redis_port %}
