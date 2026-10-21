@@ -1,3 +1,5 @@
 ---
 procps_pkg: "procps"
 centos_repo_baseurl: "https://vault.centos.org"
+cleanup_yum_conf_docs_settings: true
+ignore_ansible_install_errors: false
