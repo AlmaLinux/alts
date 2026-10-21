@@ -86,6 +86,15 @@ deprecated_ansible_venv: "{{ deprecated_ansible_virtualenv_directory }}"
 {% if package_proxy is defined %}
 package_proxy: "{{ package_proxy }}"
 {% endif %}
+{% if cleanup_yum_conf_docs_settings is defined %}
+cleanup_yum_conf_docs_settings: {{ cleanup_yum_conf_docs_settings | bool }}
+{% endif %}
+{% if ignore_ansible_install_errors is defined %}
+ignore_ansible_install_errors: {{ ignore_ansible_install_errors | bool }}
+{% endif %}
+{% if docker_image_overrides is defined %}
+docker_image_overrides: {{ docker_image_overrides | to_json }}
+{% endif %}
 {% if worker_type == 'opennebula' %}
 tests_base_dir: "{{ opennebula_tests_base_dir }}"
 {% if opennebula_rpc_endpoint and opennebula_username and opennebula_password and opennebula_vm_group and opennebula_network %}

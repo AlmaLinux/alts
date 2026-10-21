@@ -1,0 +1,71 @@
+---
+
+- name: Ensure Flower password is set
+  ansible.builtin.assert:
+    that:
+      - flower_password | length > 0
+    fail_msg: flower_password must be set to enable Flower basic auth
+    quiet: true
+  no_log: true
+
+- name: Create Flower service log directory
+  ansible.builtin.file:
+    path: "{{ flower_log_dir }}"
+    state: directory
+    owner: "{{ test_system_user }}"
+    group: "{{ test_system_user }}"
+    mode: "0755"
+
+- name: Install Flower requirements
+  become: true
+  become_user: "{{ test_system_user }}"
+  ansible.builtin.pip:
+    virtualenv: "{{ flower_venv_dir }}"
+    requirements: "{{ flower_requirements_file }}"
+  register: flower_requirements
+
+- name: Create Flower environment file
+  ansible.builtin.template:
+    src: alts-flower.env.j2
+    dest: "{{ flower_env_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  register: flower_env
+
+- name: Create Flower Systemd service file
+  ansible.builtin.template:
+    src: alts-flower.service.j2
+    dest: /etc/systemd/system/alts-flower.service
+    owner: root
+    group: root
+    mode: "0644"
+  register: flower_unit_file
+
+- name: Create logrotate config for Flower
+  ansible.builtin.template:
+    src: logrotate-flower.j2
+    dest: /etc/logrotate.d/alts-flower
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Add Flower port to firewall
+  ansible.posix.firewalld:
+    zone: public
+    port: "{{ flower_port }}/tcp"
+    state: enabled
+    permanent: true
+    immediate: true
+  when: manage_firewall | default(true) | bool
+
+- name: Enable and start Flower service
+  ansible.builtin.systemd:
+    name: alts-flower
+    enabled: true
+    daemon_reload: true
+    state: >-
+      {{ 'restarted'
+         if flower_requirements.changed or flower_env.changed or flower_unit_file.changed
+         else 'started' }}

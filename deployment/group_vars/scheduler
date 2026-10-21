@@ -47,6 +47,10 @@ celery_queues:
   - "docker-x86_64-0"
 
 scheduler_working_directory: /srv/alts/scheduler
+
+# Flower monitoring dashboard (deployed with the scheduler)
+flower_port: 5555
+# flower_password: ""  # Required, pass via --extra-vars or a vaulted vars file
 jwt_secret: very-secret-on5
 broker_pool: 30
 worker_prefetch_multiplier: 1

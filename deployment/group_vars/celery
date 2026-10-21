@@ -30,6 +30,15 @@ result_expires: 3600
 tests_exec_timeout: 3600
 broker_pool: 30
 
+# Optional overrides for environment provisioning
+# cleanup_yum_conf_docs_settings: false
+# ignore_ansible_install_errors: true
+# docker_image_overrides:
+#   - dist_name: almalinux
+#     dist_versions: ['8', '9']
+#     platform: linux/386
+#     image: quay.io/almalinuxautobot/almalinux
+
 celery_log_file_dir: /var/log/celery
 celery_log_file: "{{ celery_log_file_dir }}/celery.log"
 celery_concurrency: 10

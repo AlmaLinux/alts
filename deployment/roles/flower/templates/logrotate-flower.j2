@@ -1,0 +1,11 @@
+compress
+missingok
+notifempty
+weekly
+copytruncate
+{{ flower_log_dir }}/output.log {
+    rotate 2
+}
+{{ flower_log_dir }}/error.log {
+    rotate 4
+}
