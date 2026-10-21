@@ -117,8 +117,8 @@ class DockerRunner(BaseRunner):
             with image architecture.
         """
         docker_tf_file = os.path.join(self._work_dir, self.TF_MAIN_FILE)
-        image_name = f'{self.dist_name}:{self.dist_version}'
         image_platform = ARCH_PLATFORM_MAPPING.get(self.dist_arch)
+        image_name = self._get_image_name(image_platform)
         external_network = os.environ.get('EXTERNAL_NETWORK', None)
         http_proxy = os.environ.get('http_proxy', None)
         https_proxy = os.environ.get('https_proxy', None)
@@ -136,6 +136,26 @@ class DockerRunner(BaseRunner):
             https_proxy=https_proxy,
             no_proxy=no_proxy,
         )
+
+    def _get_image_name(self, image_platform: Optional[str]) -> str:
+        """
+        Returns Docker image name, applying the first matching
+        override from the config.
+        """
+        image = self.dist_name
+        major_version = self.dist_version.split('.')[0]
+        for override in CONFIG.docker_image_overrides:
+            if (
+                override.dist_name == self.dist_name
+                and override.platform == image_platform
+                and (
+                    self.dist_version in override.dist_versions
+                    or major_version in override.dist_versions
+                )
+            ):
+                image = override.image
+                break
+        return f'{image}:{self.dist_version}'
 
     def _render_tf_variables_file(self):
         pass

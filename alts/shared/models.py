@@ -159,6 +159,17 @@ class OpennebulaConfig(BaseModel):
     network: Optional[str] = None
 
 
+class DockerImageOverride(BaseModel):
+    # Replaces the image repository (the part before ':<version>')
+    # for matching Docker environments, e.g. to pull i386 images
+    # from a registry that still publishes them
+    dist_name: str
+    # Matched against the full version and its major part
+    dist_versions: List[str]
+    platform: str
+    image: str
+
+
 class RabbitmqBrokerConfig(BaseBrokerConfig):
     use_ssl: bool = False
     ssl_config: Optional[SslConfig] = None
@@ -326,6 +337,9 @@ class CeleryConfig(BaseModel):
     git_reference_directory: Optional[str] = None
     tests_base_dir: str = '/tests'
     package_proxy: str = ''
+    cleanup_yum_conf_docs_settings: bool = True
+    ignore_ansible_install_errors: bool = False
+    docker_image_overrides: List[DockerImageOverride] = []
     development_mode: bool = False
     authorize_build_repositories: bool = False
 

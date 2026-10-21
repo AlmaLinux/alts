@@ -741,6 +741,12 @@ class BaseRunner(object):
             'pytest_is_needed': self.pytest_is_needed,
             'development_mode': CONFIG.development_mode,
             'package_proxy': CONFIG.package_proxy,
+            'cleanup_yum_conf_docs_settings': (
+                CONFIG.cleanup_yum_conf_docs_settings
+            ),
+            'ignore_ansible_install_errors': (
+                CONFIG.ignore_ansible_install_errors
+            ),
         }
         dist_major_version = self.dist_version[0]
         if self.dist_name in CONFIG.rhel_flavors and dist_major_version in ('6', '7'):

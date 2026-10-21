@@ -3,7 +3,10 @@ from typing import Callable, List, Tuple
 
 import pytest
 
+from alts.shared.models import DockerImageOverride
+from alts.worker import CONFIG
 from alts.worker.runners import DockerRunner
+from alts.worker.runners.docker import ARCH_PLATFORM_MAPPING
 
 # from pyfakefs.fake_filesystem_unittest import TestCase
 
@@ -116,6 +119,63 @@ class TestDockerRunner:
         )
         expected = [f'third_party_test_{test_file}'] if skipped else []
         assert runner.skipped_third_party_tests == expected
+
+    @pytest.mark.parametrize(
+        'dist_name, dist_version, dist_arch, expected',
+        [
+            pytest.param(
+                'almalinux', '8', 'i686',
+                'quay.io/almalinuxautobot/almalinux:8',
+                id='overridden',
+            ),
+            pytest.param(
+                'almalinux', '9.6', 'i386',
+                'quay.io/almalinuxautobot/almalinux:9.6',
+                id='overridden-by-major-version',
+            ),
+            pytest.param(
+                'almalinux', '8', 'x86_64', 'almalinux:8',
+                id='other-arch',
+            ),
+            pytest.param(
+                'almalinux', '10', 'i686', 'almalinux:10',
+                id='other-version',
+            ),
+            pytest.param(
+                'centos', '8', 'i686', 'centos:8',
+                id='other-dist',
+            ),
+        ],
+    )
+    def test_get_image_name(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        dist_name: str,
+        dist_version: str,
+        dist_arch: str,
+        expected: str,
+    ):
+        monkeypatch.setattr(
+            CONFIG,
+            'docker_image_overrides',
+            [
+                DockerImageOverride(
+                    dist_name='almalinux',
+                    dist_versions=['8', '9'],
+                    platform='linux/386',
+                    image='quay.io/almalinuxautobot/almalinux',
+                ),
+            ],
+        )
+        runner = DockerRunner(
+            'test_id',
+            task_is_aborted,
+            dist_name,
+            dist_version,
+            dist_arch=dist_arch,
+        )
+        image_platform = ARCH_PLATFORM_MAPPING.get(dist_arch)
+        assert runner._get_image_name(image_platform) == expected
 
     # def setUp(self) -> None:
     #     self.patcher = patch('os.stat', MagicMock())

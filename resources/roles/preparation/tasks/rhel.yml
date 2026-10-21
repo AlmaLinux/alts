@@ -96,6 +96,7 @@
     section: main
     option: tsflags
     state: absent
+  when: cleanup_yum_conf_docs_settings | bool
 
 - name: Remove override_install_langs from YUM config
   ini_file:
@@ -104,6 +105,7 @@
     section: main
     option: override_install_langs
     state: absent
+  when: cleanup_yum_conf_docs_settings | bool
 
 - name: Delete /etc/rpm/macros.image-language-conf
   file:
@@ -169,6 +171,7 @@
     enablerepo: epel
     lock_timeout: 300
   when: pytest_is_needed | bool
+  ignore_errors: "{{ ignore_ansible_install_errors | bool }}"
 
 - name: Add required repositories
   yum_repository:
