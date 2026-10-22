@@ -15,7 +15,7 @@ broker_config:
   use_ssl: true
   rabbitmq_ssl_port: {{ rabbitmq_ssl_port }}
 {% endif %}
-  rabbitmq_user: {{ celery_rabbitmq_user or test_system_user }}
+  rabbitmq_user: {{ celery_rabbitmq_user | default(test_system_user, true) }}
   rabbitmq_password: {{ test_system_password }}
   rabbitmq_vhost: {{ test_system_vhost }}
 {% elif broker_type == 'redis' and alts_redis_host and alts_redis_port %}
@@ -59,6 +59,9 @@ task_track_started: true
 artifacts_root_directory: 'test_system_artifacts'
 worker_prefetch_multiplier: {{ worker_prefetch_multiplier }}
 result_expires: {{ result_expires }}
+{% if alts_service | default('') == 'scheduler' %}
+jwt_secret: "{{ jwt_secret }}"
+{% endif %}
 
 {% if buildsys_url | default('') %}
 bs_host: "{{ buildsys_url }}"
@@ -85,6 +88,15 @@ deprecated_ansible_venv: "{{ deprecated_ansible_virtualenv_directory }}"
 {% endif %}
 {% if package_proxy is defined %}
 package_proxy: "{{ package_proxy }}"
+{% endif %}
+{% if cleanup_yum_conf_docs_settings is defined %}
+cleanup_yum_conf_docs_settings: {{ cleanup_yum_conf_docs_settings | bool }}
+{% endif %}
+{% if ignore_ansible_install_errors is defined %}
+ignore_ansible_install_errors: {{ ignore_ansible_install_errors | bool }}
+{% endif %}
+{% if docker_image_overrides is defined %}
+docker_image_overrides: {{ docker_image_overrides | to_json }}
 {% endif %}
 {% if worker_type == 'opennebula' %}
 tests_base_dir: "{{ opennebula_tests_base_dir }}"

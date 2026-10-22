@@ -1,0 +1,20 @@
+[Unit]
+Description=Flower monitoring dashboard for AL test system Celery
+After=network.target
+
+[Service]
+User={{ test_system_user }}
+Group={{ test_system_user }}
+WorkingDirectory=/home/{{ test_system_user }}/alts
+EnvironmentFile={{ flower_env_file }}
+# Start through /bin/sh like alts-scheduler: under SELinux, systemd may not
+# execute binaries labelled as user home content directly
+ExecStart=/bin/sh -c 'exec {{ flower_venv_dir }}/bin/celery -A alts.worker.app flower \
+    --port={{ flower_port }}'
+StandardOutput=append:{{ flower_log_dir }}/output.log
+StandardError=append:{{ flower_log_dir }}/error.log
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

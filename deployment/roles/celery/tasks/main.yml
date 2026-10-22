@@ -31,11 +31,16 @@
       ansible.builtin.git:
         repo: https://github.com/AlmaLinux/alts
         dest: /home/{{ test_system_user }}/alts
+        force: true
+      tags:
+        - update
 
     - name: Install Celery dependencies
       ansible.builtin.pip:
         virtualenv: "{{ celery_venv_dir }}"
         requirements: /home/{{ test_system_user }}/alts/requirements/celery.txt
+      tags:
+        - update
 
     - name: Create config and SSL folder
       ansible.builtin.file:
@@ -66,12 +71,15 @@
         dest: "{{ test_system_config_dir }}/celery.yaml"
       tags:
         - celery-config
+        - update
 
 - name: Create Celery Systemd service file
   ansible.builtin.template:
     src: alts-celery.service.j2
     dest: /etc/systemd/system/alts-celery.service
     mode: 0644
+  tags:
+    - update
 
 - name: Create log files directory for Celery service
   ansible.builtin.file:
@@ -80,6 +88,8 @@
     owner: "{{ test_system_user }}"
     group: "{{ test_system_user }}"
     state: directory
+  tags:
+    - update
 
 - name: Create folder for Celery local results
   ansible.builtin.file:
@@ -105,3 +115,5 @@
     state: restarted
     daemon_reload: yes
     enabled: yes
+  tags:
+    - update

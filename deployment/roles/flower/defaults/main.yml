@@ -1,0 +1,13 @@
+---
+
+flower_port: 5555
+flower_log_dir: /var/log/alts-flower
+flower_venv_dir: /home/{{ test_system_user }}/.venv-flower
+flower_version: 2.0.1
+flower_requirements_file: /home/{{ test_system_user }}/alts/requirements/base.txt
+# Celery config Flower takes broker settings from (scheduler config by default)
+flower_celery_config: "{{ test_system_config_dir }}/scheduler.yaml"
+flower_env_file: /etc/sysconfig/alts-flower
+flower_user: alts-mon
+# Must be set, Flower UI allows revoking tasks and controlling workers
+flower_password: ""
