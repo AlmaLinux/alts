@@ -21,10 +21,6 @@
     allow_downgrade: true
     allowerasing: true
     lock_timeout: 300
-  register: pkg_mgr_result
-  until: pkg_mgr_retry_done | bool
-  retries: "{{ pkg_mgr_retries }}"
-  delay: "{{ pkg_mgr_retry_delay }}"
   when: ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version | int >= 8
   tags:
     - install_package
@@ -35,10 +31,6 @@
     state: present
     allow_downgrade: true
     lock_timeout: 300
-  register: pkg_mgr_result
-  until: pkg_mgr_retry_done | bool
-  retries: "{{ pkg_mgr_retries }}"
-  delay: "{{ pkg_mgr_retry_delay }}"
   when: ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version | int < 8
   tags:
     - install_package

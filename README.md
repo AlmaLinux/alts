@@ -49,6 +49,8 @@ Test system flow
 - Celery will save the task result (summary on the run) to the separate Azure/S3 folder;
 - Web application can return task status and result by calling a separate endpoint.
 
+Package manager operations in the test environment (initial provisioning, package installation and uninstallation) are retried when they fail on a transient repository/mirror error such as `Cannot download repomd.xml` or `Curl error (23)`: up to 3 retries, after about 5, 10 and 15 seconds. Each delay is randomly changed by up to 25% (`MIRROR_RETRY_JITTER`), so that the tasks a mirror failed together don't retry together. The error signatures and the delays are `MIRROR_ERROR_SIGNATURES` and `MIRROR_RETRY_DELAYS` in `alts/shared/constants.py`. Other failures and timeouts are not retried. The output of the step starts with a note about the failed attempts.
+
 Celery launch command example:
 
 `celery -A alts.app worker --pool=threads --concurrency=10 --loglevel=DEBUG`

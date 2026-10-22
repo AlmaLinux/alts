@@ -30,7 +30,12 @@ from mako.lookup import TemplateLookup
 from plumbum import ProcessExecutionError, ProcessTimedOut, local
 from sentry_sdk import capture_message
 
-from alts.shared.constants import COMMAND_TIMEOUT_EXIT_CODE
+from alts.shared.constants import (
+    COMMAND_TIMEOUT_EXIT_CODE,
+    MIRROR_ERROR_SIGNATURES,
+    MIRROR_RETRY_DELAYS,
+    MIRROR_RETRY_JITTER,
+)
 from alts.shared.exceptions import (
     AbortedTestTask,
     InstallPackageError,
@@ -64,6 +69,8 @@ __all__ = [
     'BaseRunner',
     'GenericVMRunner',
     'command_decorator',
+    'describe_mirror_error',
+    'find_mirror_error',
     'TESTS_SECTION_NAME',
     'TESTS_SECTIONS_NAMES',
 ]
@@ -111,6 +118,30 @@ DetectExecutorResult = Type[Optional[Union[
 def get_third_party_test_key(test_file_name: str) -> str:
     """Name of a third party test in the artifacts and in the result."""
     return f'{THIRD_PARTY_SECTION_NAME}_test_{test_file_name}'
+
+
+def find_mirror_error(output: str) -> Optional[re.Match]:
+    """
+    Finds the first transient repository/mirror error in package manager
+    output.
+    """
+    matches = (
+        signature.search(output) for signature in MIRROR_ERROR_SIGNATURES
+    )
+    return min(
+        (match for match in matches if match),
+        key=lambda match: match.start(),
+        default=None,
+    )
+
+
+def describe_mirror_error(match: re.Match, max_length: int = 200) -> str:
+    """Text of a found mirror error up to the end of its line."""
+    end = match.string.find('\n', match.start())
+    if end == -1:
+        end = len(match.string)
+    end = min(end, match.start() + max_length)
+    return match.string[match.start() : end].strip()
 
 
 def command_decorator(
@@ -629,6 +660,72 @@ class BaseRunner(object):
 
         return exit_code, stdout, stderr
 
+    def run_with_mirror_retries(
+        self,
+        operation: str,
+        run: Callable[[], Tuple[int, str, str]],
+        add_notes: bool = True,
+    ) -> Tuple[int, str, str]:
+        """
+        Runs a package manager operation, retrying it after each of
+        MIRROR_RETRY_DELAYS seconds (give or take MIRROR_RETRY_JITTER of
+        each) while it fails on a transient
+        repository/mirror error. Other failures and timeouts are not
+        retried. Returns the result of the last attempt, with a note about
+        the failed attempts prepended to its stdout unless add_notes is
+        False.
+        """
+        notes = []
+        attempts = len(MIRROR_RETRY_DELAYS) + 1
+        for attempt, delay in enumerate((*MIRROR_RETRY_DELAYS, None), 1):
+            exit_code, stdout, stderr = run()
+            if exit_code in (0, COMMAND_TIMEOUT_EXIT_CODE):
+                break
+            match = find_mirror_error(f'{stdout}\n{stderr}')
+            if not match:
+                break
+            error = describe_mirror_error(match)
+            if delay is not None:
+                delay = round(
+                    delay
+                    * random.uniform(
+                        1 - MIRROR_RETRY_JITTER, 1 + MIRROR_RETRY_JITTER
+                    ),
+                    1,
+                )
+            if delay is None or self.already_aborted:
+                self._logger.error(
+                    '%s failed on a mirror error on attempt %d of %d, '
+                    'giving up. Signature "%s" matched: %s',
+                    operation,
+                    attempt,
+                    attempts,
+                    match.re.pattern,
+                    error,
+                )
+                break
+            self._logger.warning(
+                '%s failed on a mirror error on attempt %d of %d, '
+                'retrying in %g seconds. Signature "%s" matched: %s',
+                operation,
+                attempt,
+                attempts,
+                delay,
+                match.re.pattern,
+                error,
+            )
+            notes.append(
+                f'Attempt {attempt} of {attempts} failed with exit code '
+                f'{exit_code} on a mirror error, retried in {delay:g} '
+                f'seconds: {error}'
+            )
+            self._raise_if_aborted()
+            time.sleep(delay)
+            self._raise_if_aborted()
+        if notes and add_notes:
+            stdout = '\n'.join(notes) + f'\n\n{stdout}'
+        return exit_code, stdout, stderr
+
     # First step
     def prepare_work_dir_files(self):
         # In case if you've removed worker folder, recreate one
@@ -773,8 +870,11 @@ class BaseRunner(object):
             'Running "ansible-playbook %s" command',
             cmd_args_str,
         )
-        exit_code, out, err = self.run_ansible_command(
-            cmd_args, timeout=CONFIG.provision_timeout
+        exit_code, out, err = self.run_with_mirror_retries(
+            'Initial provision',
+            lambda: self.run_ansible_command(
+                cmd_args, timeout=CONFIG.provision_timeout
+            ),
         )
         if exit_code == COMMAND_TIMEOUT_EXIT_CODE:
             return 1, '', f'Provision has timed out: {out}\n{err}'
@@ -904,8 +1004,11 @@ class BaseRunner(object):
             'Running "ansible-playbook %s" command',
             cmd_args_str,
         )
-        exit_code, out, err = self.run_ansible_command(
-            cmd_args, timeout=CONFIG.provision_timeout
+        exit_code, out, err = self.run_with_mirror_retries(
+            f'Installation of {full_pkg_name}',
+            lambda: self.run_ansible_command(
+                cmd_args, timeout=CONFIG.provision_timeout
+            ),
         )
         if exit_code == COMMAND_TIMEOUT_EXIT_CODE:
             self._logger.error(
@@ -971,7 +1074,11 @@ class BaseRunner(object):
             r'dnf', '-q', '--qf=%{NAME}', 'repoquery', '--requires', '--resolve', '--recursive',
             *protected
         )
-        exit_code, stdout, stderr = self.exec_command(*dnf_command)
+        exit_code, stdout, stderr = self.run_with_mirror_retries(
+            'Resolving protected packages',
+            lambda: self.exec_command(*dnf_command),
+            add_notes=False,
+        )
         if exit_code != 0:
             self._logger.warning(
                 'Cannot resolve non-uninstallable packages via DNF: %s',
@@ -1017,8 +1124,11 @@ class BaseRunner(object):
             cmd_args_str,
         )
 
-        exit_code, out, err = self.run_ansible_command(
-            cmd_args, timeout=CONFIG.provision_timeout
+        exit_code, out, err = self.run_with_mirror_retries(
+            f'Uninstallation of {full_pkg_name}',
+            lambda: self.run_ansible_command(
+                cmd_args, timeout=CONFIG.provision_timeout
+            ),
         )
         if exit_code == COMMAND_TIMEOUT_EXIT_CODE:
             self._logger.error(

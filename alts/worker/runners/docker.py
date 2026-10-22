@@ -250,13 +250,17 @@ class DockerRunner(BaseRunner):
                     '/etc/apt/sources.list',
                 )
             self._logger.info('Installing python3 package...')
-            exit_code, stdout, stderr = self.exec_command(
-                self.pkg_manager, 'update',
+            exit_code, stdout, stderr = self.run_with_mirror_retries(
+                'Update of package lists',
+                lambda: self.exec_command(self.pkg_manager, 'update'),
             )
             if exit_code != 0:
                 return exit_code, stdout, stderr
             cmd_args = (self.pkg_manager, 'install', '-y', 'python3')
-            exit_code, stdout, stderr = self.exec_command(*cmd_args)
+            exit_code, stdout, stderr = self.run_with_mirror_retries(
+                'Installation of python3',
+                lambda: self.exec_command(*cmd_args),
+            )
             if exit_code != 0:
                 return exit_code, stdout, stderr
             self._logger.info('Installation is completed')
