@@ -8,7 +8,9 @@
   roles:
     - base
     # TODO: add role for building docker for s390x
-    - geerlingguy.docker
+    - role: geerlingguy.docker
+      tags:
+        - install_docker
     - docker_customization
     - role: terraform
       tags:
