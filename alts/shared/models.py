@@ -365,6 +365,27 @@ class CeleryConfig(BaseModel):
     def supported_distributions(self):
         return set(self.rhel_flavors + self.debian_flavors)
 
+    def get_secret_values(self) -> List[str]:
+        """Credentials that must not appear in task logs and artifacts."""
+        secrets = [
+            self.bs_token,
+            self.s3_secret_access_key,
+            self.azure_connection_string,
+            getattr(self.broker_config, 'rabbitmq_password', None),
+            getattr(self.broker_config, 'redis_password', None),
+        ]
+        if self.opennebula_config:
+            secrets.append(self.opennebula_config.password)
+        for config in (self.results_backend_config, self.logs_uploader_config):
+            for field in (
+                'redis_password',
+                's3_secret_access_key',
+                'azure_connection_string',
+                'pulp_password',
+            ):
+                secrets.append(getattr(config, field, None))
+        return [secret for secret in secrets if secret]
+
     def get_celery_config_dict(self) -> Dict[str, Any]:
         config_dict = {
             'broker_url': self.broker_config.broker_url,

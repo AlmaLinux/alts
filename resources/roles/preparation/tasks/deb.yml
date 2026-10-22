@@ -70,4 +70,8 @@
     filename: 'test_repos'
     update_cache: yes
   with_items: "{{ repositories }}"
+  loop_control:
+    label: "{{ item.name }}"
+  # Build repositories URLs contain credentials
+  no_log: true
   when: repositories is defined and (repositories | length > 0)
