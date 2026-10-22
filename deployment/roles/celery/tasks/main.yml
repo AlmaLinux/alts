@@ -31,6 +31,7 @@
       ansible.builtin.git:
         repo: https://github.com/AlmaLinux/alts
         dest: /home/{{ test_system_user }}/alts
+        force: true
       tags:
         - update
 
