@@ -213,6 +213,10 @@
     gpgcheck: no
     priority: "{{ '10' if ansible_distribution == 'Amazon' and (item.name | regex_search('-br(-|$)') or 'koji' in item.url or 'tuxcare' in item.url) else omit }}"
   with_items: "{{ repositories }}"
+  loop_control:
+    label: "{{ item.name }}"
+  # Build repositories URLs contain credentials
+  no_log: true
   when: repositories is defined and (repositories | length > 0)
 
 - name: Update all packages (AlmaLinux with disabled repos)

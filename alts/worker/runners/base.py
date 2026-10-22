@@ -16,6 +16,7 @@ from typing import (
     Any,
     Callable,
     Dict,
+    Iterable,
     List,
     Optional,
     Tuple,
@@ -55,9 +56,12 @@ from alts.shared.utils.git_utils import (
     repo_reference_subpath,
 )
 from alts.shared.utils.log_utils import (
-    get_temp_log_files,
-    read_and_cleanup_temp_log_files,
+    RedactingFormatter,
     check_for_error_string,
+    get_temp_log_files,
+    prepare_secrets,
+    read_and_cleanup_temp_log_files,
+    redact_secrets,
 )
 from alts.shared.utils.plumbum_utils import wait_bg_process
 from alts.worker import CONFIG, RESOURCES_DIR
@@ -137,6 +141,8 @@ def command_decorator(
                 stdout = ''
                 stderr = 'Task timeout has exceeded'
             finish = datetime.datetime.utcnow()
+            stdout = self.redact(stdout)
+            stderr = self.redact(stderr)
             add_to = self._artifacts
             key = kwargs.get('artifacts_key', artifacts_key)
             section_name = kwargs.get(
@@ -232,10 +238,12 @@ class BaseRunner(object):
         self._test_configuration = test_configuration or {}
         self._test_flavor = test_flavor or {}
         self._test_env = self._test_configuration.get('test_env') or {}
+        self._secrets = prepare_secrets(CONFIG.get_secret_values())
         self._logger = self.init_test_task_logger(
             task_id,
             dist_arch,
             verbose=verbose,
+            secrets=self._secrets,
         )
         self._task_log_file = None
         self._task_log_handler = None
@@ -299,6 +307,9 @@ class BaseRunner(object):
     @property
     def artifacts(self):
         return self._artifacts
+
+    def redact(self, text):
+        return redact_secrets(text, self._secrets)
 
     @property
     def uploaded_logs(self) -> Dict[str, str]:
@@ -485,9 +496,10 @@ class BaseRunner(object):
             gzip.open(log_file, 'wt', encoding='utf-8'),
         )
         handler.setLevel(logging.DEBUG)
-        formatter = logging.Formatter(
+        formatter = RedactingFormatter(
             "%(asctime)s %(levelname)-8s]: %(message)s",
             "%H:%M:%S %d.%m.%y",
+            secrets=self._secrets,
         )
         handler.setFormatter(formatter)
         self._logger.addHandler(handler)
@@ -1587,7 +1599,7 @@ class BaseRunner(object):
                 if artifacts_section.get('stderr'):
                     stderr = replace_host_name(artifacts_section["stderr"])
                     file_content += f'\n\nStderr:\n\n{stderr}'
-                fd.write(gzip.compress(file_content.encode()))
+                fd.write(gzip.compress(self.redact(file_content).encode()))
 
         for artifact_key, content in self.artifacts.items():
             if artifact_key in TESTS_SECTIONS_NAMES:
@@ -1702,7 +1714,12 @@ class BaseRunner(object):
         self.erase_work_dir()
 
     @staticmethod
-    def init_test_task_logger(task_id, arch, verbose: bool = False):
+    def init_test_task_logger(
+        task_id,
+        arch,
+        verbose: bool = False,
+        secrets: Iterable[str] = (),
+    ):
         """
         Test task logger initialization.
 
@@ -1715,9 +1732,10 @@ class BaseRunner(object):
         logger.handlers = []
         log_level = logging.DEBUG if verbose else logging.INFO
         logger.setLevel(log_level)
-        formatter = logging.Formatter(
+        formatter = RedactingFormatter(
             "%(asctime)s %(levelname)-8s: %(message)s",
             "%H:%M:%S %d.%m.%y",
+            secrets=secrets,
         )
         handler = logging.StreamHandler()
         handler.setLevel(log_level)
