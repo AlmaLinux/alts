@@ -8,6 +8,10 @@
 
 - name: Enable module
   shell: dnf module enable -y "{{ module_name }}:{{ module_stream }}:{{ module_version }}"
+  register: pkg_mgr_result
+  until: pkg_mgr_retry_done | bool
+  retries: "{{ pkg_mgr_retries }}"
+  delay: "{{ pkg_mgr_retry_delay }}"
   when: >
     ansible_facts.os_family == 'RedHat' and
     module_name is defined and module_stream is defined and module_version is defined
