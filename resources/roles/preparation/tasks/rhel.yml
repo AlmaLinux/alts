@@ -80,10 +80,20 @@
     ansible_distribution_file_variety in ('RedHat', 'CentOS') and
     ansible_facts.distribution_major_version == '7'
 
+# ini_file's "follow" option needs community.general >= 7.1.0, so resolve
+# the symlink (e.g. /etc/yum.conf -> dnf/dnf.conf on EL8+) ourselves
+- name: Check whether YUM config is a symlink
+  stat:
+    path: /etc/yum.conf
+  register: yum_conf_stat
+
+- name: Set YUM config real path
+  set_fact:
+    yum_conf_path: "{{ yum_conf_stat.stat.lnk_source if yum_conf_stat.stat.islnk | default(false) else '/etc/yum.conf' }}"
+
 - name: Add YUM proxy
   ini_file:
-    path: /etc/yum.conf
-    follow: yes
+    path: "{{ yum_conf_path }}"
     section: main
     option: proxy
     value: "{{ package_proxy }}"
@@ -91,8 +101,7 @@
 
 - name: Remove nodocs param from YUM config
   ini_file:
-    path: /etc/yum.conf
-    follow: yes
+    path: "{{ yum_conf_path }}"
     section: main
     option: tsflags
     state: absent
@@ -100,8 +109,7 @@
 
 - name: Remove override_install_langs from YUM config
   ini_file:
-    path: /etc/yum.conf
-    follow: yes
+    path: "{{ yum_conf_path }}"
     section: main
     option: override_install_langs
     state: absent
