@@ -133,20 +133,9 @@ override.tf.json
 .terraformrc
 terraform.rc
 
-# Ignore sensitive files from deployment
-deployment/hosts
-deployment/ansible
-deployment/hosts.*
-deployment/files/*.pem
-deployment/files/*.crt
-deployment/files/*/*.pem
-deployment/files/*/*.crt
-deployment/*vars*.yml
-deployment/*vars*.yaml
+# Deployment moved to the albs-deploy repository, ignore leftover local
+# inventories, vars and certificates
+deployment/
 
 # Ignore venvs of all kind
 *venv
-
-# Ignore Ansible dependencies
-deployment/roles/geerlingguy.redis
-deployment/roles/geerlingguy.docker

@@ -1,9 +1,0 @@
----
-
-- name: Configure scheduler
-  hosts: scheduler
-  roles:
-    - base
-    - geerlingguy.redis
-    - scheduler
-    - { role: flower, tags: ["flower-setup"] }
