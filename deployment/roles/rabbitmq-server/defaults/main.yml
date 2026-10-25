@@ -1,4 +1,0 @@
----
-
-rabbitmq_port: 5672
-rabbitmq_ssl_port: 5671

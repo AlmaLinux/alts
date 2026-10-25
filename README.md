@@ -140,6 +140,12 @@ Few preparations needed before you start:
 To start the system, run the following command: `docker-compose up -d`. This command will pull RabbitMQ image, build docker images for Celery and Scheduler containers and start the containers themselves. To rebuild images after your local changes, just run `docker-compose up -d --build`.
 
 
+Deploying to servers
+--
+
+Ansible roles and playbooks for deploying RabbitMQ, the scheduler (with Flower) and Celery workers live in the [albs-deploy](https://github.com/AlmaLinux/albs-deploy) repository, see the ALTS section of its README.
+
+
 Running in virtualenv
 --
 You can start the application inside virtualenv. Create virtualenv:

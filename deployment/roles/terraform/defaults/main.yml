@@ -1,5 +1,0 @@
----
-
-terraform_plugin_cache_dir: /home/{{ test_system_user }}/.terraform.d/plugins-cache
-terraform_version: 1.12.1
-terraform_arch: amd64
