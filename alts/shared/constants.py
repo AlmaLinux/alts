@@ -25,6 +25,9 @@ COSTS = [str(i) for i in range(5)]
 ARCHITECTURES = (
     'x86_64',
     'x86_64_v2',
+    # Queue-only architecture for x86_64 workers whose CPU supports
+    # x86-64-v3, see SchedulerConfig.queue_arch_overrides
+    'x86_64_v3',
     'aarch64',
     'ppc64le',
     's390x',

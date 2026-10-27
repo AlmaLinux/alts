@@ -68,6 +68,38 @@ class TestsScheduler(threading.Thread):
         pkgs = self.__cached_config.get('excluded_packages', {})
         return pkgs.get(distro, {})
 
+    @staticmethod
+    def get_queue_arch(
+        runner_class,
+        payload: TaskRequestPayload,
+    ) -> Optional[str]:
+        """
+        Returns the architecture part of the queue name for the task,
+        applying the first matching override from the config.
+        """
+        queue_arch = None
+        for (
+            arch,
+            supported_arches,
+        ) in runner_class.ARCHITECTURES_MAPPING.items():
+            if payload.dist_arch in supported_arches:
+                queue_arch = arch
+        if not queue_arch:
+            return None
+        dist_version = str(payload.dist_version)
+        major_version = dist_version.split('.')[0]
+        for override in CONFIG.queue_arch_overrides:
+            if (
+                override.dist_name == payload.dist_name
+                and override.arch == queue_arch
+                and (
+                    dist_version in override.dist_versions
+                    or major_version in override.dist_versions
+                )
+            ):
+                return override.queue_arch
+        return queue_arch
+
     def schedule_test_task(self, payload: TaskRequestPayload):
         """
         Schedules new tasks in Test System.
@@ -114,14 +146,7 @@ class TestsScheduler(threading.Thread):
 
         # TODO: Make decision on what queue to use for particular task based on
         #  queues load
-        queue_arch = None
-        for (
-            arch,
-            supported_arches,
-        ) in runner_class.ARCHITECTURES_MAPPING.items():
-            if payload.dist_arch in supported_arches:
-                queue_arch = arch
-
+        queue_arch = self.get_queue_arch(runner_class, payload)
         if not queue_arch:
             self.logger.error(
                 'Cannot map requested architecture to any '

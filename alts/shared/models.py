@@ -11,7 +11,7 @@ from typing import (
     Set,
 )
 
-from pydantic import BaseModel, ConfigDict, computed_field
+from pydantic import BaseModel, ConfigDict, computed_field, field_validator
 
 from alts.shared import constants
 from alts.shared.utils.path_utils import get_abspath
@@ -168,6 +168,27 @@ class DockerImageOverride(BaseModel):
     dist_versions: List[str]
     platform: str
     image: str
+
+
+class QueueArchOverride(BaseModel):
+    # Sends matching tasks to a different queue architecture, e.g. to
+    # schedule AlmaLinux 10 x86_64 tasks only on x86-64-v3 capable workers
+    dist_name: str
+    # Matched against the full version and its major part
+    dist_versions: List[str]
+    # Queue architecture the task would be scheduled to otherwise
+    arch: str
+    queue_arch: str
+
+    @field_validator('arch', 'queue_arch')
+    @classmethod
+    def check_queue_arch(cls, value: str) -> str:
+        # Tasks sent to an undeclared queue are never picked up
+        if value not in constants.ARCHITECTURES:
+            raise ValueError(
+                f'{value} is not one of {", ".join(constants.ARCHITECTURES)}'
+            )
+        return value
 
 
 class RabbitmqBrokerConfig(BaseBrokerConfig):
@@ -431,3 +452,4 @@ class SchedulerConfig(CeleryConfig):
     excluded_tests_url: str = 'https://git.almalinux.org/almalinux/alts-exclusions/raw/branch/main/skipped_tests.json'
     excluded_tests_cache_size: str = 1
     excluded_tests_cache_update_interval: int = 600
+    queue_arch_overrides: List[QueueArchOverride] = []
