@@ -202,7 +202,31 @@
   until: pkg_mgr_retry_done | bool
   retries: "{{ pkg_mgr_retries }}"
   delay: "{{ pkg_mgr_retry_delay }}"
-  when: pytest_is_needed | bool
+  when: >
+    pytest_is_needed | bool and
+    (ansible_facts.distribution == 'Fedora' or
+     ansible_facts.distribution_major_version | int < 10)
+  ignore_errors: "{{ ignore_ansible_install_errors | bool }}"
+
+# EPEL 10 doesn't ship the "ansible" bundle, so use ansible-core
+# from AppStream plus the most common collections from EPEL
+- name: Install ansible-core and collections (10 and higher)
+  yum:
+    name:
+      - ansible-core
+      - ansible-collection-ansible-posix
+      - ansible-collection-community-general
+    state: present
+    enablerepo: epel
+    lock_timeout: 300
+  register: pkg_mgr_result
+  until: pkg_mgr_retry_done | bool
+  retries: "{{ pkg_mgr_retries }}"
+  delay: "{{ pkg_mgr_retry_delay }}"
+  when: >
+    pytest_is_needed | bool and
+    ansible_facts.distribution != 'Fedora' and
+    ansible_facts.distribution_major_version | int >= 10
   ignore_errors: "{{ ignore_ansible_install_errors | bool }}"
 
 - name: Add required repositories
