@@ -120,33 +120,6 @@
     path: /etc/rpm/macros.image-language-conf
     state: absent
 
-- set_fact:
-    # Same check as add_credentials_to_build_repos() in the worker
-    os_repositories: "{{ repositories | default([]) | rejectattr('name', 'search', '-br') | list }}"
-
-# x32 images point their OS repositories at a single host that isn't
-# mirrored, while the task repositories provide the same content, so
-# provision from the task repositories only. Edit the files directly,
-# since not every image ships the config-manager plugin
-- name: Disable image repositories in AlmaLinux x32 docker container
-  shell: sed -i 's/^enabled\s*=.*/enabled=0/' /etc/yum.repos.d/*.repo
-  when: almalinux_docker_x32 | bool and os_repositories | length > 0
-
-# Build repositories are added at the end like everywhere else, so
-# provisioning doesn't depend on them
-- name: Add OS repositories in AlmaLinux x32 docker container
-  yum_repository:
-    name: "{{ item.name }}"
-    baseurl: "{{ item.url }}"
-    description: "Repository {{ item.name }}"
-    enabled: yes
-    gpgcheck: no
-  with_items: "{{ os_repositories }}"
-  loop_control:
-    label: "{{ item.name }}"
-  no_log: true
-  when: almalinux_docker_x32 | bool and os_repositories | length > 0
-
 - name: Install epel-release (8 and higher)
   yum:
     name: epel-release
