@@ -132,9 +132,10 @@
 
 # x32 images point their OS repositories at a single host that isn't
 # mirrored, while the task repositories provide the same content, so
-# provision from the task repositories only
+# provision from the task repositories only. Edit the files directly,
+# since not every image ships the config-manager plugin
 - name: Disable image repositories in AlmaLinux x32 docker container
-  command: dnf config-manager --set-disabled '*'
+  shell: sed -i 's/^enabled\s*=.*/enabled=0/' /etc/yum.repos.d/*.repo
   when: almalinux_docker_x32 | bool and repositories | default([]) | length > 0
 
 - name: Add required repositories in AlmaLinux x32 docker container
