@@ -3,6 +3,7 @@
 - name: Initial fact set
   set_fact:
     centos_7_x32: false
+    almalinux_docker_x32: false
     bats_package: bats
     final_centos_repo_baseurl: "{{ centos_repo_baseurl }}"
 
@@ -14,6 +15,15 @@
     centos_distro_version: "7"
   when: >
     ansible_facts.distribution_major_version == '7' and
+    ansible_facts.userspace_architecture in ('i386', 'i486', 'i586', 'i686')
+
+- name: Set fact about AlmaLinux x32 docker container (8 and higher)
+  set_fact:
+    almalinux_docker_x32: true
+  when: >
+    connection_type | default('') == 'docker' and
+    ansible_facts.distribution == 'AlmaLinux' and
+    ansible_facts.distribution_major_version | int >= 8 and
     ansible_facts.userspace_architecture in ('i386', 'i486', 'i586', 'i686')
 
 - name: Set fact about distro version for CentOS 7 x86_64
@@ -119,6 +129,27 @@
   file:
     path: /etc/rpm/macros.image-language-conf
     state: absent
+
+# x32 images point their OS repositories at a single host that isn't
+# mirrored, while the task repositories provide the same content, so
+# provision from the task repositories only
+- name: Disable image repositories in AlmaLinux x32 docker container
+  command: dnf config-manager --set-disabled '*'
+  when: almalinux_docker_x32 | bool and repositories | default([]) | length > 0
+
+- name: Add required repositories in AlmaLinux x32 docker container
+  yum_repository:
+    name: "{{ item.name }}"
+    baseurl: "{{ item.url }}"
+    description: "Repository {{ item.name }}"
+    enabled: yes
+    gpgcheck: no
+  with_items: "{{ repositories }}"
+  loop_control:
+    label: "{{ item.name }}"
+  # Build repositories URLs contain credentials
+  no_log: true
+  when: almalinux_docker_x32 | bool and repositories is defined and (repositories | length > 0)
 
 - name: Install epel-release (8 and higher)
   yum:
@@ -241,4 +272,4 @@
     label: "{{ item.name }}"
   # Build repositories URLs contain credentials
   no_log: true
-  when: repositories is defined and (repositories | length > 0)
+  when: not almalinux_docker_x32 | bool and repositories is defined and (repositories | length > 0)
