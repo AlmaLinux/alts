@@ -319,6 +319,8 @@ class CeleryConfig(BaseModel):
     # Build system settings
     bs_host: Optional[str] = None
     bs_tasks_endpoint: str = '/api/v1/tests/get_test_tasks/'
+    # Used to skip test tasks of builds removed from the build system
+    bs_build_endpoint: str = '/api/v1/builds/{build_id}/'
     bs_token: Optional[str] = None
     # Log uploader settings
     logs_uploader_config: Optional[
