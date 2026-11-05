@@ -5,6 +5,7 @@
 """AlmaLinux Test System package testing tasks running."""
 
 import logging
+import re
 import traceback
 import random
 import time
@@ -61,6 +62,45 @@ AUTO_RETRY_EXCEPTIONS = (
     StartEnvironmentError,
     TerraformInitializationError,
 )
+
+# callback_href looks like /api/v1/tests/<build_id>/<package_id>/.../result/
+CALLBACK_BUILD_ID_RE = re.compile(r'/tests/(?P<build_id>[0-9a-f]{24})/')
+BUILD_CHECK_TIMEOUT = 30
+
+
+def build_exists(callback_href: str) -> bool:
+    """
+    Checks the build of a test task still exists in the build system.
+
+    Only a 404 answer counts as a missing build: on any other answer or
+    a request error the tests run as usual.
+
+    Parameters
+    ----------
+    callback_href : str
+        Callback URL of the test task, carries the build id.
+
+    Returns
+    -------
+    bool
+    """
+    match = CALLBACK_BUILD_ID_RE.search(callback_href or '')
+    if not match:
+        return True
+    url = urllib.parse.urljoin(
+        CONFIG.bs_host,
+        CONFIG.bs_build_endpoint.format(build_id=match.group('build_id')),
+    )
+    try:
+        response = requests.get(
+            url,
+            headers={'Authorization': f'Bearer {CONFIG.bs_token}'},
+            timeout=BUILD_CHECK_TIMEOUT,
+        )
+    except requests.RequestException as exc:
+        logging.warning('Cannot check build %s exists: %s', url, exc)
+        return True
+    return response.status_code != 404
 
 
 def are_tap_tests_success(tests_output: str):
@@ -236,6 +276,13 @@ def run_tests(self, task_params: dict):
         if task_params.get(key) is None:
             logging.error('Parameter %s is not specified', key)
             return
+
+    if not build_exists(task_params.get('callback_href')):
+        logging.warning(
+            'Build of task %s no longer exists, skipping tests',
+            task_params['task_id'],
+        )
+        return
 
     runner_args = (
         task_params['task_id'],
