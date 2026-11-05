@@ -10,8 +10,12 @@ import requests
 
 from alts.scheduler import CONFIG
 from alts.scheduler.db import Session, Task
-from alts.shared.constants import DEFAULT_REQUEST_TIMEOUT, TaskPriority
-from alts.shared.models import TaskRequestPayload
+from alts.shared.constants import (
+    BS_DEFAULT_PRIORITY,
+    BS_RELEASE_BUILD_PRIORITY,
+    DEFAULT_REQUEST_TIMEOUT,
+)
+from alts.shared.models import TaskRequestPayload, get_task_priority_level
 from alts.worker.mappings import RUNNER_MAPPING
 from alts.worker.tasks import run_tests
 
@@ -53,22 +57,29 @@ class TestsScheduler(threading.Thread):
 
     @staticmethod
     def get_task_priority(
-        release_build: bool,
+        payload: TaskRequestPayload,
         build_tasks_count: int,
-    ) -> TaskPriority:
+    ) -> int:
         """
         Returns the Celery priority for a test task of a build.
 
-        Release builds go first, then builds with at most
-        `small_build_max_tasks` test tasks, then larger builds.
-        `TaskPriority.MANUAL` is never returned: it is kept for tasks
-        routed by hand.
+        The task runs at the priority the build system sent (PF-4420).
+        Without one, release builds get HIGH and the others MEDIUM. At the
+        same level, builds with at most `small_build_max_tasks` test tasks
+        go before larger builds, except at EMERGENCY.
         """
-        if release_build:
-            return TaskPriority.RELEASE_BUILD
-        if build_tasks_count <= CONFIG.small_build_max_tasks:
-            return TaskPriority.SMALL_BUILD
-        return TaskPriority.LARGE_BUILD
+        bs_priority = payload.priority
+        if bs_priority is None:
+            bs_priority = (
+                BS_RELEASE_BUILD_PRIORITY
+                if payload.release_build
+                else BS_DEFAULT_PRIORITY
+            )
+        level = get_task_priority_level(
+            bs_priority,
+            small_build=build_tasks_count <= CONFIG.small_build_max_tasks,
+        )
+        return CONFIG.get_celery_priority(level)
 
     def schedule_test_task(
         self,
@@ -157,7 +168,7 @@ class TestsScheduler(threading.Thread):
         task_params['repositories'] = repositories
         try:
             task_priority = self.get_task_priority(
-                payload.release_build,
+                payload,
                 build_tasks_count,
             )
             run_tests.apply_async(
