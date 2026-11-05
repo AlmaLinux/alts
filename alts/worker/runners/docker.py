@@ -58,6 +58,12 @@ class DockerRunner(BaseRunner):
     TYPE = 'docker'
     TF_MAIN_FILE = 'docker.tf'
     TEMPFILE_PREFIX = 'docker_test_runner_'
+    COST_STANDARD = 0
+    COST_RELEASE_BUILD = 1
+
+    @classmethod
+    def get_cost(cls, release_build: bool = False) -> int:
+        return cls.COST_RELEASE_BUILD if release_build else cls.COST_STANDARD
 
     def __init__(
         self,
