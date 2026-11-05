@@ -406,6 +406,18 @@ def run_tests(self, task_params: dict):
                 headers={'Authorization': f'Bearer {CONFIG.bs_token}'},
                 timeout=DEFAULT_REQUEST_TIMEOUT,
             )
-            response.raise_for_status()
+            try:
+                response.raise_for_status()
+            except HTTPError as exc:
+                # Client errors (e.g. 404 for a removed build task) won't
+                # be fixed by re-running the whole test task
+                if 400 <= response.status_code < 500:
+                    logging.error(
+                        'Callback %s for task %s failed with client error, '
+                        'skipping retry: %s',
+                        full_url, task_params['task_id'], exc,
+                    )
+                else:
+                    raise
 
         return summary
