@@ -15,20 +15,25 @@ from alts.scheduler import scheduling
 from alts.shared.constants import TaskPriority
 
 
-def _payload(index: int, release_build: bool = False) -> dict:
+def _payload(
+    index: int,
+    release_build: bool = False,
+    package_name: str = 'pkg',
+    runner_type: str = 'opennebula',
+) -> dict:
     return {
         'bs_task_id': f'task-{index}',
-        'runner_type': 'opennebula',
+        'runner_type': runner_type,
         'dist_name': 'almalinux',
         'dist_version': '9',
         'dist_arch': 'x86_64',
-        'package_name': 'pkg',
+        'package_name': package_name,
         'release_build': release_build,
     }
 
 
-def _run_once(test_tasks: list) -> list:
-    """Run one scheduler cycle and return the published priorities."""
+def _run_once(test_tasks: list, field: str = 'priority') -> list:
+    """Run one scheduler cycle and return the published `field` values."""
     terminated = threading.Event()
     graceful = threading.Event()
 
@@ -44,7 +49,7 @@ def _run_once(test_tasks: list) -> list:
             patch.object(scheduling.time, 'sleep', side_effect=stop):
         scheduler.run()
     return [
-        call.kwargs['priority']
+        call.kwargs[field]
         for call in run_tests.apply_async.call_args_list
     ]
 
@@ -105,3 +110,92 @@ def test_redis_priority_steps_ignore_configured_max_priority():
     })
     transport = config.get_celery_config_dict()['broker_transport_options']
     assert transport['priority_steps'] == [int(p) for p in TaskPriority]
+
+
+PACKAGE_QUEUE_SUFFIXES = {
+    'acme-foo.*': 'foo',
+    'acme-bar[0-9]+(-.*)?': 'bar',
+    # Never reached for acme-foo/acme-bar: the first matching entry wins
+    'acme-.*': 'acme',
+}
+
+
+@pytest.fixture
+def package_queue_suffixes(monkeypatch):
+    monkeypatch.setattr(
+        CONFIG, 'package_queue_suffixes', PACKAGE_QUEUE_SUFFIXES,
+    )
+
+
+@pytest.mark.usefixtures('package_queue_suffixes')
+@pytest.mark.parametrize('runner_type', ['docker', 'opennebula'])
+@pytest.mark.parametrize('release_build', [False, True])
+@pytest.mark.parametrize('package_name, suffix', [
+    ('acme-foo1', 'foo'),
+    ('acme-foo2-extra', 'foo'),
+    ('acme-bar1', 'bar'),
+    ('acme-bar1-extra', 'bar'),
+    ('acme-baz', 'acme'),
+])
+def test_package_goes_to_its_queue(runner_type, release_build,
+                                   package_name, suffix):
+    task = _payload(0, release_build, package_name, runner_type)
+    assert _run_once([task], 'queue') == [f'{runner_type}-x86_64-{suffix}']
+
+
+@pytest.mark.usefixtures('package_queue_suffixes')
+@pytest.mark.parametrize('package_name', [
+    'pkg',
+    'other-foo1',
+    'foo-acme',
+    # The regex must match the whole name, case-sensitively
+    'my-acme-foo1',
+    'ACME-FOO1',
+])
+def test_unmatched_packages_keep_cost_queue(package_name):
+    task = _payload(0, package_name=package_name)
+    assert _run_once([task], 'queue') == ['opennebula-x86_64-1']
+
+
+def test_no_package_queue_suffixes_by_default():
+    assert CONFIG.model_fields['package_queue_suffixes'].default == {}
+    task = _payload(0, package_name='acme-foo1')
+    assert _run_once([task], 'queue') == ['opennebula-x86_64-1']
+
+
+@pytest.mark.parametrize('suffixes', [
+    {'acme-foo[': 'foo'},
+    {'acme-foo.*': ''},
+])
+def test_invalid_package_queue_suffixes_are_rejected(suffixes):
+    with pytest.raises(ValueError):
+        CONFIG.model_validate({
+            **CONFIG.model_dump(),
+            'package_queue_suffixes': suffixes,
+        })
+
+
+@pytest.mark.parametrize('runner_type, release_build, queue', [
+    ('docker', False, 'docker-x86_64-0'),
+    ('docker', True, 'docker-x86_64-1'),
+    ('opennebula', False, 'opennebula-x86_64-1'),
+    ('opennebula', True, 'opennebula-x86_64-2'),
+])
+def test_queue_cost_comes_from_runner(runner_type, release_build, queue):
+    tasks = [
+        _payload(i, release_build, runner_type=runner_type)
+        for i in range(CONFIG.small_build_max_tasks + 1)
+    ]
+    assert _run_once(tasks, 'queue') == [queue] * len(tasks)
+
+
+def test_package_queue_gets_priority_support():
+    # Workers do not declare the package queues: Celery creates them on
+    # publish and must still give them the priority argument
+    from alts.worker.app import celery_app
+    assert celery_app.conf.task_create_missing_queues
+    queue = celery_app.amqp.queues['docker-x86_64-foo']
+    assert queue.routing_key == 'docker-x86_64-foo'
+    assert queue.queue_arguments == {
+        'x-max-priority': CONFIG.task_queue_max_priority,
+    }

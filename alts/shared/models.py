@@ -1,4 +1,5 @@
 import os
+import re
 import ssl
 from logging import Logger
 from typing import (
@@ -11,7 +12,7 @@ from typing import (
     Set,
 )
 
-from pydantic import BaseModel, ConfigDict, computed_field
+from pydantic import BaseModel, ConfigDict, computed_field, field_validator
 
 from alts.shared import constants
 from alts.shared.utils.path_utils import get_abspath
@@ -460,3 +461,25 @@ class SchedulerConfig(CeleryConfig):
     # Builds handed out with at most this many test tasks are queued ahead
     # of larger ones, so a few tests are not stuck behind a big backlog.
     small_build_max_tasks: int = 10
+    # Maps a package name regex to the queue suffix its test tasks use in
+    # place of the runner cost, e.g. `{'acme-.*': 'acme'}` sends them
+    # to `<runner>-<arch>-acme`, served by dedicated workers. The regex
+    # must match the whole name; the first matching entry wins.
+    package_queue_suffixes: Dict[str, str] = {}
+
+    @field_validator('package_queue_suffixes')
+    @classmethod
+    def validate_package_queue_suffixes(
+        cls,
+        value: Dict[str, str],
+    ) -> Dict[str, str]:
+        for pattern, suffix in value.items():
+            try:
+                re.compile(pattern)
+            except re.error as exc:
+                raise ValueError(
+                    f'Invalid package regex {pattern!r}: {exc}'
+                ) from exc
+            if not suffix:
+                raise ValueError(f'Empty queue suffix for {pattern!r}')
+        return value

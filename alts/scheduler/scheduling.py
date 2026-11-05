@@ -1,10 +1,11 @@
 import logging
 import random
+import re
 import threading
 import time
 import urllib.parse
 import uuid
-from typing import List
+from typing import List, Optional
 
 import requests
 
@@ -69,6 +70,28 @@ class TestsScheduler(threading.Thread):
         if build_tasks_count <= CONFIG.small_build_max_tasks:
             return TaskPriority.SMALL_BUILD
         return TaskPriority.LARGE_BUILD
+
+    @staticmethod
+    def get_package_queue_suffix(package_name: str) -> Optional[str]:
+        """
+        Returns the queue suffix configured for the package in
+        `package_queue_suffixes`, or None when no regex matches it.
+        """
+        for pattern, suffix in CONFIG.package_queue_suffixes.items():
+            if re.fullmatch(pattern, package_name):
+                return suffix
+        return None
+
+    @staticmethod
+    def get_queue_suffix(runner_class, payload: TaskRequestPayload) -> str:
+        """
+        Returns the last part of the `<runner>-<arch>-<suffix>` queue name:
+        the package's configured suffix, or the runner's cost otherwise.
+        """
+        suffix = TestsScheduler.get_package_queue_suffix(payload.package_name)
+        if suffix:
+            return suffix
+        return str(runner_class.get_cost(payload.release_build))
 
     def schedule_test_task(
         self,
@@ -149,7 +172,8 @@ class TestsScheduler(threading.Thread):
                 repo_counter += 1
             repositories.append({'url': repository.baseurl, 'name': repo_name})
 
-        queue_name = f'{runner_type}-{queue_arch}-{runner_class.get_cost(payload.release_build)}'
+        queue_suffix = self.get_queue_suffix(runner_class, payload)
+        queue_name = f'{runner_type}-{queue_arch}-{queue_suffix}'
         task_id = str(uuid.uuid4())
         task_params = payload.model_dump()
         task_params['task_id'] = task_id
