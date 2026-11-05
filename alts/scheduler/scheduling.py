@@ -53,23 +53,15 @@ class TestsScheduler(threading.Thread):
         return response_as_json
 
     @staticmethod
-    def get_task_priority(
-        release_build: bool,
-        build_tasks_count: int,
-    ) -> TaskPriority:
+    def get_task_priority(release_build: bool) -> TaskPriority:
         """
-        Returns the Celery priority for a test task of a build.
-
-        Release builds go first, then builds with at most
-        `small_build_max_tasks` test tasks, then larger builds.
-        `TaskPriority.MANUAL` is never returned: it is kept for tasks
-        routed by hand.
+        Returns the Celery priority for a test task: release builds go
+        ahead of all other builds. `TaskPriority.RESERVED` is never
+        returned: it is kept for tasks routed by hand.
         """
         if release_build:
             return TaskPriority.RELEASE_BUILD
-        if build_tasks_count <= CONFIG.small_build_max_tasks:
-            return TaskPriority.SMALL_BUILD
-        return TaskPriority.LARGE_BUILD
+        return TaskPriority.REGULAR_BUILD
 
     @staticmethod
     def get_package_queue_suffix(package_name: str) -> Optional[str]:
@@ -93,11 +85,7 @@ class TestsScheduler(threading.Thread):
             return suffix
         return str(runner_class.get_cost(payload.release_build))
 
-    def schedule_test_task(
-        self,
-        payload: TaskRequestPayload,
-        build_tasks_count: int = 1,
-    ):
+    def schedule_test_task(self, payload: TaskRequestPayload):
         """
         Schedules new tasks in Test System.
 
@@ -105,8 +93,6 @@ class TestsScheduler(threading.Thread):
         ----------
         payload : TaskRequestPayload
             Loader task data in appropriate for request form.
-        build_tasks_count : int
-            Number of test tasks handed out for the same build.
 
         Returns
         -------
@@ -180,10 +166,7 @@ class TestsScheduler(threading.Thread):
         task_params['runner_type'] = runner_type
         task_params['repositories'] = repositories
         try:
-            task_priority = self.get_task_priority(
-                payload.release_build,
-                build_tasks_count,
-            )
+            task_priority = self.get_task_priority(payload.release_build)
             run_tests.apply_async(
                 (task_params,),
                 task_id=task_id,
@@ -212,11 +195,6 @@ class TestsScheduler(threading.Thread):
                 not self.__graceful_terminate.is_set()
                 or not self.__terminated_event.is_set()
         ):
-            # The build system hands out all test tasks of one build at once
-            test_tasks = self.get_available_test_tasks()
-            for test_task_payload in test_tasks:
-                self.schedule_test_task(
-                    TaskRequestPayload(**test_task_payload),
-                    build_tasks_count=len(test_tasks),
-                )
+            for test_task_payload in self.get_available_test_tasks():
+                self.schedule_test_task(TaskRequestPayload(**test_task_payload))
             time.sleep(10)

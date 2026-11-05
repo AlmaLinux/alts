@@ -412,7 +412,7 @@ class CeleryConfig(BaseModel):
             'result_backend_max_retries': self.result_backend_max_retries,
             'task_default_queue': 'default',
             'task_queue_max_priority': self.task_queue_max_priority,
-            'task_default_priority': constants.TaskPriority.SMALL_BUILD,
+            'task_default_priority': constants.TaskPriority.REGULAR_BUILD,
             'task_acks_late': True,
             'task_track_started': True,
             'task_soft_time_limit': self.task_soft_time_limit,
@@ -458,9 +458,6 @@ class SchedulerConfig(CeleryConfig):
     task_retention_rows: int = 200000
     task_prune_chunk_size: int = 10000
     task_prune_time_budget: int = 30
-    # Builds handed out with at most this many test tasks are queued ahead
-    # of larger ones, so a few tests are not stuck behind a big backlog.
-    small_build_max_tasks: int = 10
     # Maps a package name regex to the queue suffix its test tasks use in
     # place of the runner cost, e.g. `{'acme-.*': 'acme'}` sends them
     # to `<runner>-<arch>-acme`, served by dedicated workers. The regex

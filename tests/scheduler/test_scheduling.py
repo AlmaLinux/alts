@@ -1,8 +1,7 @@
-"""Tests for the Celery priority the scheduler gives each test task.
+"""Tests for the queue and Celery priority the scheduler gives each test task.
 
-On Redis a lower priority number is served first: manually routed tasks,
-then release builds, then builds with at most `small_build_max_tasks` test
-tasks, then larger builds (PF-3736).
+On Redis a lower priority number is served first: tasks routed by hand
+with the reserved priority, then release builds, then all other builds.
 """
 import threading
 from unittest.mock import MagicMock, patch
@@ -54,38 +53,28 @@ def _run_once(test_tasks: list, field: str = 'priority') -> list:
     ]
 
 
-@pytest.mark.parametrize('test_tasks, expected_priority', [
-    pytest.param(
-        [_payload(i, release_build=True) for i in range(50)],
-        TaskPriority.RELEASE_BUILD,
-        id='release-build',
-    ),
-    pytest.param(
-        [_payload(i) for i in range(5)],
-        TaskPriority.SMALL_BUILD,
-        id='5-task-build',
-    ),
-    pytest.param(
-        [_payload(i) for i in range(CONFIG.small_build_max_tasks)],
-        TaskPriority.SMALL_BUILD,
-        id='build-at-small-limit',
-    ),
-    pytest.param(
-        [_payload(i) for i in range(50)],
-        TaskPriority.LARGE_BUILD,
-        id='50-task-build',
-    ),
+@pytest.mark.parametrize('runner_type', ['docker', 'opennebula'])
+@pytest.mark.parametrize('tasks_count', [1, 50])
+@pytest.mark.parametrize('release_build, expected_priority', [
+    (True, TaskPriority.RELEASE_BUILD),
+    (False, TaskPriority.REGULAR_BUILD),
 ])
-def test_task_priority_depends_on_build_size(test_tasks, expected_priority):
-    assert _run_once(test_tasks) == [expected_priority] * len(test_tasks)
+def test_task_priority_depends_only_on_release(runner_type, tasks_count,
+                                                release_build,
+                                                expected_priority):
+    tasks = [
+        _payload(i, release_build, runner_type=runner_type)
+        for i in range(tasks_count)
+    ]
+    assert _run_once(tasks) == [expected_priority] * tasks_count
 
 
 def test_priorities_are_served_in_order():
+    assert [int(p) for p in TaskPriority] == [0, 1, 2]
     assert (
-        TaskPriority.MANUAL
+        TaskPriority.RESERVED
         < TaskPriority.RELEASE_BUILD
-        < TaskPriority.SMALL_BUILD
-        < TaskPriority.LARGE_BUILD
+        < TaskPriority.REGULAR_BUILD
     )
 
 
@@ -97,7 +86,7 @@ def test_redis_priority_steps_cover_every_priority():
         steps = celery_config['broker_transport_options']['priority_steps']
         assert steps == [int(p) for p in TaskPriority]
     assert celery_config['task_queue_max_priority'] == len(TaskPriority)
-    assert celery_config['task_default_priority'] == TaskPriority.SMALL_BUILD
+    assert celery_config['task_default_priority'] == TaskPriority.REGULAR_BUILD
 
 
 def test_redis_priority_steps_ignore_configured_max_priority():
@@ -106,7 +95,7 @@ def test_redis_priority_steps_ignore_configured_max_priority():
     config = CONFIG.model_validate({
         **CONFIG.model_dump(),
         'broker_config': {'redis_host': 'redis'},
-        'task_queue_max_priority': 2,
+        'task_queue_max_priority': 1,
     })
     transport = config.get_celery_config_dict()['broker_transport_options']
     assert transport['priority_steps'] == [int(p) for p in TaskPriority]
@@ -184,7 +173,7 @@ def test_invalid_package_queue_suffixes_are_rejected(suffixes):
 def test_queue_cost_comes_from_runner(runner_type, release_build, queue):
     tasks = [
         _payload(i, release_build, runner_type=runner_type)
-        for i in range(CONFIG.small_build_max_tasks + 1)
+        for i in range(3)
     ]
     assert _run_once(tasks, 'queue') == [queue] * len(tasks)
 
