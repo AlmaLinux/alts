@@ -85,7 +85,6 @@ class TaskPriority(IntEnum):
     """
     # Never published by the scheduler: reserved for tasks an operator
     # routes by hand ahead of everything else
-    MANUAL = 0
+    RESERVED = 0
     RELEASE_BUILD = 1
-    SMALL_BUILD = 2
-    LARGE_BUILD = 3
+    REGULAR_BUILD = 2
