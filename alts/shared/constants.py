@@ -13,7 +13,12 @@ __all__ = [
     'RHEL_FLAVORS',
     'SUPPORTED_ARCHITECTURES',
     'SUPPORTED_DISTRIBUTIONS',
-    'TaskPriority',
+    'BS_DEFAULT_PRIORITY',
+    'BS_MAX_RULE_PRIORITY',
+    'BS_RELEASE_BUILD_PRIORITY',
+    'EMERGENCY_TASK_LEVEL',
+    'PRIORITY_BANDS',
+    'TASK_PRIORITY_LEVELS',
     'DEFAULT_REQUEST_TIMEOUT',
     'DEFAULT_UPLOADER_CONCURRENCY',
     'DEFAULT_SSH_AUTH_METHODS',
@@ -78,13 +83,18 @@ class TapStatusEnum(IntEnum):
     SKIPPED = 3
 
 
-class TaskPriority(IntEnum):
-    """
-    Celery priority of a test task. On Redis the lowest value is served
-    first, and each value gets its own `<queue>:<value>` list.
-    """
-    # Never published by the scheduler: reserved for tasks an operator
-    # routes by hand ahead of everything else
-    RESERVED = 0
-    RELEASE_BUILD = 1
-    REGULAR_BUILD = 2
+# The build system sends a test task priority from 0 to 31, higher is more
+# urgent (PF-4420). Its priority rules assign 0..23, the levels above are
+# set by hand (EMERGENCY).
+BS_MAX_RULE_PRIORITY = 23
+# Used when the build system sends no priority: HIGH for release builds,
+# MEDIUM for the others
+BS_RELEASE_BUILD_PRIORITY = 23
+BS_DEFAULT_PRIORITY = 11
+# A test task level, higher is more urgent: the rule range is split into
+# PRIORITY_BANDS bands, one level each, and EMERGENCY_TASK_LEVEL is above
+# every band. Redis serves priorities 0..9 only, so there are at most 10
+# levels.
+PRIORITY_BANDS = 4
+TASK_PRIORITY_LEVELS = PRIORITY_BANDS + 1
+EMERGENCY_TASK_LEVEL = TASK_PRIORITY_LEVELS - 1

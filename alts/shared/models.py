@@ -76,6 +76,23 @@ class TestFlavor(BaseModel):
     version: str
 
 
+def get_task_priority_level(bs_priority: int) -> int:
+    """
+    Returns the level of a test task, higher is more urgent (PF-4420).
+
+    A build system priority above `BS_MAX_RULE_PRIORITY` was set by hand
+    and gets `EMERGENCY_TASK_LEVEL`. Rule priorities fall into one of
+    `PRIORITY_BANDS` bands, one level each.
+    """
+    if bs_priority > constants.BS_MAX_RULE_PRIORITY:
+        return constants.EMERGENCY_TASK_LEVEL
+    return (
+        max(bs_priority, 0)
+        * constants.PRIORITY_BANDS
+        // (constants.BS_MAX_RULE_PRIORITY + 1)
+    )
+
+
 class TaskRequestPayload(BaseModel):
     bs_task_id: Union[str, int]
     runner_type: Literal['any', 'docker', 'opennebula'] = 'any'
@@ -96,6 +113,9 @@ class TaskRequestPayload(BaseModel):
     vm_alive: bool = False
     verbose: bool = False
     release_build: bool = False
+    # Build System task priority, 0..31, higher is more urgent (PF-4420).
+    # None when an older build system sends no priority.
+    priority: Optional[int] = None
 
 
 class TaskRequestResponse(BaseModel):
@@ -393,9 +413,23 @@ class CeleryConfig(BaseModel):
 
     @property
     def task_queue_max_priority(self) -> int:
-        # Priorities are fixed in `TaskPriority` rather than configured, so
-        # the broker always has a list for every value that is published
-        return len(constants.TaskPriority)
+        # Priorities are fixed by `TASK_PRIORITY_LEVELS` rather than
+        # configured, so the broker always has a list for every value that
+        # is published
+        return constants.TASK_PRIORITY_LEVELS
+
+    def get_celery_priority(self, level: int) -> int:
+        """
+        Returns the Celery priority of a test task level (higher is more
+        urgent, see `TASK_PRIORITY_LEVELS`).
+
+        RabbitMQ serves the highest priority first, Redis the lowest one,
+        so the level is inverted for Redis.
+        """
+        level = min(max(level, 0), constants.EMERGENCY_TASK_LEVEL)
+        if isinstance(self.broker_config, RedisBrokerConfig):
+            return constants.EMERGENCY_TASK_LEVEL - level
+        return level
 
     @computed_field(return_type=Set[str])
     @property
@@ -433,7 +467,10 @@ class CeleryConfig(BaseModel):
             'result_backend_max_retries': self.result_backend_max_retries,
             'task_default_queue': 'default',
             'task_queue_max_priority': self.task_queue_max_priority,
-            'task_default_priority': constants.TaskPriority.REGULAR_BUILD,
+            # A task published without a priority is MEDIUM
+            'task_default_priority': self.get_celery_priority(
+                get_task_priority_level(constants.BS_DEFAULT_PRIORITY),
+            ),
             'task_acks_late': True,
             'task_track_started': True,
             'task_soft_time_limit': self.task_soft_time_limit,
@@ -445,7 +482,7 @@ class CeleryConfig(BaseModel):
         if isinstance(self.broker_config, RedisBrokerConfig):
             config_dict['broker_transport_options'].update({
                 'queue_order_strategy': 'priority',
-                'priority_steps': [int(p) for p in constants.TaskPriority],
+                'priority_steps': list(range(constants.TASK_PRIORITY_LEVELS)),
                 'sep': ':',
             })
         if isinstance(self.results_backend_config, AzureResultsConfig):

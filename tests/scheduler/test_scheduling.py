@@ -1,9 +1,11 @@
 """Tests for the queue and Celery priority the scheduler gives each test task.
 
-On Redis a lower priority number is served first: tasks routed by hand
-with the reserved priority, then release builds, then all other builds.
+A test task runs at the priority the build system sent (PF-4420), whatever
+the build size. The test config uses RabbitMQ, where a higher priority
+number is served first.
 """
 import threading
+from typing import Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -11,7 +13,8 @@ import pytest
 from alts.scheduler import CONFIG
 # Imported as a module: pytest would try to collect `TestsScheduler`
 from alts.scheduler import scheduling
-from alts.shared.constants import TaskPriority
+from alts.shared.constants import EMERGENCY_TASK_LEVEL, TASK_PRIORITY_LEVELS
+from alts.shared.models import get_task_priority_level
 
 
 def _payload(
@@ -19,8 +22,9 @@ def _payload(
     release_build: bool = False,
     package_name: str = 'pkg',
     runner_type: str = 'opennebula',
+    priority: Optional[int] = None,
 ) -> dict:
-    return {
+    payload = {
         'bs_task_id': f'task-{index}',
         'runner_type': runner_type,
         'dist_name': 'almalinux',
@@ -29,6 +33,9 @@ def _payload(
         'package_name': package_name,
         'release_build': release_build,
     }
+    if priority is not None:
+        payload['priority'] = priority
+    return payload
 
 
 def _run_once(test_tasks: list, field: str = 'priority') -> list:
@@ -55,50 +62,88 @@ def _run_once(test_tasks: list, field: str = 'priority') -> list:
 
 @pytest.mark.parametrize('runner_type', ['docker', 'opennebula'])
 @pytest.mark.parametrize('tasks_count', [1, 50])
-@pytest.mark.parametrize('release_build, expected_priority', [
-    (True, TaskPriority.RELEASE_BUILD),
-    (False, TaskPriority.REGULAR_BUILD),
+@pytest.mark.parametrize('release_build, priority, expected_priority', [
+    # without a priority from the build system: release builds are HIGH
+    pytest.param(True, None, 3, id='release-build'),
+    # and the other builds MEDIUM
+    pytest.param(False, None, 1, id='regular-build'),
+    # the build system priority wins over the release build flag
+    pytest.param(True, 0, 0, id='low-priority-release-build'),
+    pytest.param(False, 23, 3, id='top-rule-priority'),
+    pytest.param(False, 31, EMERGENCY_TASK_LEVEL, id='emergency'),
 ])
-def test_task_priority_depends_only_on_release(runner_type, tasks_count,
-                                                release_build,
-                                                expected_priority):
+def test_task_priority_ignores_build_size(runner_type, tasks_count,
+                                          release_build, priority,
+                                          expected_priority):
     tasks = [
-        _payload(i, release_build, runner_type=runner_type)
+        _payload(i, release_build, runner_type=runner_type,
+                 priority=priority)
         for i in range(tasks_count)
     ]
     assert _run_once(tasks) == [expected_priority] * tasks_count
 
 
-def test_priorities_are_served_in_order():
-    assert [int(p) for p in TaskPriority] == [0, 1, 2]
-    assert (
-        TaskPriority.RESERVED
-        < TaskPriority.RELEASE_BUILD
-        < TaskPriority.REGULAR_BUILD
-    )
+@pytest.mark.parametrize('bs_priority, level', [
+    (-1, 0),
+    (0, 0),
+    (5, 0),
+    (6, 1),
+    (11, 1),
+    (12, 2),
+    (17, 2),
+    (18, 3),
+    (23, 3),
+    (24, EMERGENCY_TASK_LEVEL),
+    (31, EMERGENCY_TASK_LEVEL),
+])
+def test_task_priority_level(bs_priority, level):
+    assert get_task_priority_level(bs_priority) == level
 
 
-def test_redis_priority_steps_cover_every_priority():
+def test_levels_fit_redis():
+    # Redis clamps a message priority to 0..9
+    assert TASK_PRIORITY_LEVELS <= 10
+    levels = {get_task_priority_level(priority) for priority in range(32)}
+    assert levels == set(range(TASK_PRIORITY_LEVELS))
+
+
+def test_rabbitmq_priorities():
+    celery_config = CONFIG.get_celery_config_dict()
+    assert celery_config['task_queue_max_priority'] == TASK_PRIORITY_LEVELS
+    # MEDIUM
+    assert celery_config['task_default_priority'] == 1
+    assert CONFIG.get_celery_priority(EMERGENCY_TASK_LEVEL) == \
+        EMERGENCY_TASK_LEVEL
+    assert CONFIG.get_celery_priority(99) == EMERGENCY_TASK_LEVEL
+
+
+def _redis_config(**fields):
+    return CONFIG.model_validate({
+        **CONFIG.model_dump(),
+        'broker_config': {'redis_host': 'redis'},
+        **fields,
+    })
+
+
+def test_redis_priorities_are_inverted():
     # Workers consume only the Redis priority lists listed in
     # `priority_steps`, so a priority outside them would never be served
-    celery_config = CONFIG.get_celery_config_dict()
-    if 'priority_steps' in celery_config['broker_transport_options']:
-        steps = celery_config['broker_transport_options']['priority_steps']
-        assert steps == [int(p) for p in TaskPriority]
-    assert celery_config['task_queue_max_priority'] == len(TaskPriority)
-    assert celery_config['task_default_priority'] == TaskPriority.REGULAR_BUILD
+    config = _redis_config()
+    celery_config = config.get_celery_config_dict()
+    steps = celery_config['broker_transport_options']['priority_steps']
+    assert steps == list(range(TASK_PRIORITY_LEVELS))
+    # Redis serves the lowest number first
+    assert config.get_celery_priority(EMERGENCY_TASK_LEVEL) == 0
+    assert config.get_celery_priority(0) == EMERGENCY_TASK_LEVEL
+    assert celery_config['task_default_priority'] == EMERGENCY_TASK_LEVEL - 1
 
 
 def test_redis_priority_steps_ignore_configured_max_priority():
     # Deployments still set the old `task_queue_max_priority` key; it must
     # not shrink the steps below what the scheduler publishes
-    config = CONFIG.model_validate({
-        **CONFIG.model_dump(),
-        'broker_config': {'redis_host': 'redis'},
-        'task_queue_max_priority': 1,
-    })
+    config = _redis_config(task_queue_max_priority=1)
     transport = config.get_celery_config_dict()['broker_transport_options']
-    assert transport['priority_steps'] == [int(p) for p in TaskPriority]
+    assert transport['priority_steps'] == list(range(TASK_PRIORITY_LEVELS))
 
 
 PACKAGE_QUEUE_SUFFIXES = {
