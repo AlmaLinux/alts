@@ -11,8 +11,9 @@
     # Shared retry policy for package manager tasks. Repos can be
     # regenerated while we provision (repomd.xml points to primary/filelists
     # that are already gone), and only re-running the whole command picks
-    # up fresh metadata. Retry only on download/mirror errors so genuine
-    # dependency failures still fail fast. Tasks opt in with:
+    # up fresh metadata (the task repositories never use cached metadata,
+    # see "Add required repositories"). Retry only on download/mirror errors
+    # so genuine dependency failures still fail fast. Tasks opt in with:
     #   register: pkg_mgr_result
     #   until: pkg_mgr_retry_done | bool
     #   retries: "{{ pkg_mgr_retries }}"

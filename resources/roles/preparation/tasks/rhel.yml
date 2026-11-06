@@ -141,6 +141,7 @@
     description: "Repository {{ item.name }}"
     enabled: yes
     gpgcheck: no
+    metadata_expire: "0"
   with_items: "{{ os_repositories }}"
   loop_control:
     label: "{{ item.name }}"
@@ -256,6 +257,10 @@
     ansible_facts.distribution_major_version | int >= 10
   ignore_errors: "{{ ignore_ansible_install_errors | bool }}"
 
+# The build system republishes the task repositories while we test, e.g.
+# signing replaces the packages of the build repository with the signed
+# ones, so dnf has to check them on every run instead of trusting its
+# cache, or the retries keep failing on the metadata of the old packages
 - name: Add required repositories
   yum_repository:
     name: "{{ item.name }}"
@@ -263,6 +268,7 @@
     description: "Repository {{ item.name }}"
     enabled: yes
     gpgcheck: no
+    metadata_expire: "0"
   with_items: "{{ repositories }}"
   loop_control:
     label: "{{ item.name }}"
