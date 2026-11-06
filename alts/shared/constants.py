@@ -18,6 +18,8 @@ __all__ = [
     'BS_RELEASE_BUILD_PRIORITY',
     'EMERGENCY_TASK_LEVEL',
     'PRIORITY_BANDS',
+    'SIZE_ORDER_BANDS',
+    'SIZE_ORDER_MAX_PRIORITY',
     'TASK_PRIORITY_LEVELS',
     'DEFAULT_REQUEST_TIMEOUT',
     'DEFAULT_UPLOADER_CONCURRENCY',
@@ -91,10 +93,15 @@ BS_MAX_RULE_PRIORITY = 23
 # MEDIUM for the others
 BS_RELEASE_BUILD_PRIORITY = 23
 BS_DEFAULT_PRIORITY = 11
-# A test task level, higher is more urgent: the rule range is split into
-# PRIORITY_BANDS bands, each with a level for large builds and a level
-# above it for small builds. EMERGENCY_TASK_LEVEL is above every band and is
-# never reordered by build size.
-PRIORITY_BANDS = 4
-TASK_PRIORITY_LEVELS = 2 * PRIORITY_BANDS + 1
+# A test task level, higher is more urgent. Redis serves priorities 0..9
+# only, so there are at most 10 levels. Rule priorities up to
+# SIZE_ORDER_MAX_PRIORITY (MEDIUM) fall into SIZE_ORDER_BANDS bands, each
+# with a level for large builds and a level above it for small builds.
+# Higher rule priorities fall into PRIORITY_BANDS bands that ignore the build
+# size, the way release builds did before. EMERGENCY_TASK_LEVEL is above
+# every band and is never reordered by build size.
+SIZE_ORDER_MAX_PRIORITY = 11
+SIZE_ORDER_BANDS = 2
+PRIORITY_BANDS = 5
+TASK_PRIORITY_LEVELS = 2 * SIZE_ORDER_BANDS + PRIORITY_BANDS + 1
 EMERGENCY_TASK_LEVEL = TASK_PRIORITY_LEVELS - 1

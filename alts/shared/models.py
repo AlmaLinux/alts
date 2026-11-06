@@ -81,17 +81,27 @@ def get_task_priority_level(bs_priority: int, small_build: bool) -> int:
 
     A build system priority above `BS_MAX_RULE_PRIORITY` was set by hand
     and gets `EMERGENCY_TASK_LEVEL`, whatever the build size. Rule
-    priorities fall into one of `PRIORITY_BANDS` bands, and inside a band
-    the tests of a small build go before the tests of a large one.
+    priorities up to `SIZE_ORDER_MAX_PRIORITY` fall into one of
+    `SIZE_ORDER_BANDS` bands, and inside a band the tests of a small build
+    go before the tests of a large one. Higher rule priorities fall into one
+    of `PRIORITY_BANDS` bands above them, whatever the build size.
     """
     if bs_priority > constants.BS_MAX_RULE_PRIORITY:
         return constants.EMERGENCY_TASK_LEVEL
+    bs_priority = max(bs_priority, 0)
+    if bs_priority <= constants.SIZE_ORDER_MAX_PRIORITY:
+        band = (
+            bs_priority
+            * constants.SIZE_ORDER_BANDS
+            // (constants.SIZE_ORDER_MAX_PRIORITY + 1)
+        )
+        return 2 * band + int(small_build)
     band = (
-        max(bs_priority, 0)
+        (bs_priority - constants.SIZE_ORDER_MAX_PRIORITY - 1)
         * constants.PRIORITY_BANDS
-        // (constants.BS_MAX_RULE_PRIORITY + 1)
+        // (constants.BS_MAX_RULE_PRIORITY - constants.SIZE_ORDER_MAX_PRIORITY)
     )
-    return 2 * band + int(small_build)
+    return 2 * constants.SIZE_ORDER_BANDS + band
 
 
 class TaskRequestPayload(BaseModel):

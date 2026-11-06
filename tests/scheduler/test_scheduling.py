@@ -1,8 +1,8 @@
 """Tests for the Celery priority the scheduler gives each test task.
 
-A test task runs at the priority the build system sent (PF-4420). At the
-same level, builds with at most `small_build_max_tasks` test tasks go before
-larger builds (PF-3736), except at EMERGENCY. The test config uses RabbitMQ,
+A test task runs at the priority the build system sent (PF-4420). Up to
+MEDIUM, builds with at most `small_build_max_tasks` test tasks go before
+larger builds of the same level (PF-3736). The test config uses RabbitMQ,
 where a higher priority number is served first.
 """
 import threading
@@ -63,7 +63,7 @@ def _run_once(test_tasks: list) -> list:
     # without a priority from the build system: release builds are HIGH
     pytest.param(
         [_payload(i, release_build=True) for i in range(50)],
-        6,
+        8,
         id='release-build',
     ),
     # and the other builds MEDIUM
@@ -90,8 +90,14 @@ def _run_once(test_tasks: list) -> list:
     ),
     pytest.param(
         [_payload(i, priority=23) for i in range(5)],
-        7,
+        8,
         id='top-rule-priority',
+    ),
+    # above MEDIUM the build size is ignored
+    pytest.param(
+        [_payload(i, priority=23) for i in range(50)],
+        8,
+        id='top-rule-priority-large-build',
     ),
     # EMERGENCY is never reordered by build size
     pytest.param(
@@ -110,8 +116,11 @@ def test_task_priority(test_tasks, expected_priority):
     (6, False, 2),
     (11, True, 3),
     (12, False, 4),
-    (18, False, 6),
-    (23, True, 7),
+    (12, True, 4),
+    (15, False, 5),
+    (19, True, 6),
+    (23, True, 8),
+    (23, False, 8),
     (24, False, EMERGENCY_TASK_LEVEL),
     (31, True, EMERGENCY_TASK_LEVEL),
     (-1, False, 0),
@@ -120,12 +129,25 @@ def test_task_priority_level(bs_priority, small_build, level):
     assert get_task_priority_level(bs_priority, small_build) == level
 
 
-def test_small_build_goes_first_only_inside_a_band():
+def test_small_build_goes_first_only_up_to_medium():
     # a large build of a higher band still goes before a small build
     assert get_task_priority_level(12, small_build=False) > \
         get_task_priority_level(11, small_build=True)
     assert get_task_priority_level(11, small_build=True) > \
         get_task_priority_level(11, small_build=False)
+    assert get_task_priority_level(23, small_build=True) == \
+        get_task_priority_level(23, small_build=False)
+
+
+def test_levels_fit_redis():
+    # Redis clamps a message priority to 0..9
+    assert TASK_PRIORITY_LEVELS <= 10
+    levels = {
+        get_task_priority_level(priority, small_build)
+        for priority in range(32)
+        for small_build in (False, True)
+    }
+    assert levels == set(range(TASK_PRIORITY_LEVELS))
 
 
 def test_rabbitmq_priorities():
