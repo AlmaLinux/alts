@@ -12,3 +12,4 @@ force_install_pkgs:
 module_hotfixes_pkg_patterns:
   - "^MariaDB"
   - "^percona-"
+  - "^mysql-community-"
