@@ -8,6 +8,7 @@ an empty `user`).
 """
 import ast
 import logging
+import os
 import re
 
 import pytest
@@ -24,6 +25,7 @@ def _make_runner(tmp_path):
     runner._stats = {}
     runner.already_aborted = True  # skip the abort check in the decorator
     runner._logger = logging.getLogger('test')
+    runner._secrets = []
     runner._repositories = []
     runner._integrity_tests_dir = str(tmp_path / 'tests')
     runner._ansible_connection_type = 'ssh'
@@ -35,11 +37,38 @@ def _make_runner(tmp_path):
 
 
 def _extract_extra_vars(cmd_args):
-    """Pull the `-e <dict-literal>` payload out of the ansible args and
+    """Read the `-e @<file>` payload referenced by the ansible args and
     parse it back into a Python dict.
     """
     idx = cmd_args.index('-e')
-    return ast.literal_eval(cmd_args[idx + 1])
+    vars_arg = cmd_args[idx + 1]
+    assert vars_arg.startswith('@')
+    with open(vars_arg[1:]) as vars_file:
+        return ast.literal_eval(vars_file.read())
+
+
+class TestInitialProvisionRepositories:
+    def test_credentials_are_not_in_command_line(self, tmp_path):
+        url = 'https://alts:s3cr3t-t0ken@build.example.com/repo/'
+        captured = {}
+
+        def fake_run(cmd_args, timeout=None):
+            captured['args'] = cmd_args
+            return 0, '', ''
+
+        runner = _make_runner(tmp_path)
+        runner._repositories = [{'name': 'al-9-x86_64-1-br', 'url': url}]
+        runner.run_ansible_command = fake_run
+
+        runner.initial_provision()
+
+        assert not any('s3cr3t-t0ken' in str(arg) for arg in captured['args'])
+        vars_path = captured['args'][captured['args'].index('-e') + 1][1:]
+        assert os.stat(vars_path).st_mode & 0o777 == 0o600
+        extra_vars = _extract_extra_vars(captured['args'])
+        assert extra_vars['repositories'] == [
+            {'name': 'al-9-x86_64-1-br', 'url': url},
+        ]
 
 
 class TestInitialProvisionSshHosts:

@@ -212,6 +212,9 @@ class BaseRunner(object):
         'templates',
     ]
     ANSIBLE_INVENTORY_FILE = 'hosts'
+    # Provision variables are passed through a file to keep the build
+    # repositories credentials out of the ansible-playbook command line
+    PROVISION_VARS_FILE = 'provision_vars.yml'
     TEMPFILE_PREFIX = 'base_test_runner_'
     INTEGRITY_TESTS_DIR = 'package_tests'
     INIT_TESTS = frozenset(['0_init', '0_init.yml'])
@@ -795,16 +798,29 @@ class BaseRunner(object):
             var_dict['disabled_al_repos'] = ','.join(CONFIG.disabled_al_repos)
         if CONFIG.extra_alpine_repo_baseurl:
             var_dict['extra_alpine_repo_baseurl'] = CONFIG.extra_alpine_repo_baseurl
+        # Build repositories URLs contain credentials, so they must not get
+        # into the command line, which ends up in process lists, timeout
+        # messages and Sentry. The content is the same as for the inline
+        # "-e", ansible parses both as YAML.
+        vars_file_path = os.path.join(self._work_dir, self.PROVISION_VARS_FILE)
+        vars_fd = os.open(
+            vars_file_path,
+            os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+            0o600,
+        )
+        with os.fdopen(vars_fd, 'w') as vars_file:
+            vars_file.write(f'{var_dict}')
         cmd_args = [
             '-i',
             self.ANSIBLE_INVENTORY_FILE,
             self.ANSIBLE_PLAYBOOK,
             '-e',
-            f'{var_dict}',
+            f'@{vars_file_path}',
             '-t',
             'initial_provision',
         ]
         self._logger.info('Command args: %s', cmd_args)
+        self._logger.info('Provision variables: %s', var_dict)
         if verbose:
             cmd_args.append('-vvvv')
         cmd_args_str = ' '.join(cmd_args)
