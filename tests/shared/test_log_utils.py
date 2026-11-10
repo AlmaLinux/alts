@@ -5,6 +5,7 @@ import pytest
 
 from alts.shared.utils.log_utils import (
     REDACTED,
+    RedactingFilter,
     RedactingFormatter,
     prepare_secrets,
     redact_secrets,
@@ -73,3 +74,36 @@ def test_redacting_formatter():
     assert 'tok@' not in output
     assert 'top-secret' not in output
     assert f'https://alts:{REDACTED}@host/repo' in output
+
+
+def test_redacting_filter_covers_parent_handlers():
+    # Parent handler with a plain formatter, like the Celery worker log
+    parent_stream = io.StringIO()
+    parent_handler = logging.StreamHandler(parent_stream)
+    parent_handler.setFormatter(logging.Formatter('%(message)s'))
+    parent = logging.getLogger('test-redacting-filter')
+    parent.handlers = [parent_handler]
+    parent.setLevel(logging.DEBUG)
+    parent.propagate = False
+
+    logger = logging.getLogger('test-redacting-filter.task')
+    logger.handlers = []
+    logger.filters = []
+    logger.addFilter(RedactingFilter(['top-secret']))
+    logger.setLevel(logging.DEBUG)
+
+    logger.error(
+        'Cannot install package %s: %s',
+        'foo',
+        'Status code: 503 for https://alts:tok@host/repodata/repomd.xml',
+    )
+    try:
+        raise RuntimeError('failed with top-secret')
+    except RuntimeError:
+        logger.exception('Unknown error')
+
+    output = parent_stream.getvalue()
+    assert 'tok@' not in output
+    assert 'top-secret' not in output
+    assert f'https://alts:{REDACTED}@host/repodata/repomd.xml' in output
+    assert f'RuntimeError: failed with {REDACTED}' in output

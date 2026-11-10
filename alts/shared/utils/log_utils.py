@@ -111,6 +111,37 @@ def redact_secrets(text, secrets: Iterable[str] = ()):
     return URL_CREDENTIALS_REGEX.sub(rf'\g<prefix>{REDACTED}@', text)
 
 
+class RedactingFilter(logging.Filter):
+    """
+    Logging filter that masks credentials in the records themselves.
+
+    Unlike RedactingFormatter it also covers handlers of the parent loggers
+    the records propagate to (e.g. the Celery worker log), since logger
+    filters run before any handler gets the record.
+    """
+
+    def __init__(self, secrets: Iterable[str] = ()):
+        super().__init__()
+        self._secrets = list(secrets)
+        self._formatter = logging.Formatter()
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.msg = redact_secrets(record.getMessage(), self._secrets)
+        record.args = ()
+        if record.exc_info and not record.exc_text:
+            record.exc_text = self._formatter.formatException(
+                record.exc_info,
+            )
+        if record.exc_text:
+            record.exc_text = redact_secrets(record.exc_text, self._secrets)
+        if record.stack_info:
+            record.stack_info = redact_secrets(
+                record.stack_info,
+                self._secrets,
+            )
+        return True
+
+
 class RedactingFormatter(logging.Formatter):
     """
     Logging formatter that masks credentials in the formatted records.
