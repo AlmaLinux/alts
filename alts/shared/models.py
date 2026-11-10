@@ -81,7 +81,7 @@ def get_task_priority_level(bs_priority: int) -> int:
     Returns the level of a test task, higher is more urgent (PF-4420).
 
     A build system priority above `BS_MAX_RULE_PRIORITY` was set by hand
-    and gets `EMERGENCY_TASK_LEVEL`. Rule priorities fall into one of
+    and gets `EMERGENCY_TASK_LEVEL`. Weighted priorities fall into one of
     `PRIORITY_BANDS` bands, one level each.
     """
     if bs_priority > constants.BS_MAX_RULE_PRIORITY:

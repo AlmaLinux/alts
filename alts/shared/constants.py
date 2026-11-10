@@ -84,14 +84,14 @@ class TapStatusEnum(IntEnum):
 
 
 # The build system sends a test task priority from 0 to 31, higher is more
-# urgent (PF-4420). Its priority rules assign 0..23, the levels above are
+# urgent (PF-4420). Its priority weights assign 0..23, the levels above are
 # set by hand (EMERGENCY).
 BS_MAX_RULE_PRIORITY = 23
 # Used when the build system sends no priority: HIGH for release builds,
 # MEDIUM for the others
 BS_RELEASE_BUILD_PRIORITY = 23
 BS_DEFAULT_PRIORITY = 11
-# A test task level, higher is more urgent: the rule range is split into
+# A test task level, higher is more urgent: the weighted range is split into
 # PRIORITY_BANDS bands, one level each, and EMERGENCY_TASK_LEVEL is above
 # every band. Redis serves priorities 0..9 only, so there are at most 10
 # levels.
