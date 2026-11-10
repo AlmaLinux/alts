@@ -56,6 +56,7 @@ from alts.shared.utils.git_utils import (
     repo_reference_subpath,
 )
 from alts.shared.utils.log_utils import (
+    RedactingFilter,
     RedactingFormatter,
     check_for_error_string,
     get_temp_log_files,
@@ -1730,6 +1731,10 @@ class BaseRunner(object):
         """
         logger = logging.getLogger(f'test_task-{task_id}-{arch}-logger')
         logger.handlers = []
+        # Records propagate to the root (Celery worker) logger,
+        # whose handlers don't use RedactingFormatter
+        logger.filters = []
+        logger.addFilter(RedactingFilter(secrets))
         log_level = logging.DEBUG if verbose else logging.INFO
         logger.setLevel(log_level)
         formatter = RedactingFormatter(
