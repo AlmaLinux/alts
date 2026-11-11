@@ -17,7 +17,7 @@ __all__ = [
     'BS_MAX_RULE_PRIORITY',
     'BS_RELEASE_BUILD_PRIORITY',
     'EMERGENCY_TASK_LEVEL',
-    'PRIORITY_BANDS',
+    'PRIORITY_LEVEL_BOUNDS',
     'TASK_PRIORITY_LEVELS',
     'DEFAULT_REQUEST_TIMEOUT',
     'DEFAULT_UPLOADER_CONCURRENCY',
@@ -84,17 +84,20 @@ class TapStatusEnum(IntEnum):
 
 
 # The build system sends a test task priority from 0 to 31, higher is more
-# urgent (PF-4420). Its priority weights assign 0..23, the levels above are
-# set by hand (EMERGENCY).
+# urgent (PF-4420). Its priority weights and defaults assign 0..23, the
+# levels above are set by hand (EMERGENCY).
 BS_MAX_RULE_PRIORITY = 23
-# Used when the build system sends no priority: HIGH for release builds,
-# MEDIUM for the others
-BS_RELEASE_BUILD_PRIORITY = 23
-BS_DEFAULT_PRIORITY = 11
-# A test task level, higher is more urgent: the weighted range is split into
-# PRIORITY_BANDS bands, one level each, and EMERGENCY_TASK_LEVEL is above
-# every band. Redis serves priorities 0..9 only, so there are at most 10
-# levels.
-PRIORITY_BANDS = 4
-TASK_PRIORITY_LEVELS = PRIORITY_BANDS + 1
+# Used when the build system sends no priority: the git tag build default
+# for release builds, MEDIUM for the others
+BS_RELEASE_BUILD_PRIORITY = 2
+BS_DEFAULT_PRIORITY = 1
+# A test task level, higher is more urgent. Level N (N >= 1) starts at the
+# build system priority PRIORITY_LEVEL_BOUNDS[N - 1], so the values the
+# build system gives keep their order: 0 is the low_priority_build tag, 1
+# MEDIUM, 2 the git tag default, 3-4 and 5-6 routine work on weighted
+# platforms, and 7, 11, 15 and 19-23 important projects by OS weight.
+# EMERGENCY_TASK_LEVEL is above BS_MAX_RULE_PRIORITY. Redis serves
+# priorities 0..9 only, so there are at most 10 levels.
+PRIORITY_LEVEL_BOUNDS = (1, 2, 3, 5, 7, 11, 15, 19)
+TASK_PRIORITY_LEVELS = len(PRIORITY_LEVEL_BOUNDS) + 2
 EMERGENCY_TASK_LEVEL = TASK_PRIORITY_LEVELS - 1

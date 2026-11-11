@@ -63,13 +63,14 @@ def _run_once(test_tasks: list, field: str = 'priority') -> list:
 @pytest.mark.parametrize('runner_type', ['docker', 'opennebula'])
 @pytest.mark.parametrize('tasks_count', [1, 50])
 @pytest.mark.parametrize('release_build, priority, expected_priority', [
-    # without a priority from the build system: release builds are HIGH
-    pytest.param(True, None, 3, id='release-build'),
+    # without a priority from the build system: release builds get the
+    # git tag build default
+    pytest.param(True, None, 2, id='release-build'),
     # and the other builds MEDIUM
     pytest.param(False, None, 1, id='regular-build'),
     # the build system priority wins over the release build flag
     pytest.param(True, 0, 0, id='low-priority-release-build'),
-    pytest.param(False, 23, 3, id='top-rule-priority'),
+    pytest.param(False, 23, 8, id='top-rule-priority'),
     pytest.param(False, 31, EMERGENCY_TASK_LEVEL, id='emergency'),
 ])
 def test_task_priority_ignores_build_size(runner_type, tasks_count,
@@ -85,14 +86,25 @@ def test_task_priority_ignores_build_size(runner_type, tasks_count,
 
 @pytest.mark.parametrize('bs_priority, level', [
     (-1, 0),
+    # low_priority_build tag
     (0, 0),
-    (5, 0),
-    (6, 1),
-    (11, 1),
-    (12, 2),
-    (17, 2),
-    (18, 3),
-    (23, 3),
+    # MEDIUM
+    (1, 1),
+    # git tag build default
+    (2, 2),
+    (3, 3),
+    (4, 3),
+    # routine work on CL7-CL9
+    (5, 4),
+    (6, 4),
+    (7, 5),
+    (10, 5),
+    (11, 6),
+    (14, 6),
+    (15, 7),
+    (18, 7),
+    (19, 8),
+    (23, 8),
     (24, EMERGENCY_TASK_LEVEL),
     (31, EMERGENCY_TASK_LEVEL),
 ])

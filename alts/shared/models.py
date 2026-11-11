@@ -1,3 +1,4 @@
+import bisect
 import os
 import re
 import ssl
@@ -81,16 +82,12 @@ def get_task_priority_level(bs_priority: int) -> int:
     Returns the level of a test task, higher is more urgent (PF-4420).
 
     A build system priority above `BS_MAX_RULE_PRIORITY` was set by hand
-    and gets `EMERGENCY_TASK_LEVEL`. Weighted priorities fall into one of
-    `PRIORITY_BANDS` bands, one level each.
+    and gets `EMERGENCY_TASK_LEVEL`. The other priorities are mapped by
+    `PRIORITY_LEVEL_BOUNDS`.
     """
     if bs_priority > constants.BS_MAX_RULE_PRIORITY:
         return constants.EMERGENCY_TASK_LEVEL
-    return (
-        max(bs_priority, 0)
-        * constants.PRIORITY_BANDS
-        // (constants.BS_MAX_RULE_PRIORITY + 1)
-    )
+    return bisect.bisect_right(constants.PRIORITY_LEVEL_BOUNDS, bs_priority)
 
 
 class TaskRequestPayload(BaseModel):

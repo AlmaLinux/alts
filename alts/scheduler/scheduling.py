@@ -62,7 +62,8 @@ class TestsScheduler(threading.Thread):
         Returns the Celery priority for a test task.
 
         The task runs at the priority the build system sent (PF-4420).
-        Without one, release builds get HIGH and the others MEDIUM.
+        Without one, release builds get the git tag build default and the
+        others MEDIUM.
         """
         bs_priority = payload.priority
         if bs_priority is None:
