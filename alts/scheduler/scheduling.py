@@ -11,8 +11,12 @@ import requests
 
 from alts.scheduler import CONFIG
 from alts.scheduler.db import Session, Task
-from alts.shared.constants import DEFAULT_REQUEST_TIMEOUT, TaskPriority
-from alts.shared.models import TaskRequestPayload
+from alts.shared.constants import (
+    BS_DEFAULT_PRIORITY,
+    BS_RELEASE_BUILD_PRIORITY,
+    DEFAULT_REQUEST_TIMEOUT,
+)
+from alts.shared.models import TaskRequestPayload, get_task_priority_level
 from alts.worker.mappings import RUNNER_MAPPING
 from alts.worker.tasks import run_tests
 
@@ -53,15 +57,22 @@ class TestsScheduler(threading.Thread):
         return response_as_json
 
     @staticmethod
-    def get_task_priority(release_build: bool) -> TaskPriority:
+    def get_task_priority(payload: TaskRequestPayload) -> int:
         """
-        Returns the Celery priority for a test task: release builds go
-        ahead of all other builds. `TaskPriority.RESERVED` is never
-        returned: it is kept for tasks routed by hand.
+        Returns the Celery priority for a test task.
+
+        The task runs at the priority the build system sent (PF-4420).
+        Without one, release builds get the git tag build default and the
+        others MEDIUM.
         """
-        if release_build:
-            return TaskPriority.RELEASE_BUILD
-        return TaskPriority.REGULAR_BUILD
+        bs_priority = payload.priority
+        if bs_priority is None:
+            bs_priority = (
+                BS_RELEASE_BUILD_PRIORITY
+                if payload.release_build
+                else BS_DEFAULT_PRIORITY
+            )
+        return CONFIG.get_celery_priority(get_task_priority_level(bs_priority))
 
     @staticmethod
     def get_package_queue_suffix(package_name: str) -> Optional[str]:
@@ -166,7 +177,7 @@ class TestsScheduler(threading.Thread):
         task_params['runner_type'] = runner_type
         task_params['repositories'] = repositories
         try:
-            task_priority = self.get_task_priority(payload.release_build)
+            task_priority = self.get_task_priority(payload)
             run_tests.apply_async(
                 (task_params,),
                 task_id=task_id,
