@@ -64,7 +64,8 @@ class TestsScheduler(threading.Thread):
         The task runs at the priority the build system sent (PF-4420).
         Without one, release builds get the git tag build default and the
         others MEDIUM. A release build's tests go one level above
-        development tests of the same priority level.
+        development tests of the same priority level, except at level 0,
+        the top rule level and EMERGENCY (see `get_task_priority_level`).
         """
         bs_priority = payload.priority
         if bs_priority is None:

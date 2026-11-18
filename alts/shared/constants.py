@@ -109,7 +109,7 @@ EMERGENCY_TASK_LEVEL = TASK_PRIORITY_LEVELS - 1
 # development build with the same weights, but neighbouring priorities can
 # share a level, so the tests of a release build also move one level up,
 # never to EMERGENCY_TASK_LEVEL. Level 0 is kept: only the
-# low_priority_build tag gives it. A level spans 2-4 build system
+# low_priority_build tag gives it. Levels 1-7 span 2-4 build system
 # priorities, so a release build's tests also go ahead of development tests
 # whose priority is up to 3 higher in the same level (release 3 is ahead of
 # development 4), and tie development tests of the next level up (release 8

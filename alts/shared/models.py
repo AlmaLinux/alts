@@ -91,7 +91,8 @@ def get_task_priority_level(
     tests with the same weights, and of development tests with a higher
     priority in the same level, and tie development tests of the next
     level up. Level 0 (`low_priority_build` tag) stays;
-    the medium_priority_build tag (1) is moved like the release default.
+    on a release build the medium_priority_build tag (1) is moved like the
+    release default.
     """
     if bs_priority > constants.BS_MAX_RULE_PRIORITY:
         return constants.EMERGENCY_TASK_LEVEL

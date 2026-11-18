@@ -75,6 +75,10 @@ def _run_once(test_tasks: list, field: str = 'priority') -> list:
     pytest.param(False, None, 1, id='regular-build'),
     # the low_priority_build tag wins over the release build flag
     pytest.param(True, 0, 0, id='low-priority-release-build'),
+    # the medium_priority_build tag on a release build is moved up like
+    # the release default; a development build at 2 shares MEDIUM's level
+    pytest.param(True, 1, 2, id='medium-priority-release-build'),
+    pytest.param(False, 2, 1, id='development-build-at-2'),
     # alt-php on an unweighted platform: release 4, development 3
     pytest.param(True, 4, 3, id='weighted-release-build'),
     pytest.param(False, 3, 2, id='weighted-development-build'),
@@ -142,7 +146,7 @@ def test_release_build_task_priority_level(bs_priority, level):
 @pytest.mark.parametrize('project_weight', range(1, 5))
 def test_release_tests_go_ahead_of_development_tests(os_weight,
                                                      project_weight):
-    # build system weighted priorities (PF-4420): os * project for a
+    # build system weighted priorities: os * project for a
     # release build, os * project - 1 (at most 22) for the others, never
     # below the default of 2 (release) and 1 (development)
     weight = os_weight * project_weight
