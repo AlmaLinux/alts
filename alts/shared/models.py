@@ -89,7 +89,8 @@ def get_task_priority_level(
     `PRIORITY_LEVEL_BOUNDS`, and a release build's tests move one level up
     to `RELEASE_BUILD_TOP_LEVEL` at most, so they go ahead of development
     tests with the same weights, and of development tests with a higher
-    priority in the same level. Level 0 (`low_priority_build` tag) stays;
+    priority in the same level, and tie development tests of the next
+    level up. Level 0 (`low_priority_build` tag) stays;
     the medium_priority_build tag (1) is moved like the release default.
     """
     if bs_priority > constants.BS_MAX_RULE_PRIORITY:

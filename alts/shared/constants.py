@@ -112,5 +112,6 @@ EMERGENCY_TASK_LEVEL = TASK_PRIORITY_LEVELS - 1
 # low_priority_build tag gives it. A level spans 2-4 build system
 # priorities, so a release build's tests also go ahead of development tests
 # whose priority is up to 3 higher in the same level (release 3 is ahead of
-# development 4): release work comes first within a level by design.
+# development 4), and tie development tests of the next level up (release 8
+# ties development 11): release work comes first within a level by design.
 RELEASE_BUILD_TOP_LEVEL = EMERGENCY_TASK_LEVEL - 1

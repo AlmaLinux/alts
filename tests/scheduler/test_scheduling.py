@@ -167,6 +167,26 @@ def test_release_level_never_below_development_level(bs_priority):
         get_task_priority_level(bs_priority)
 
 
+@pytest.mark.parametrize('release, development', [
+    # the same level: release goes first, even with a lower priority
+    (3, 4),
+    (7, 10),
+])
+def test_release_goes_ahead_within_a_level(release, development):
+    assert get_task_priority_level(release, release_build=True) > \
+        get_task_priority_level(development)
+
+
+@pytest.mark.parametrize('release, development', [
+    # the next level up: a tie, by design
+    (8, 11),
+    (16, 22),
+])
+def test_release_ties_the_next_level(release, development):
+    assert get_task_priority_level(release, release_build=True) == \
+        get_task_priority_level(development)
+
+
 def test_top_development_priority_below_top_release_priority():
     # why 23 has a level of its own: development builds stop at 22
     assert get_task_priority_level(22) < \
