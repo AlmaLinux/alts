@@ -1,8 +1,9 @@
 """Tests for the queue and Celery priority the scheduler gives each test task.
 
 A test task runs at the priority the build system sent (PF-4420), whatever
-the build size. The test config uses RabbitMQ, where a higher priority
-number is served first.
+the build size, and a release build's tests one level above development
+tests of the same level. The test config uses RabbitMQ, where a higher
+priority number is served first.
 """
 import threading
 from typing import Optional
@@ -13,7 +14,11 @@ import pytest
 from alts.scheduler import CONFIG
 # Imported as a module: pytest would try to collect `TestsScheduler`
 from alts.scheduler import scheduling
-from alts.shared.constants import EMERGENCY_TASK_LEVEL, TASK_PRIORITY_LEVELS
+from alts.shared.constants import (
+    EMERGENCY_TASK_LEVEL,
+    RELEASE_BUILD_TOP_LEVEL,
+    TASK_PRIORITY_LEVELS,
+)
 from alts.shared.models import get_task_priority_level
 
 
@@ -68,10 +73,18 @@ def _run_once(test_tasks: list, field: str = 'priority') -> list:
     pytest.param(True, None, 2, id='release-build'),
     # and the other builds MEDIUM
     pytest.param(False, None, 1, id='regular-build'),
-    # the build system priority wins over the release build flag
+    # the low_priority_build tag wins over the release build flag
     pytest.param(True, 0, 0, id='low-priority-release-build'),
-    pytest.param(False, 23, 8, id='top-rule-priority'),
-    pytest.param(False, 31, EMERGENCY_TASK_LEVEL, id='emergency'),
+    # the medium_priority_build tag on a release build is moved up like
+    # the release default; a development build at 2 shares MEDIUM's level
+    pytest.param(True, 1, 2, id='medium-priority-release-build'),
+    pytest.param(False, 2, 1, id='development-build-at-2'),
+    # alt-php on an unweighted platform: release 4, development 3
+    pytest.param(True, 4, 3, id='weighted-release-build'),
+    pytest.param(False, 3, 2, id='weighted-development-build'),
+    pytest.param(True, 23, 8, id='top-rule-priority'),
+    pytest.param(False, 22, 7, id='top-development-priority'),
+    pytest.param(True, 31, EMERGENCY_TASK_LEVEL, id='emergency'),
 ])
 def test_task_priority_ignores_build_size(runner_type, tasks_count,
                                           release_build, priority,
@@ -91,25 +104,97 @@ def test_task_priority_ignores_build_size(runner_type, tasks_count,
     # MEDIUM
     (1, 1),
     # git tag build default
-    (2, 2),
-    (3, 3),
-    (4, 3),
+    (2, 1),
+    (3, 2),
+    (4, 2),
     # routine work on CL7-CL9
-    (5, 4),
-    (6, 4),
-    (7, 5),
-    (10, 5),
-    (11, 6),
-    (14, 6),
-    (15, 7),
-    (18, 7),
-    (19, 8),
+    (5, 3),
+    (6, 3),
+    (7, 4),
+    (10, 4),
+    (11, 5),
+    (14, 5),
+    (15, 6),
+    (18, 6),
+    (19, 7),
+    (22, 7),
+    # the top weighted priority of a release build, or the high tag
     (23, 8),
     (24, EMERGENCY_TASK_LEVEL),
     (31, EMERGENCY_TASK_LEVEL),
 ])
 def test_task_priority_level(bs_priority, level):
     assert get_task_priority_level(bs_priority) == level
+
+
+@pytest.mark.parametrize('bs_priority, level', [
+    # the low_priority_build tag keeps level 0
+    (0, 0),
+    (2, 2),
+    (4, 3),
+    (6, 4),
+    (20, 8),
+    # never moved to EMERGENCY
+    (23, RELEASE_BUILD_TOP_LEVEL),
+    (31, EMERGENCY_TASK_LEVEL),
+])
+def test_release_build_task_priority_level(bs_priority, level):
+    assert get_task_priority_level(bs_priority, release_build=True) == level
+
+
+@pytest.mark.parametrize('os_weight', range(1, 7))
+@pytest.mark.parametrize('project_weight', range(1, 5))
+def test_release_tests_go_ahead_of_development_tests(os_weight,
+                                                     project_weight):
+    # build system weighted priorities: os * project for a
+    # release build, os * project - 1 (at most 22) for the others, never
+    # below the default of 2 (release) and 1 (development)
+    weight = os_weight * project_weight
+    release = max(min(weight, 23), 2)
+    development = max(min(weight - 1, 22), 1)
+    assert get_task_priority_level(release, release_build=True) > \
+        get_task_priority_level(development)
+
+
+@pytest.mark.parametrize('release_build', [False, True])
+def test_levels_keep_build_system_order(release_build):
+    levels = [
+        get_task_priority_level(priority, release_build)
+        for priority in range(-1, 33)
+    ]
+    assert levels == sorted(levels)
+
+
+@pytest.mark.parametrize('bs_priority', range(-1, 33))
+def test_release_level_never_below_development_level(bs_priority):
+    assert get_task_priority_level(bs_priority, release_build=True) >= \
+        get_task_priority_level(bs_priority)
+
+
+@pytest.mark.parametrize('release, development', [
+    # the same level: release goes first, even with a lower priority
+    (3, 4),
+    (7, 10),
+])
+def test_release_goes_ahead_within_a_level(release, development):
+    assert get_task_priority_level(release, release_build=True) > \
+        get_task_priority_level(development)
+
+
+@pytest.mark.parametrize('release, development', [
+    # the next level up: a tie, by design
+    (8, 11),
+    (16, 22),
+])
+def test_release_ties_the_next_level(release, development):
+    assert get_task_priority_level(release, release_build=True) == \
+        get_task_priority_level(development)
+
+
+def test_top_development_priority_below_top_release_priority():
+    # why 23 has a level of its own: development builds stop at 22
+    assert get_task_priority_level(22) < \
+        get_task_priority_level(23, release_build=True)
 
 
 def test_levels_fit_redis():
@@ -148,6 +233,32 @@ def test_redis_priorities_are_inverted():
     assert config.get_celery_priority(EMERGENCY_TASK_LEVEL) == 0
     assert config.get_celery_priority(0) == EMERGENCY_TASK_LEVEL
     assert celery_config['task_default_priority'] == EMERGENCY_TASK_LEVEL - 1
+
+
+@pytest.mark.parametrize('release_build, priority, redis_priority', [
+    # alt-php on an unweighted platform: Redis serves the lower list first
+    (True, 4, EMERGENCY_TASK_LEVEL - 3),
+    (False, 3, EMERGENCY_TASK_LEVEL - 2),
+    (True, 31, 0),
+])
+def test_redis_scheduler_publishes_inverted_priority(release_build, priority,
+                                                     redis_priority):
+    config = _redis_config()
+    with patch.object(scheduling, 'CONFIG', config):
+        task = _payload(0, release_build, priority=priority)
+        assert _run_once([task]) == [redis_priority]
+
+
+def test_redis_scheduler_puts_release_tests_first():
+    # alt-php on an unweighted platform: release 4, development 3, published
+    # in one cycle; Redis serves the lower priority list first
+    config = _redis_config()
+    with patch.object(scheduling, 'CONFIG', config):
+        development, release = _run_once([
+            _payload(0, False, priority=3),
+            _payload(1, True, priority=4),
+        ])
+    assert release < development
 
 
 def test_redis_priority_steps_ignore_configured_max_priority():

@@ -77,17 +77,28 @@ class TestFlavor(BaseModel):
     version: str
 
 
-def get_task_priority_level(bs_priority: int) -> int:
+def get_task_priority_level(
+    bs_priority: int,
+    release_build: bool = False,
+) -> int:
     """
     Returns the level of a test task, higher is more urgent (PF-4420).
 
     A build system priority above `BS_MAX_RULE_PRIORITY` was set by hand
     and gets `EMERGENCY_TASK_LEVEL`. The other priorities are mapped by
-    `PRIORITY_LEVEL_BOUNDS`.
+    `PRIORITY_LEVEL_BOUNDS`, and a release build's tests move one level up
+    to `RELEASE_BUILD_TOP_LEVEL` at most, so they go ahead of development
+    tests with the same weights, and of development tests with a higher
+    priority in the same level, and tie development tests of the next
+    level up. Level 0 (`low_priority_build` tag) stays; on a release build
+    the `medium_priority_build` tag (1) is moved like the release default.
     """
     if bs_priority > constants.BS_MAX_RULE_PRIORITY:
         return constants.EMERGENCY_TASK_LEVEL
-    return bisect.bisect_right(constants.PRIORITY_LEVEL_BOUNDS, bs_priority)
+    level = bisect.bisect_right(constants.PRIORITY_LEVEL_BOUNDS, bs_priority)
+    if release_build and level > 0:
+        level = min(level + 1, constants.RELEASE_BUILD_TOP_LEVEL)
+    return level
 
 
 class TaskRequestPayload(BaseModel):

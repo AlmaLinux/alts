@@ -63,7 +63,9 @@ class TestsScheduler(threading.Thread):
 
         The task runs at the priority the build system sent (PF-4420).
         Without one, release builds get the git tag build default and the
-        others MEDIUM.
+        others MEDIUM. A release build's tests go one level above
+        development tests of the same priority level, except at level 0,
+        the top rule level and EMERGENCY (see `get_task_priority_level`).
         """
         bs_priority = payload.priority
         if bs_priority is None:
@@ -72,7 +74,9 @@ class TestsScheduler(threading.Thread):
                 if payload.release_build
                 else BS_DEFAULT_PRIORITY
             )
-        return CONFIG.get_celery_priority(get_task_priority_level(bs_priority))
+        return CONFIG.get_celery_priority(
+            get_task_priority_level(bs_priority, payload.release_build),
+        )
 
     @staticmethod
     def get_package_queue_suffix(package_name: str) -> Optional[str]:
