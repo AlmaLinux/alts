@@ -114,7 +114,7 @@ def test_task_priority_ignores_build_size(runner_type, tasks_count,
     (18, 6),
     (19, 7),
     (22, 7),
-    # only a release build gets 23 from the weights
+    # the top weighted priority of a release build, or the high tag
     (23, 8),
     (24, EMERGENCY_TASK_LEVEL),
     (31, EMERGENCY_TASK_LEVEL),
@@ -150,6 +150,27 @@ def test_release_tests_go_ahead_of_development_tests(os_weight,
     development = max(min(weight - 1, 22), 1)
     assert get_task_priority_level(release, release_build=True) > \
         get_task_priority_level(development)
+
+
+@pytest.mark.parametrize('release_build', [False, True])
+def test_levels_keep_build_system_order(release_build):
+    levels = [
+        get_task_priority_level(priority, release_build)
+        for priority in range(-1, 33)
+    ]
+    assert levels == sorted(levels)
+
+
+@pytest.mark.parametrize('bs_priority', range(-1, 33))
+def test_release_level_never_below_development_level(bs_priority):
+    assert get_task_priority_level(bs_priority, release_build=True) >= \
+        get_task_priority_level(bs_priority)
+
+
+def test_top_development_priority_below_top_release_priority():
+    # why 23 has a level of its own: development builds stop at 22
+    assert get_task_priority_level(22) < \
+        get_task_priority_level(23, release_build=True)
 
 
 def test_levels_fit_redis():
@@ -188,6 +209,20 @@ def test_redis_priorities_are_inverted():
     assert config.get_celery_priority(EMERGENCY_TASK_LEVEL) == 0
     assert config.get_celery_priority(0) == EMERGENCY_TASK_LEVEL
     assert celery_config['task_default_priority'] == EMERGENCY_TASK_LEVEL - 1
+
+
+@pytest.mark.parametrize('release_build, priority, redis_priority', [
+    # alt-php on an unweighted platform: Redis serves the lower list first
+    (True, 4, EMERGENCY_TASK_LEVEL - 3),
+    (False, 3, EMERGENCY_TASK_LEVEL - 2),
+    (True, 31, 0),
+])
+def test_redis_scheduler_puts_release_tests_first(release_build, priority,
+                                                   redis_priority):
+    config = _redis_config()
+    with patch.object(scheduling, 'CONFIG', config):
+        task = _payload(0, release_build, priority=priority)
+        assert _run_once([task]) == [redis_priority]
 
 
 def test_redis_priority_steps_ignore_configured_max_priority():

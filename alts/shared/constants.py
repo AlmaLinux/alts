@@ -97,7 +97,9 @@ BS_DEFAULT_PRIORITY = 1
 # build system gives keep their order: 0 is the low_priority_build tag, 1-2
 # MEDIUM and the git tag default, 3-4 and 5-6 routine work on weighted
 # platforms, 7, 11, 15 and 19-22 important projects by OS weight, and 23 the
-# top weighted priority, which only a release build gets.
+# top weighted priority of a release build and the high_priority_build tag.
+# These are the levels before the release build step below, which moves
+# e.g. the git tag default of a release build to level 2.
 # EMERGENCY_TASK_LEVEL is above BS_MAX_RULE_PRIORITY. Redis serves
 # priorities 0..9 only, so there are at most 10 levels.
 PRIORITY_LEVEL_BOUNDS = (1, 3, 5, 7, 11, 15, 19, 23)
@@ -107,5 +109,8 @@ EMERGENCY_TASK_LEVEL = TASK_PRIORITY_LEVELS - 1
 # development build with the same weights, but neighbouring priorities can
 # share a level, so the tests of a release build also move one level up,
 # never to EMERGENCY_TASK_LEVEL. Level 0 is kept: only the
-# low_priority_build tag gives it.
+# low_priority_build tag gives it. A level spans 2-4 build system
+# priorities, so a release build's tests also go ahead of development tests
+# whose priority is up to 3 higher in the same level (release 3 is ahead of
+# development 4): release work comes first within a level by design.
 RELEASE_BUILD_TOP_LEVEL = EMERGENCY_TASK_LEVEL - 1
