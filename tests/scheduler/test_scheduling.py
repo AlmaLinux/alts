@@ -241,12 +241,24 @@ def test_redis_priorities_are_inverted():
     (False, 3, EMERGENCY_TASK_LEVEL - 2),
     (True, 31, 0),
 ])
-def test_redis_scheduler_puts_release_tests_first(release_build, priority,
-                                                   redis_priority):
+def test_redis_scheduler_publishes_inverted_priority(release_build, priority,
+                                                     redis_priority):
     config = _redis_config()
     with patch.object(scheduling, 'CONFIG', config):
         task = _payload(0, release_build, priority=priority)
         assert _run_once([task]) == [redis_priority]
+
+
+def test_redis_scheduler_puts_release_tests_first():
+    # alt-php on an unweighted platform: release 4, development 3, published
+    # in one cycle; Redis serves the lower priority list first
+    config = _redis_config()
+    with patch.object(scheduling, 'CONFIG', config):
+        development, release = _run_once([
+            _payload(0, False, priority=3),
+            _payload(1, True, priority=4),
+        ])
+    assert release < development
 
 
 def test_redis_priority_steps_ignore_configured_max_priority():
