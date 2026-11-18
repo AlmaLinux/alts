@@ -1,8 +1,9 @@
 """Tests for the queue and Celery priority the scheduler gives each test task.
 
 A test task runs at the priority the build system sent (PF-4420), whatever
-the build size. The test config uses RabbitMQ, where a higher priority
-number is served first.
+the build size, and a release build's tests one level above development
+tests of the same level. The test config uses RabbitMQ, where a higher
+priority number is served first.
 """
 import threading
 from typing import Optional
@@ -13,7 +14,11 @@ import pytest
 from alts.scheduler import CONFIG
 # Imported as a module: pytest would try to collect `TestsScheduler`
 from alts.scheduler import scheduling
-from alts.shared.constants import EMERGENCY_TASK_LEVEL, TASK_PRIORITY_LEVELS
+from alts.shared.constants import (
+    EMERGENCY_TASK_LEVEL,
+    RELEASE_BUILD_TOP_LEVEL,
+    TASK_PRIORITY_LEVELS,
+)
 from alts.shared.models import get_task_priority_level
 
 
@@ -68,10 +73,14 @@ def _run_once(test_tasks: list, field: str = 'priority') -> list:
     pytest.param(True, None, 2, id='release-build'),
     # and the other builds MEDIUM
     pytest.param(False, None, 1, id='regular-build'),
-    # the build system priority wins over the release build flag
+    # the low_priority_build tag wins over the release build flag
     pytest.param(True, 0, 0, id='low-priority-release-build'),
-    pytest.param(False, 23, 8, id='top-rule-priority'),
-    pytest.param(False, 31, EMERGENCY_TASK_LEVEL, id='emergency'),
+    # alt-php on an unweighted platform: release 4, development 3
+    pytest.param(True, 4, 3, id='weighted-release-build'),
+    pytest.param(False, 3, 2, id='weighted-development-build'),
+    pytest.param(True, 23, 8, id='top-rule-priority'),
+    pytest.param(False, 22, 7, id='top-development-priority'),
+    pytest.param(True, 31, EMERGENCY_TASK_LEVEL, id='emergency'),
 ])
 def test_task_priority_ignores_build_size(runner_type, tasks_count,
                                           release_build, priority,
@@ -91,25 +100,56 @@ def test_task_priority_ignores_build_size(runner_type, tasks_count,
     # MEDIUM
     (1, 1),
     # git tag build default
-    (2, 2),
-    (3, 3),
-    (4, 3),
+    (2, 1),
+    (3, 2),
+    (4, 2),
     # routine work on CL7-CL9
-    (5, 4),
-    (6, 4),
-    (7, 5),
-    (10, 5),
-    (11, 6),
-    (14, 6),
-    (15, 7),
-    (18, 7),
-    (19, 8),
+    (5, 3),
+    (6, 3),
+    (7, 4),
+    (10, 4),
+    (11, 5),
+    (14, 5),
+    (15, 6),
+    (18, 6),
+    (19, 7),
+    (22, 7),
+    # only a release build gets 23 from the weights
     (23, 8),
     (24, EMERGENCY_TASK_LEVEL),
     (31, EMERGENCY_TASK_LEVEL),
 ])
 def test_task_priority_level(bs_priority, level):
     assert get_task_priority_level(bs_priority) == level
+
+
+@pytest.mark.parametrize('bs_priority, level', [
+    # the low_priority_build tag keeps level 0
+    (0, 0),
+    (2, 2),
+    (4, 3),
+    (6, 4),
+    (20, 8),
+    # never moved to EMERGENCY
+    (23, RELEASE_BUILD_TOP_LEVEL),
+    (31, EMERGENCY_TASK_LEVEL),
+])
+def test_release_build_task_priority_level(bs_priority, level):
+    assert get_task_priority_level(bs_priority, release_build=True) == level
+
+
+@pytest.mark.parametrize('os_weight', range(1, 7))
+@pytest.mark.parametrize('project_weight', range(1, 5))
+def test_release_tests_go_ahead_of_development_tests(os_weight,
+                                                     project_weight):
+    # build system weighted priorities (PF-4420): os * project for a
+    # release build, os * project - 1 (at most 22) for the others, never
+    # below the default of 2 (release) and 1 (development)
+    weight = os_weight * project_weight
+    release = max(min(weight, 23), 2)
+    development = max(min(weight - 1, 22), 1)
+    assert get_task_priority_level(release, release_build=True) > \
+        get_task_priority_level(development)
 
 
 def test_levels_fit_redis():
